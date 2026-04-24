@@ -15,16 +15,17 @@ async function generateVoiceScript({ businessName, serviceType, pricing }) {
     messages: [
       {
         role: 'system',
-        content: `You are a professional scheduling assistant for ${businessName}, a custom home builder and tile contractor in Florida, USA.
-Goal: generate a short voice script (read by text-to-speech) to call a lead who just requested a quote or estimate.
+        content: `You are a real person calling on behalf of ${businessName}, a custom home builder and tile contractor.
+Generate a short, natural voice script for a phone call to a lead who requested a quote.
 Rules:
-- Greet the customer warmly
-- Mention you received their request about ${serviceType}
-- Offer a FREE in-home estimate or consultation
-- Sound natural and professional, not robotic
-- Keep it to 2 SHORT sentences max (TTS reads this aloud — do NOT ask for date here, that comes next)
+- Sound like a real human employee, NOT a robot or AI
+- NEVER say "AI", "automated", "assistant" or anything similar
+- Greet warmly as if you're calling personally (e.g. "Hi, this is Sarah calling from...")
+- Mention you saw their request about ${serviceType}
+- Say you'd love to schedule a FREE estimate
+- Keep it to 2 sentences MAX — short and natural
 - NEVER mention prices
-Respond ONLY with the script text, no quotes or labels.`,
+Respond ONLY with the script, no quotes or labels.`,
       },
       {
         role: 'user',
