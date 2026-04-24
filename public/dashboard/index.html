@@ -121,6 +121,7 @@
 
     <div class="nav-title">Menu</div>
     <div class="nav-item active" onclick="showView('leads', this)">Leads</div>
+    <div class="nav-item" onclick="showView('appointments', this)">Appointments</div>
     <div class="nav-item" onclick="showView('clients', this)">Clients</div>
 
     <div class="nav-title">System</div>
@@ -166,6 +167,35 @@
           <tbody id="leadsTable"><tr><td colspan="6" style="text-align:center;color:var(--muted)">Loading…</td></tr></tbody>
         </table>
         <div class="pagination" id="pagination"></div>
+      </div>
+    </div>
+
+    <!-- Appointments view -->
+    <div id="viewAppointments" class="view">
+      <div class="card">
+        <div class="card-title">Upcoming Appointments</div>
+        <table>
+          <thead>
+            <tr><th>Date & Time</th><th>Phone</th><th>Service</th><th>Client</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="appointmentsTable"><tr><td colspan="6" style="text-align:center;color:var(--muted)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Manual schedule modal -->
+      <div id="scheduleModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center;">
+        <div class="modal" style="max-width:420px">
+          <h3>Set Appointment Time</h3>
+          <div style="margin:16px 0">
+            <label style="color:var(--muted);font-size:12px;display:block;margin-bottom:6px">Date & Time</label>
+            <input type="datetime-local" id="scheduleInput" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px">
+          </div>
+          <input type="hidden" id="scheduleConvId">
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+            <button class="refresh-btn" onclick="closeScheduleModal()">Cancel</button>
+            <button class="refresh-btn" style="background:var(--blue);border-color:var(--blue)" onclick="saveSchedule()">Save</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -387,9 +417,68 @@ function showView(name, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('view' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
   if (el) el.classList.add('active');
-  const titles = { leads: 'Dashboard', clients: 'Clients' };
+  const titles = { leads: 'Dashboard', clients: 'Clients', appointments: 'Appointments' };
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'clients') loadClients();
+  if (name === 'appointments') loadAppointments();
+}
+
+async function loadAppointments() {
+  try {
+    const data = await api('/appointments');
+    const tbody = document.getElementById('appointmentsTable');
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No appointments yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(a => {
+      const scheduled = a.scheduled_at ? fmt(a.scheduled_at) : '–';
+      const statusBadge = a.stage === 'scheduled'
+        ? '<span class="badge badge-green">Scheduled</span>'
+        : '<span class="badge badge-blue">Pending</span>';
+      const actions = a.stage === 'scheduled'
+        ? `<button class="btn-sm" onclick="cancelAppointment('${a.id}')">Cancel</button>`
+        : `<button class="btn-sm" onclick="openScheduleModal('${a.id}')">Schedule</button>`;
+      return `<tr>
+        <td style="font-size:12px">${scheduled}</td>
+        <td>${a.lead_phone || '–'}</td>
+        <td><span class="badge badge-gray">${a.service_type || 'general'}</span></td>
+        <td style="font-size:12px;color:var(--muted)">${a.clients ? a.clients.business_name : '–'}</td>
+        <td>${statusBadge}</td>
+        <td>${actions}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) { console.error('appointments', e); }
+}
+
+function openScheduleModal(id) {
+  document.getElementById('scheduleConvId').value = id;
+  document.getElementById('scheduleInput').value = '';
+  const modal = document.getElementById('scheduleModal');
+  modal.style.display = 'flex';
+}
+
+function closeScheduleModal() {
+  document.getElementById('scheduleModal').style.display = 'none';
+}
+
+async function saveSchedule() {
+  const id = document.getElementById('scheduleConvId').value;
+  const val = document.getElementById('scheduleInput').value;
+  if (!val) { alert('Please select a date and time.'); return; }
+  try {
+    await apiPatch(`/appointments/${id}`, { stage: 'scheduled', scheduled_at: new Date(val).toISOString() });
+    closeScheduleModal();
+    loadAppointments();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function cancelAppointment(id) {
+  if (!confirm('Cancel this appointment?')) return;
+  try {
+    await apiPatch(`/appointments/${id}`, { stage: 'ai_responded' });
+    loadAppointments();
+  } catch (e) { alert('Error: ' + e.message); }
 }
 
 async function loadAll() {
