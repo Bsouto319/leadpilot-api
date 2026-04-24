@@ -18,6 +18,19 @@ async function getClientByTwilioNumber(twilioNumber) {
   return data;
 }
 
+async function getExistingConversation(clientId, leadPhone) {
+  const { data } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('lead_phone', leadPhone)
+    .in('stage', ['ai_responded', 'new_lead'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+  return data || null;
+}
+
 async function checkDuplicate(clientId, leadPhone, minutes = 60) {
   const { data, error } = await supabase.rpc('check_duplicate_lead', {
     p_client_id: clientId,
@@ -159,6 +172,7 @@ async function getHourlyLeads() {
 
 module.exports = {
   getClientByTwilioNumber,
+  getExistingConversation,
   checkDuplicate,
   saveLead,
   updateConversation,

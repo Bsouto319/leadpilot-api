@@ -59,6 +59,14 @@ async function processSms(body) {
     return;
   }
 
+  // 2. Check if lead already exists (scheduling reply)
+  const existingConv = await db.getExistingConversation(client.id, leadPhone);
+  if (existingConv && existingConv.stage === 'ai_responded') {
+    logger.info('webhook', `scheduling reply from ${leadPhone} — processing date`);
+    await processSchedulingReply({ client, conversation: existingConv, message });
+    return;
+  }
+
   // 2. Anti-duplicate
   let isDuplicate;
   try {
@@ -160,6 +168,77 @@ async function processSms(body) {
   }
 
   logger.info('webhook', `lead processed id=${conversation.id} phone=${leadPhone}`);
+}
+
+// Process scheduling reply from lead
+async function processSchedulingReply({ client, conversation, message }) {
+  try {
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const now = new Date().toISOString();
+
+    // Parse date/time from SMS
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 100,
+      messages: [
+        {
+          role: 'system',
+          content: `Today is ${now}. Extract a specific ISO 8601 datetime from the user's message. If vague (e.g. "tomorrow afternoon"), pick 2pm. If no day, use next business day. Timezone: ${client.timezone || 'America/New_York'}. Respond ONLY with the ISO datetime.`,
+        },
+        { role: 'user', content: message },
+      ],
+    });
+
+    const isoDate = completion.choices[0].message.content.trim();
+    const scheduledDate = new Date(isoDate);
+    const formatted = scheduledDate.toLocaleString('en-US', {
+      timeZone: client.timezone || 'America/New_York',
+      weekday: 'long', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+
+    // Update conversation stage
+    await db.updateConversation(conversation.id, {
+      stage: 'scheduled',
+      collected_data: { preferred_datetime: isoDate, sms_reply: message },
+      last_response_at: new Date().toISOString(),
+    });
+
+    // Google Calendar
+    if (client.google_refresh_token && client.google_calendar_id) {
+      try {
+        await calendarSvc.createFollowUpEvent({
+          refreshToken: client.google_refresh_token,
+          calendarId: client.google_calendar_id,
+          leadPhone: conversation.lead_phone,
+          serviceType: conversation.service_type,
+          message: `Scheduled via SMS reply: "${message}"`,
+          voiceScript: `Estimate visit at ${isoDate}`,
+        });
+      } catch (err) {
+        await handleError('calendar', err);
+      }
+    }
+
+    // Confirm to lead via SMS
+    await twilioSvc.sendSms({
+      to: `+${conversation.lead_phone}`,
+      from: client.twilio_number,
+      body: `Great! Your free estimate with ${client.business_name} is confirmed for ${formatted}. We'll see you then! Reply STOP to cancel.`,
+    });
+
+    // Notify owner
+    await twilioSvc.sendSms({
+      to: client.owner_phone,
+      from: client.twilio_number,
+      body: `SCHEDULED ✓ – ${client.business_name}\nPhone: ${conversation.lead_phone}\nService: ${conversation.service_type}\nTime: ${formatted}\nLead said: "${message}"`,
+    });
+
+    logger.info('webhook', `scheduled lead ${conversation.lead_phone} for ${isoDate}`);
+  } catch (err) {
+    await handleError('scheduling', err);
+  }
 }
 
 // Twilio call status callback
