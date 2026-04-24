@@ -9,10 +9,12 @@ const { handleError } = require('../middleware/alerting');
 
 function detectServiceType(text) {
   const msg = (text || '').toLowerCase();
-  if (/floor|hardwood|tile|vinyl|laminate|carpet/.test(msg)) return 'flooring';
-  if (/install/.test(msg)) return 'installation';
-  if (/repair|fix|refinish/.test(msg)) return 'repair';
-  if (/estimate|quote|price/.test(msg)) return 'estimate';
+  if (/tile|tiling|grout|bullnose|porcelain/.test(msg)) return 'tile_install';
+  if (/custom home|new home|build|construction/.test(msg)) return 'custom_home';
+  if (/remodel|kitchen|bathroom|bath/.test(msg)) return 'remodel';
+  if (/renovat/.test(msg)) return 'renovation';
+  if (/repair|fix|replace|replacement/.test(msg)) return 'tile_replacement';
+  if (/estimate|quote|price/.test(msg)) return 'free_estimate';
   return 'general';
 }
 
@@ -191,7 +193,7 @@ router.post('/call-gather', async (req, res) => {
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Say voice="Polly.Joanna" language="en-US">Perfect! We have noted your preference. You will receive a confirmation shortly. Thank you for choosing Dellanno Floors and have a wonderful day!</Say>
+  <Say voice="Polly.Joanna" language="en-US">Perfect! We have noted your preference. You will receive a confirmation shortly. Thank you for choosing Denali Custom Homes and have a wonderful day!</Say>
 </Response>`);
 });
 
