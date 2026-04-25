@@ -7,6 +7,22 @@ const openaiSvc = require('../services/openai');
 const calendarSvc = require('../services/calendar');
 const { handleError } = require('../middleware/alerting');
 
+// US compliance: detect opt-out / opt-in / help keywords (TCPA mandatory)
+function detectComplianceKeyword(text) {
+  const msg = (text || '').trim().toUpperCase();
+  if (/^(STOP|STOPALL|UNSUBSCRIBE|CANCEL|END|QUIT)$/.test(msg)) return 'stop';
+  if (/^(START|UNSTOP|YES)$/.test(msg)) return 'start';
+  if (/^HELP$/.test(msg)) return 'help';
+  return null;
+}
+
+// US compliance: check if current time is within business hours for the client timezone
+function isWithinBusinessHours(timezone = 'America/New_York') {
+  const now = new Date();
+  const hour = parseInt(now.toLocaleString('en-US', { timeZone: timezone, hour: 'numeric', hour12: false }));
+  return hour >= 8 && hour < 21; // 8am–9pm
+}
+
 function detectServiceType(text) {
   const msg = (text || '').toLowerCase();
   if (/tile|tiling|grout|bullnose|porcelain/.test(msg)) return 'tile_install';
@@ -62,6 +78,51 @@ async function processSms(body) {
   }
 
   logger.info('webhook', `inbound SMS from=${leadPhone} to=${twilioNumber}`);
+
+  // US Compliance: handle STOP / HELP / START before anything else
+  const keyword = detectComplianceKeyword(message);
+  if (keyword === 'stop') {
+    // Twilio handles opt-out automatically at carrier level,
+    // but we must also confirm in plain text per TCPA
+    try {
+      let clientForStop;
+      try { clientForStop = await db.getClientByTwilioNumber(twilioNumber); } catch {}
+      await twilioSvc.sendSms({
+        to: `+${leadPhone}`,
+        from: twilioNumber,
+        body: `You have been unsubscribed from ${clientForStop ? clientForStop.business_name : 'our service'} notifications. No more messages will be sent. Reply START to re-subscribe.`,
+      });
+      await db.optOutLead(leadPhone, twilioNumber);
+    } catch {}
+    logger.info('webhook', `STOP received from ${leadPhone}`);
+    return;
+  }
+  if (keyword === 'help') {
+    try {
+      let clientForHelp;
+      try { clientForHelp = await db.getClientByTwilioNumber(twilioNumber); } catch {}
+      await twilioSvc.sendSms({
+        to: `+${leadPhone}`,
+        from: twilioNumber,
+        body: `${clientForHelp ? clientForHelp.business_name : 'LeadPilot'}: Reply to schedule your free estimate. Reply STOP to unsubscribe. Msg&Data rates may apply.`,
+      });
+    } catch {}
+    return;
+  }
+  if (keyword === 'start') {
+    try {
+      await db.optInLead(leadPhone, twilioNumber);
+    } catch {}
+    // fall through to normal processing
+  }
+
+  // Check opt-out list before processing
+  let isOptedOut = false;
+  try { isOptedOut = await db.isOptedOut(leadPhone, twilioNumber); } catch {}
+  if (isOptedOut) {
+    logger.info('webhook', `lead ${leadPhone} is opted out, skipping`);
+    return;
+  }
 
   const serviceType = detectServiceType(message);
   const leadName    = await extractLeadName(message);
@@ -140,13 +201,20 @@ async function processSms(body) {
     await handleError('supabase', err);
   }
 
-  // 6. Send SMS to lead asking them to reply with preferred time
+  // 6. Send SMS to lead — with business hours check and required compliance footer
   try {
-    const smsToLead = `Hi${leadName && leadName !== 'Customer' ? ' ' + leadName : ''}! This is ${client.business_name}. We just called about your ${serviceType.replace(/_/g, ' ')} request.\n\nReply to THIS message with your preferred day and time to schedule your FREE estimate and we'll confirm right away! 📅`;
+    const tz = client.timezone || 'America/New_York';
+    const greeting = leadName && leadName !== 'Customer' ? ` ${leadName}` : '';
+    let smsBody;
+    if (isWithinBusinessHours(tz)) {
+      smsBody = `Hi${greeting}! This is ${client.business_name}. We just called about your ${serviceType.replace(/_/g, ' ')} request.\n\nReply with your preferred day and time to schedule your FREE estimate — we'll confirm right away! 📅\n\nReply STOP to opt out.`;
+    } else {
+      smsBody = `Hi${greeting}! This is ${client.business_name}. We received your ${serviceType.replace(/_/g, ' ')} request.\n\nReply with your preferred day and time to schedule your FREE estimate and we'll confirm first thing in the morning! 📅\n\nReply STOP to opt out.`;
+    }
     await twilioSvc.sendSms({
       to: `+${leadPhone}`,
       from: client.twilio_number,
-      body: smsToLead,
+      body: smsBody,
     });
   } catch (err) {
     await handleError('twilio', err);

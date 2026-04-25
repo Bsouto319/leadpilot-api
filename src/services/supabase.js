@@ -213,6 +213,19 @@ async function getHourlyLeads() {
   return hours;
 }
 
+async function optOutLead(leadPhone, twilioNumber) {
+  await supabase.from('sms_opt_outs').upsert({ lead_phone: leadPhone, twilio_number: twilioNumber, opted_out_at: new Date().toISOString() });
+}
+
+async function optInLead(leadPhone, twilioNumber) {
+  await supabase.from('sms_opt_outs').delete().eq('lead_phone', leadPhone).eq('twilio_number', twilioNumber);
+}
+
+async function isOptedOut(leadPhone, twilioNumber) {
+  const { data } = await supabase.from('sms_opt_outs').select('id').eq('lead_phone', leadPhone).eq('twilio_number', twilioNumber).single();
+  return !!data;
+}
+
 module.exports = {
   getClientByTwilioNumber,
   getExistingConversation,
@@ -229,6 +242,9 @@ module.exports = {
   updateClient,
   getErrors,
   getAppointments,
+  optOutLead,
+  optInLead,
+  isOptedOut,
   getDayStats,
   getHourlyLeads,
 };
