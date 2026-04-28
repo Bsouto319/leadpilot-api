@@ -62,6 +62,19 @@ router.get('/leads/export/csv', async (req, res) => {
   }
 });
 
+router.patch('/leads/:id', async (req, res) => {
+  try {
+    const allowed = {};
+    if (req.body.stage     !== undefined) allowed.stage     = req.body.stage;
+    if (req.body.notes     !== undefined) allowed.notes     = req.body.notes;
+    if (req.body.scheduled_at !== undefined) allowed.scheduled_at = req.body.scheduled_at;
+    await db.updateConversation(req.params.id, allowed);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/leads/:id', async (req, res) => {
   try {
     const lead = await db.getLeadById(req.params.id);
