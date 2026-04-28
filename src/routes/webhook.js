@@ -7,6 +7,24 @@ const openaiSvc = require('../services/openai');
 const calendarSvc = require('../services/calendar');
 const { handleError } = require('../middleware/alerting');
 
+// Simple in-memory rate limiter: max 10 requests per IP per minute
+const rateLimitMap = new Map();
+function webhookRateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  const window = 60_000;
+  const max = 10;
+  const entry = rateLimitMap.get(ip) || { count: 0, start: now };
+  if (now - entry.start > window) { entry.count = 0; entry.start = now; }
+  entry.count++;
+  rateLimitMap.set(ip, entry);
+  if (entry.count > max) {
+    logger.warn('webhook', `rate limit hit from ${ip}`);
+    return res.status(429).send('Too Many Requests');
+  }
+  next();
+}
+
 // US compliance: detect opt-out / opt-in / help keywords (TCPA mandatory)
 function detectComplianceKeyword(text) {
   const msg = (text || '').trim().toUpperCase();
@@ -65,7 +83,7 @@ async function extractLeadName(message) {
 }
 
 // Twilio inbound SMS
-router.post('/sms', (req, res) => {
+router.post('/sms', webhookRateLimit, twilioSvc.twilioSignatureMiddleware, (req, res) => {
   // Respond immediately so Twilio doesn't timeout
   res.set('Content-Type', 'text/xml');
   res.send('<Response></Response>');
@@ -465,19 +483,8 @@ router.post('/call-gather', async (req, res) => {
 });
 
 async function processGather({ speech, conversationId, clientId }) {
-  const { createClient } = require('@supabase/supabase-js');
-  const supabase = createClient(
-    'https://pvphgusjofufwtyiyviu.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2cGhndXNqb2Z1Znd0eWl5dml1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNjkwODYsImV4cCI6MjA5MDg0NTA4Nn0.0aA8YNmhVusNuBjWZoEZW50dTRZWowm9AoNVoyGCXBM'
-  );
-
   // 1. Get conversation + client data
-  const { data: conv } = await supabase
-    .from('conversations')
-    .select('*, clients(*)')
-    .eq('id', conversationId)
-    .single();
-
+  const conv = await db.getConversationWithClient(conversationId);
   if (!conv) return;
 
   const client = conv.clients;
@@ -506,11 +513,11 @@ async function processGather({ speech, conversationId, clientId }) {
   const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // +1h
 
   // 3. Save preference to Supabase
-  await supabase.from('conversations').update({
+  await db.updateConversation(conversationId, {
     stage: 'scheduled',
     collected_data: { preferred_datetime: isoDate, speech_input: speech },
     last_response_at: new Date().toISOString(),
-  }).eq('id', conversationId);
+  });
 
   // 4. Google Calendar (if client has refresh token)
   if (client.google_refresh_token && client.google_calendar_id) {

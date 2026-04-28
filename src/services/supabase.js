@@ -1,8 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('../utils/logger');
 
-const SUPABASE_URL = 'https://pvphgusjofufwtyiyviu.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2cGhndXNqb2Z1Znd0eWl5dml1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNjkwODYsImV4cCI6MjA5MDg0NTA4Nn0.0aA8YNmhVusNuBjWZoEZW50dTRZWowm9AoNVoyGCXBM';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pvphgusjofufwtyiyviu.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2cGhndXNqb2Z1Znd0eWl5dml1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNjkwODYsImV4cCI6MjA5MDg0NTA4Nn0.0aA8YNmhVusNuBjWZoEZW50dTRZWowm9AoNVoyGCXBM';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -315,6 +315,16 @@ async function getNoShowLeads() {
   return data || [];
 }
 
+async function getConversationWithClient(id) {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*, clients(*)')
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(`getConversationWithClient: ${error.message}`);
+  return data;
+}
+
 async function getClientByUserId(userId) {
   const { data, error } = await supabase
     .from('clients')
@@ -354,4 +364,5 @@ module.exports = {
   markReviewSent,
   getNoShowLeads,
   getClientByUserId,
+  getConversationWithClient,
 };

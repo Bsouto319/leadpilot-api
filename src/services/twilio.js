@@ -10,11 +10,20 @@ function getClient(credentials) {
   return defaultClient;
 }
 
+function escapeXml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 async function makeCall({ to, from, voiceScript, statusCallbackUrl, gatherUrl, credentials }) {
   const client = getClient(credentials);
   const twiml = `<Response>
   <Pause length="2"/>
-  <Say voice="Polly.Joanna" language="en-US">${voiceScript}</Say>
+  <Say voice="Polly.Joanna" language="en-US">${escapeXml(voiceScript)}</Say>
   <Pause length="2"/>
   <Say voice="Polly.Joanna" language="en-US">To schedule your free estimate, simply reply to our text message with your preferred day and time. We will confirm right away. Thank you and have a wonderful day!</Say>
   <Pause length="1"/>
@@ -46,4 +55,13 @@ function validateSignature(req, authToken) {
   return twilio.validateRequest(token, signature, url, req.body);
 }
 
-module.exports = { makeCall, sendSms, validateSignature };
+function twilioSignatureMiddleware(req, res, next) {
+  if (process.env.TWILIO_VALIDATE_SIGNATURES !== 'true') return next();
+  if (!validateSignature(req)) {
+    logger.warn('twilio', `invalid signature from ${req.ip} on ${req.originalUrl}`);
+    return res.status(403).send('Forbidden');
+  }
+  next();
+}
+
+module.exports = { makeCall, sendSms, validateSignature, twilioSignatureMiddleware };

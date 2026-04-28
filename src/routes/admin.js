@@ -147,6 +147,26 @@ router.post('/weekly-report', async (req, res) => {
   }
 });
 
+router.post('/test-alert', async (req, res) => {
+  try {
+    const twilio = require('twilio');
+    const alertPhone = process.env.ALERT_PHONE;
+    const fromNumber = process.env.TWILIO_FROM_ALERT;
+    if (!alertPhone || !fromNumber) {
+      return res.status(400).json({ error: 'ALERT_PHONE or TWILIO_FROM_ALERT not configured' });
+    }
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await client.messages.create({
+      to: alertPhone,
+      from: fromNumber,
+      body: 'TEST ALERT – LeadPilot monitoring check OK',
+    });
+    res.json({ ok: true, to: alertPhone, from: fromNumber });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/errors', async (req, res) => {
   try {
     const errors = await db.getErrors();
