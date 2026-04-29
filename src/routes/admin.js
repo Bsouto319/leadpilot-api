@@ -151,9 +151,9 @@ router.post('/test-alert', async (req, res) => {
   try {
     const twilio = require('twilio');
     const alertPhone = process.env.ALERT_PHONE;
-    const fromNumber = process.env.TWILIO_FROM_ALERT;
+    const fromNumber = process.env.TWILIO_FROM_ALERT || process.env.ALERT_FROM;
     if (!alertPhone || !fromNumber) {
-      return res.status(400).json({ error: 'ALERT_PHONE or TWILIO_FROM_ALERT not configured' });
+      return res.status(400).json({ error: 'ALERT_PHONE or ALERT_FROM not configured' });
     }
     const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
     await client.messages.create({
