@@ -28,6 +28,16 @@ async function getClientById(id) {
   return data;
 }
 
+async function getClientsWithGmailToken() {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, business_name, twilio_number, owner_phone, twilio_account_sid, twilio_auth_token, gmail_refresh_token')
+    .eq('active', true)
+    .not('gmail_refresh_token', 'is', null);
+  if (error) throw new Error(`getClientsWithGmailToken: ${error.message}`);
+  return data || [];
+}
+
 async function getExistingConversation(clientId, leadPhone) {
   const { data } = await supabase
     .from('conversations')
@@ -403,6 +413,7 @@ async function getMessages(conversationId) {
 module.exports = {
   getClientByTwilioNumber,
   getClientById,
+  getClientsWithGmailToken,
   getExistingConversation,
   checkDuplicate,
   saveLead,

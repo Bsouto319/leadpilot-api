@@ -6,6 +6,7 @@ const twilioSvc = require('../services/twilio');
 const openaiSvc = require('../services/openai');
 const calendarSvc = require('../services/calendar');
 const { handleError } = require('../middleware/alerting');
+const { processThumbtackLead } = require('../services/thumbtack');
 
 // Simple in-memory rate limiter: max 10 requests per IP per minute
 const rateLimitMap = new Map();
@@ -981,152 +982,12 @@ async function processVoiceIntake(req, res) {
 }
 
 // ── THUMBTACK LEAD WEBHOOK ────────────────────────────────────────────────────
-// Called by Zapier when Thumbtack notifies a new lead via email/webhook.
 // Payload: { clientId, leadPhone, leadName?, serviceNote?, apiKey }
 // leadPhone = Thumbtack virtual number assigned to this lead
-// The Twilio number registered on the Thumbtack profile must match client.twilio_number
+// The Twilio number on the Thumbtack profile must match client.twilio_number
 router.post('/thumbtack-lead', express.json(), async (req, res) => {
   res.sendStatus(200);
   processThumbtackLead(req.body).catch(err => handleError('thumbtack', err));
 });
-
-async function processThumbtackLead(body) {
-  const { clientId, leadPhone: rawPhone, leadName, serviceNote, apiKey } = body;
-
-  if (!clientId || !rawPhone) {
-    logger.warn('thumbtack', 'missing clientId or leadPhone');
-    return;
-  }
-
-  // Simple API key check — stored in THUMBTACK_WEBHOOK_SECRET env var
-  const expectedKey = process.env.THUMBTACK_WEBHOOK_SECRET;
-  if (expectedKey && apiKey !== expectedKey) {
-    logger.warn('thumbtack', 'invalid apiKey in thumbtack-lead request');
-    return;
-  }
-
-  const leadPhone = normalizePhone(rawPhone);
-  if (!leadPhone) {
-    logger.warn('thumbtack', `invalid phone: ${rawPhone}`);
-    return;
-  }
-
-  // Load client
-  let client;
-  try {
-    client = await db.getClientById(clientId);
-  } catch (err) {
-    await handleError('supabase', err);
-    return;
-  }
-  if (!client) {
-    logger.warn('thumbtack', `no client found for id ${clientId}`);
-    return;
-  }
-
-  // Anti-duplicate: ignore if we already processed this Thumbtack virtual number recently
-  let isDuplicate;
-  try {
-    isDuplicate = await db.checkDuplicate(client.id, leadPhone, 60);
-  } catch (err) {
-    await handleError('supabase', err);
-    return;
-  }
-  if (isDuplicate) {
-    logger.info('thumbtack', `duplicate lead ${leadPhone} for client ${client.id}, skipping`);
-    return;
-  }
-
-  const name        = leadName || 'Customer';
-  const serviceType = serviceNote ? detectServiceType(serviceNote) : 'free_estimate';
-  const message     = serviceNote || 'Thumbtack lead request';
-
-  // Save lead
-  let conversation;
-  try {
-    conversation = await db.saveLead({
-      clientId: client.id,
-      leadPhone,
-      leadName: name,
-      source: 'thumbtack',
-      serviceType,
-      message,
-    });
-  } catch (err) {
-    await handleError('supabase', err);
-    return;
-  }
-
-  // Generate voice script
-  let voiceScript;
-  try {
-    voiceScript = await openaiSvc.generateVoiceScript({
-      businessName: client.business_name,
-      serviceType,
-      pricing: client.pricing,
-      systemPrompt: client.ai_system_prompt || null,
-    });
-  } catch (err) {
-    await handleError('openai', err);
-    voiceScript = `Hi${name !== 'Customer' ? ` ${name}` : ''}! This is ${client.business_name}. We saw your request on Thumbtack and would love to schedule a FREE in-home estimate. Please reply with a day and time that works for you!`;
-  }
-
-  await db.updateConversation(conversation.id, {
-    stage: 'ai_responded',
-    ai_response: voiceScript,
-    last_response_at: new Date().toISOString(),
-  }).catch(() => {});
-
-  const hi = name !== 'Customer' ? `Hi ${name}!` : 'Hi there!';
-
-  // SMS first — Thumbtack routes it to lead via their virtual number
-  try {
-    const smsBody = `${hi} 🏠 ${client.business_name} here — saw your Thumbtack request and calling you RIGHT NOW!\n\nIf we miss you, just reply with your best day & time for a FREE estimate. We have openings this week! 📅\n\nReply STOP to opt out.`;
-    await twilioSvc.sendSms({
-      to: `+${leadPhone}`,
-      from: client.twilio_number,
-      body: smsBody,
-      credentials: clientCredentials(client),
-    });
-    db.appendMessage(conversation.id, 'ai', smsBody).catch(() => {});
-  } catch (err) {
-    await handleError('twilio', err);
-  }
-
-  // Outbound call — must come from the Twilio number registered on Thumbtack profile
-  try {
-    const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
-    const call = await twilioSvc.makeCall({
-      to: `+${leadPhone}`,
-      from: client.twilio_number,
-      voiceScript,
-      statusCallbackUrl: `${BASE}/webhook/call-status`,
-      gatherUrl: `${BASE}/webhook/call-gather?conversationId=${conversation.id}&clientId=${client.id}`,
-      credentials: clientCredentials(client),
-    });
-    await db.updateConversation(conversation.id, {
-      call_sid: call.sid,
-      call_status: call.status,
-      call_attempted_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    await handleError('twilio', err);
-  }
-
-  // Notify owner
-  try {
-    await twilioSvc.sendSms({
-      to: client.owner_phone,
-      from: client.twilio_number,
-      body: `🔔 THUMBTACK LEAD – ${client.business_name}\nName: ${name}\nPhone: +${leadPhone}\nService: ${serviceType}\nNote: ${message}\n\nCall + SMS sent automatically.`,
-      credentials: clientCredentials(client),
-    });
-  } catch (err) {
-    await handleError('twilio', err);
-  }
-
-  db.appendMessage(conversation.id, 'lead', message).catch(() => {});
-  logger.info('thumbtack', `lead processed id=${conversation.id} phone=${leadPhone} client=${client.business_name}`);
-}
 
 module.exports = router;

@@ -12,8 +12,10 @@ const errorHandler = require('./middleware/errorHandler');
 const webhookRoutes = require('./routes/webhook');
 const adminRoutes   = require('./routes/admin');
 const cronRoutes    = require('./routes/cron');
-const db     = require('./services/supabase');
+const db         = require('./services/supabase');
 const twilioSvc  = require('./services/twilio');
+const gmailSvc   = require('./services/gmail');
+const { processThumbtackLead } = require('./services/thumbtack');
 const { handleError } = require('./middleware/alerting');
 
 const app = express();
@@ -165,5 +167,27 @@ function startCronJobs() {
     } catch (err) { handleError('cron-weekly', err).catch(() => {}); }
   }, { timezone: 'America/New_York' });
 
-  logger.info('server', 'cron jobs scheduled: reminders@9am, followups@10am, reviews@6pm, noshows@8pm, weekly-report@mon8am');
+  // Every 10 minutes — poll Gmail for Thumbtack lead emails (clients with gmail_refresh_token)
+  cron.schedule('*/10 * * * *', async () => {
+    try {
+      const clients = await db.getClientsWithGmailToken();
+      for (const client of clients) {
+        const leads = await gmailSvc.fetchThumbtackLeads(client.gmail_refresh_token);
+        for (const lead of leads) {
+          if (!lead.leadPhone) {
+            logger.warn('cron-thumbtack', `no phone found in email for client ${client.business_name}, skipping`);
+            continue;
+          }
+            await processThumbtackLead({
+            clientId: client.id,
+            leadPhone: lead.leadPhone,
+            leadName: lead.leadName,
+            serviceNote: lead.serviceNote,
+          });
+        }
+      }
+    } catch (err) { handleError('cron-thumbtack', err).catch(() => {}); }
+  });
+
+  logger.info('server', 'cron jobs scheduled: reminders@9am, followups@10am, reviews@6pm, noshows@8pm, weekly-report@mon8am, thumbtack-poll@every10min');
 }
