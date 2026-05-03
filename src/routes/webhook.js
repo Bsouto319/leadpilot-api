@@ -75,7 +75,7 @@ async function handleHumanHandoff({ client, conversation, message }) {
     await twilioSvc.sendSms({
       to: client.owner_phone,
       from: client.twilio_number,
-      body: `⚠️ HUMAN HANDOFF – ${client.business_name}\nName: ${leadName}\nPhone: +${leadPhone}\nMessage: "${message}"\n\nLead is requesting a human. Please call them directly.`,
+      body: `⚠️ ATENÇÃO – ${client.business_name}\nCliente quer falar com humano!\nNome: ${leadName}\nFone: +${leadPhone}\nMensagem: "${message}"\n\nLigue diretamente para esse cliente agora.`,
       credentials: clientCredentials(client),
     });
   } catch (err) {
@@ -406,7 +406,7 @@ async function processSms(body) {
     await twilioSvc.sendSms({
       to: client.owner_phone,
       from: client.twilio_number,
-      body: `NEW LEAD – ${client.business_name}\nName: ${leadName}\nPhone: +${leadPhone}\nService: ${serviceType}\nCall + SMS sent to lead.`,
+      body: `🔔 NOVO LEAD – ${client.business_name}\nNome: ${leadName}\nFone: +${leadPhone}\nServiço: ${serviceType.replace(/_/g, ' ')}\n\nLigação + SMS enviados automaticamente ✅`,
       credentials: clientCredentials(client),
     });
   } catch (err) {
@@ -482,7 +482,7 @@ async function processAddressReply({ client, conversation, message }) {
     await twilioSvc.sendSms({
       to: client.owner_phone,
       from: client.twilio_number,
-      body: `ADDRESS CONFIRMED – ${client.business_name}\nName: ${conversation.lead_name}\nPhone: +${conversation.lead_phone}\nTime: ${formatted}\nAddress: ${address}`,
+      body: `📍 ENDEREÇO CONFIRMADO – ${client.business_name}\nNome: ${conversation.lead_name}\nFone: +${conversation.lead_phone}\nData: ${formatted}\nEndereço: ${address}\n\nVisita confirmada ✅`,
       credentials: clientCredentials(client),
     });
 
@@ -605,7 +605,7 @@ async function processSchedulingReply({ client, conversation, message }) {
     await twilioSvc.sendSms({
       to: client.owner_phone,
       from: client.twilio_number,
-      body: `PENDING ADDRESS – ${client.business_name}\nName: ${conversation.lead_name || 'Customer'}\nPhone: +${conversation.lead_phone}\nService: ${conversation.service_type}\nTime: ${formatted}\n(Waiting for address)`,
+      body: `📅 VISITA MARCADA – ${client.business_name}\nNome: ${conversation.lead_name || 'Cliente'}\nFone: +${conversation.lead_phone}\nServiço: ${(conversation.service_type || '').replace(/_/g, ' ')}\nData: ${formatted}\n\nAguardando endereço do cliente...`,
       credentials: clientCredentials(client),
     });
 
@@ -709,7 +709,7 @@ async function processGather({ speech, conversationId, clientId }) {
     await twilioSvc.sendSms({
       to: client.owner_phone,
       from: client.twilio_number,
-      body: `SCHEDULED – ${client.business_name}\nPhone: ${conv.lead_phone}\nService: ${conv.service_type}\nTime: ${startDate.toLocaleString('en-US', { timeZone: client.timezone || 'America/New_York' })}\nLead said: "${speech}"`,
+      body: `✅ AGENDADO POR VOZ – ${client.business_name}\nFone: +${conv.lead_phone}\nServiço: ${(conv.service_type || '').replace(/_/g, ' ')}\nData: ${startDate.toLocaleString('pt-BR', { timeZone: client.timezone || 'America/New_York', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}\nCliente disse: "${speech}"`,
       credentials: clientCredentials(client),
     });
   } catch (err) {
@@ -963,7 +963,7 @@ async function processVoiceIntake(req, res) {
     await twilioSvc.sendSms({
       to: client.owner_phone,
       from: client.twilio_number,
-      body: `📞 NEW VOICE LEAD – ${client.business_name}\nPhone: +${conv.lead_phone}\nService: ${serviceRaw}\nDate: ${formatted}\nAddress: ${address}\n\nVer no dashboard para confirmar.`,
+      body: `📞 NOVA VISITA AGENDADA – ${client.business_name}\nFone: +${conv.lead_phone}\nServiço: ${serviceRaw}\nData: ${formatted}\nEndereço: ${address}\n\nVer no dashboard para confirmar ✅`,
       credentials: clientCredentials(client),
     }).catch(() => {});
 

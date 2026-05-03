@@ -24,122 +24,90 @@ router.post('/twilio-fix', async (req, res) => {
     return res.status(500).json({ error: 'TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not set in env' });
   }
 
-  const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
-  const headers = { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' };
-  const report = { accountSid: accountSid.slice(0, 10) + '...', checks: [] };
+  const twilio = require('twilio')(accountSid, authToken);
+  const report = { accountSid: accountSid.slice(0, 10) + '...', checks: [], fixes: [] };
 
-  // 1. Checar detalhes da conta
+  // 1. Detalhes da conta
   try {
-    const accRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}.json`, { headers });
-    const acc = await accRes.json();
-    report.account = { status: acc.status, type: acc.type, friendlyName: acc.friendly_name };
+    const acc = await twilio.api.accounts(accountSid).fetch();
+    report.account = { status: acc.status, type: acc.type, friendlyName: acc.friendlyName };
     report.checks.push({ check: 'account_status', value: acc.status, ok: acc.status === 'active' });
   } catch (e) {
-    report.checks.push({ check: 'account_status', error: e.message });
+    report.checks.push({ check: 'account_status', error: e.message, ok: false });
   }
 
-  // 2. Checar capabilities do número +19418456110
+  // 2. Capabilities do número +19418456110
   try {
-    const numRes = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=%2B19418456110`,
-      { headers }
-    );
-    const nums = await numRes.json();
-    const num = nums.incoming_phone_numbers?.[0];
+    const numbers = await twilio.incomingPhoneNumbers.list({ phoneNumber: '+19418456110' });
+    const num = numbers[0];
     if (num) {
       report.number = {
-        phoneNumber: num.phone_number,
-        friendlyName: num.friendly_name,
-        voiceCapable: num.capabilities?.voice,
-        smsCapable: num.capabilities?.sms,
-        voiceUrl: num.voice_url,
-        smsUrl: num.sms_url,
+        phoneNumber: num.phoneNumber,
+        voiceCapable: num.capabilities.voice,
+        smsCapable:   num.capabilities.sms,
+        voiceUrl: num.voiceUrl,
+        smsUrl:   num.smsUrl,
+        statusCallbackUrl: num.statusCallbackUrl,
       };
-      report.checks.push({ check: 'voice_capable', value: num.capabilities?.voice, ok: !!num.capabilities?.voice });
-      report.checks.push({ check: 'sms_capable',   value: num.capabilities?.sms,   ok: !!num.capabilities?.sms });
+      report.checks.push({ check: 'voice_capable', value: num.capabilities.voice, ok: !!num.capabilities.voice });
+      report.checks.push({ check: 'sms_capable',   value: num.capabilities.sms,   ok: !!num.capabilities.sms });
     } else {
-      report.checks.push({ check: 'number_found', ok: false, note: 'Number +19418456110 not found in account' });
+      report.checks.push({ check: 'number_found', ok: false, note: '+19418456110 not found in this account' });
     }
   } catch (e) {
-    report.checks.push({ check: 'number_capabilities', error: e.message });
+    report.checks.push({ check: 'number_capabilities', error: e.message, ok: false });
   }
 
-  // 3. Checar Voice Geographic Permissions para US
+  // 3. Voice Geographic Permissions para US
   try {
-    const geoRes = await fetch(
-      'https://voice.twilio.com/v1/DialingPermissions/Countries/US',
-      { headers: { 'Authorization': `Basic ${auth}` } }
-    );
-    const geo = await geoRes.json();
+    const geo = await twilio.voice.dialingPermissions.countries('US').fetch();
     report.voiceGeoUS = {
-      isoCode: geo.iso_code,
-      highRiskEnabled: geo.high_risk_special_numbers_enabled,
-      lowRiskEnabled:  geo.low_risk_numbers_enabled,
+      lowRiskEnabled:  geo.lowRiskNumbersEnabled,
+      highRiskEnabled: geo.highRiskSpecialNumbersEnabled,
     };
-    report.checks.push({ check: 'us_voice_low_risk', value: geo.low_risk_numbers_enabled, ok: !!geo.low_risk_numbers_enabled });
+    report.checks.push({ check: 'us_low_risk_voice', value: geo.lowRiskNumbersEnabled, ok: !!geo.lowRiskNumbersEnabled });
 
-    // Habilitar se não estiver
-    if (!geo.low_risk_numbers_enabled) {
-      const fixRes = await fetch(
-        `https://voice.twilio.com/v1/DialingPermissions/Countries/US`,
-        {
-          method: 'POST',
-          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'LowRiskNumbersEnabled=true',
-        }
-      );
-      const fixData = await fixRes.json();
-      report.voiceGeoFix = { attempted: true, result: fixData };
-      report.checks.push({ check: 'us_voice_fix_attempted', ok: true });
+    // Corrige automaticamente se estiver desabilitado
+    if (!geo.lowRiskNumbersEnabled) {
+      await twilio.voice.dialingPermissions.countries('US').update({ lowRiskNumbersEnabled: true });
+      report.fixes.push('us_low_risk_voice: enabled');
+      report.voiceGeoUS.lowRiskEnabled = true;
     }
   } catch (e) {
-    report.checks.push({ check: 'us_voice_geo', error: e.message });
+    report.checks.push({ check: 'us_voice_geo', error: e.message, ok: false });
   }
 
-  // 4. Checar Voice settings globais da conta
+  // 4. Últimas 5 mensagens enviadas do número da Denali
   try {
-    const vsRes = await fetch('https://voice.twilio.com/v1/Settings', {
-      headers: { 'Authorization': `Basic ${auth}` }
-    });
-    const vs = await vsRes.json();
-    report.voiceSettings = vs;
-  } catch (e) {
-    report.checks.push({ check: 'voice_settings', error: e.message });
-  }
-
-  // 5. Checar últimas mensagens enviadas (para ver se SMS chegou)
-  try {
-    const msgRes = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json?From=%2B19418456110&PageSize=5`,
-      { headers }
-    );
-    const msgs = await msgRes.json();
-    report.recentMessages = (msgs.messages || []).map(m => ({
+    const msgs = await twilio.messages.list({ from: '+19418456110', limit: 5 });
+    report.recentMessages = msgs.map(m => ({
       to: m.to, status: m.status, direction: m.direction,
-      errorCode: m.error_code, errorMessage: m.error_message,
-      dateSent: m.date_sent, body: (m.body || '').substring(0, 60),
+      errorCode: m.errorCode, errorMessage: m.errorMessage,
+      dateSent: m.dateSent,
+      body: (m.body || '').substring(0, 80),
     }));
+    const failed = msgs.filter(m => ['failed', 'undelivered'].includes(m.status));
+    report.checks.push({ check: 'sms_delivery', failedCount: failed.length, ok: failed.length === 0 });
+    if (failed.length > 0) {
+      report.smsFailureReasons = failed.map(m => ({ to: m.to, errorCode: m.errorCode, errorMessage: m.errorMessage }));
+    }
   } catch (e) {
-    report.checks.push({ check: 'recent_messages', error: e.message });
+    report.checks.push({ check: 'recent_messages', error: e.message, ok: false });
   }
 
-  // 6. Checar últimas chamadas realizadas
+  // 5. Últimas 5 chamadas do número da Denali
   try {
-    const callRes = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls.json?From=%2B19418456110&PageSize=5`,
-      { headers }
-    );
-    const calls = await callRes.json();
-    report.recentCalls = (calls.calls || []).map(c => ({
+    const calls = await twilio.calls.list({ from: '+19418456110', limit: 5 });
+    report.recentCalls = calls.map(c => ({
       to: c.to, status: c.status, direction: c.direction,
-      duration: c.duration, startTime: c.start_time,
+      duration: c.duration, startTime: c.startTime,
     }));
   } catch (e) {
-    report.checks.push({ check: 'recent_calls', error: e.message });
+    report.checks.push({ check: 'recent_calls', error: e.message, ok: false });
   }
 
-  const allOk = report.checks.filter(c => c.ok === false).length === 0;
-  res.json({ ok: allOk, report });
+  const failed = report.checks.filter(c => c.ok === false);
+  res.json({ ok: failed.length === 0, fixesApplied: report.fixes, report });
 });
 
 router.get('/stats', async (req, res) => {

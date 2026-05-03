@@ -157,9 +157,10 @@ function startCronJobs() {
         if (!s.client || !s.client.owner_phone) continue;
         const conversion = s.total > 0 ? Math.round((s.scheduled / s.total) * 100) : 0;
         const msg =
-          `📊 LeadPilot Weekly – ${s.client.business_name}\n` +
-          `Leads: ${s.total} | Scheduled: ${s.scheduled}\n` +
-          `Conversion: ${conversion}%\n` +
+          `📊 LeadPilot — Resumo Semanal\n${s.client.business_name}\n` +
+          `Leads recebidos: ${s.total}\n` +
+          `Visitas agendadas: ${s.scheduled}\n` +
+          `Conversão: ${conversion}%\n` +
           `Powered by LeadPilot`;
         await twilioSvc.sendSms({ to: s.client.owner_phone, from: s.client.twilio_number, body: msg });
         logger.info('cron', `weekly report → ${s.client.business_name}`);

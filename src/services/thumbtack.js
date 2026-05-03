@@ -144,7 +144,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     await twilioSvc.sendSms({
       to: client.owner_phone,
       from: client.twilio_number,
-      body: `🔔 THUMBTACK LEAD – ${client.business_name}\nName: ${name}\nPhone: +${leadPhone}\nService: ${serviceType}\nNote: ${message}\n\nCall + SMS sent automatically.`,
+      body: `🔔 NOVO LEAD THUMBTACK – ${client.business_name}\nNome: ${name}\nFone: +${leadPhone}\nServiço: ${serviceType.replace(/_/g, ' ')}\nPedido: ${message}\n\nLigação + SMS enviados automaticamente ✅`,
       credentials: clientCredentials(client),
     });
   } catch (err) {
