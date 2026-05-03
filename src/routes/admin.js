@@ -16,6 +16,132 @@ router.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 
+// Diagnóstico e correção automática das permissões de voz Twilio
+router.post('/twilio-fix', async (req, res) => {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken  = process.env.TWILIO_AUTH_TOKEN;
+  if (!accountSid || !authToken) {
+    return res.status(500).json({ error: 'TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not set in env' });
+  }
+
+  const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+  const headers = { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' };
+  const report = { accountSid: accountSid.slice(0, 10) + '...', checks: [] };
+
+  // 1. Checar detalhes da conta
+  try {
+    const accRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}.json`, { headers });
+    const acc = await accRes.json();
+    report.account = { status: acc.status, type: acc.type, friendlyName: acc.friendly_name };
+    report.checks.push({ check: 'account_status', value: acc.status, ok: acc.status === 'active' });
+  } catch (e) {
+    report.checks.push({ check: 'account_status', error: e.message });
+  }
+
+  // 2. Checar capabilities do número +19418456110
+  try {
+    const numRes = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=%2B19418456110`,
+      { headers }
+    );
+    const nums = await numRes.json();
+    const num = nums.incoming_phone_numbers?.[0];
+    if (num) {
+      report.number = {
+        phoneNumber: num.phone_number,
+        friendlyName: num.friendly_name,
+        voiceCapable: num.capabilities?.voice,
+        smsCapable: num.capabilities?.sms,
+        voiceUrl: num.voice_url,
+        smsUrl: num.sms_url,
+      };
+      report.checks.push({ check: 'voice_capable', value: num.capabilities?.voice, ok: !!num.capabilities?.voice });
+      report.checks.push({ check: 'sms_capable',   value: num.capabilities?.sms,   ok: !!num.capabilities?.sms });
+    } else {
+      report.checks.push({ check: 'number_found', ok: false, note: 'Number +19418456110 not found in account' });
+    }
+  } catch (e) {
+    report.checks.push({ check: 'number_capabilities', error: e.message });
+  }
+
+  // 3. Checar Voice Geographic Permissions para US
+  try {
+    const geoRes = await fetch(
+      'https://voice.twilio.com/v1/DialingPermissions/Countries/US',
+      { headers: { 'Authorization': `Basic ${auth}` } }
+    );
+    const geo = await geoRes.json();
+    report.voiceGeoUS = {
+      isoCode: geo.iso_code,
+      highRiskEnabled: geo.high_risk_special_numbers_enabled,
+      lowRiskEnabled:  geo.low_risk_numbers_enabled,
+    };
+    report.checks.push({ check: 'us_voice_low_risk', value: geo.low_risk_numbers_enabled, ok: !!geo.low_risk_numbers_enabled });
+
+    // Habilitar se não estiver
+    if (!geo.low_risk_numbers_enabled) {
+      const fixRes = await fetch(
+        `https://voice.twilio.com/v1/DialingPermissions/Countries/US`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'LowRiskNumbersEnabled=true',
+        }
+      );
+      const fixData = await fixRes.json();
+      report.voiceGeoFix = { attempted: true, result: fixData };
+      report.checks.push({ check: 'us_voice_fix_attempted', ok: true });
+    }
+  } catch (e) {
+    report.checks.push({ check: 'us_voice_geo', error: e.message });
+  }
+
+  // 4. Checar Voice settings globais da conta
+  try {
+    const vsRes = await fetch('https://voice.twilio.com/v1/Settings', {
+      headers: { 'Authorization': `Basic ${auth}` }
+    });
+    const vs = await vsRes.json();
+    report.voiceSettings = vs;
+  } catch (e) {
+    report.checks.push({ check: 'voice_settings', error: e.message });
+  }
+
+  // 5. Checar últimas mensagens enviadas (para ver se SMS chegou)
+  try {
+    const msgRes = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json?From=%2B19418456110&PageSize=5`,
+      { headers }
+    );
+    const msgs = await msgRes.json();
+    report.recentMessages = (msgs.messages || []).map(m => ({
+      to: m.to, status: m.status, direction: m.direction,
+      errorCode: m.error_code, errorMessage: m.error_message,
+      dateSent: m.date_sent, body: (m.body || '').substring(0, 60),
+    }));
+  } catch (e) {
+    report.checks.push({ check: 'recent_messages', error: e.message });
+  }
+
+  // 6. Checar últimas chamadas realizadas
+  try {
+    const callRes = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls.json?From=%2B19418456110&PageSize=5`,
+      { headers }
+    );
+    const calls = await callRes.json();
+    report.recentCalls = (calls.calls || []).map(c => ({
+      to: c.to, status: c.status, direction: c.direction,
+      duration: c.duration, startTime: c.start_time,
+    }));
+  } catch (e) {
+    report.checks.push({ check: 'recent_calls', error: e.message });
+  }
+
+  const allOk = report.checks.filter(c => c.ok === false).length === 0;
+  res.json({ ok: allOk, report });
+});
+
 router.get('/stats', async (req, res) => {
   try {
     const clientId = req.query.clientId || '';
