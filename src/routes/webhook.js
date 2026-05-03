@@ -349,17 +349,10 @@ async function processSms(body) {
     await handleError('supabase', err);
   }
 
-  // 6. Send SMS to lead — with business hours check and required compliance footer
-  const tzSms = client.timezone || 'America/New_York';
-  const withinHours = isWithinBusinessHours(tzSms);
+  // 6. Send SMS to lead immediately (lead initiated contact — always respond ASAP)
   try {
     const greeting = leadName && leadName !== 'Customer' ? ` ${leadName}` : '';
-    let smsBody;
-    if (withinHours) {
-      smsBody = `Hi${greeting}! This is ${client.business_name}. We're calling you right now about your ${serviceType.replace(/_/g, ' ')} request!\n\nIf we miss you, reply with your preferred day and time to schedule your FREE estimate 📅\n\nReply STOP to opt out.`;
-    } else {
-      smsBody = `Hi${greeting}! This is ${client.business_name}. We received your ${serviceType.replace(/_/g, ' ')} request.\n\nReply with your preferred day and time to schedule your FREE estimate and we'll confirm first thing in the morning! 📅\n\nReply STOP to opt out.`;
-    }
+    const smsBody = `Hi${greeting}! This is ${client.business_name}. We're calling you right now about your ${serviceType.replace(/_/g, ' ')} request! 📞\n\nIf we miss you, reply with your preferred day and time for a FREE estimate 📅\n\nReply STOP to opt out.`;
     await twilioSvc.sendSms({
       to: `+${leadPhone}`,
       from: client.twilio_number,
@@ -371,28 +364,24 @@ async function processSms(body) {
     await handleError('twilio', err);
   }
 
-  // 7. Make outbound call (only during business hours — TCPA compliance)
-  if (withinHours) {
-    try {
-      const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
-      const call = await twilioSvc.makeCall({
-        to: `+${leadPhone}`,
-        from: client.twilio_number,
-        voiceScript,
-        statusCallbackUrl: `${BASE}/webhook/call-status`,
-        gatherUrl: `${BASE}/webhook/call-gather?conversationId=${conversation.id}&clientId=${client.id}`,
-        credentials: clientCredentials(client),
-      });
-      await db.updateConversation(conversation.id, {
-        call_sid: call.sid,
-        call_status: call.status,
-        call_attempted_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      await handleError('twilio', err);
-    }
-  } else {
-    logger.info('webhook', `outside business hours, skipping call for ${leadPhone}`);
+  // 7. Make outbound call immediately — lead initiated contact so consent is established
+  try {
+    const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+    const call = await twilioSvc.makeCall({
+      to: `+${leadPhone}`,
+      from: client.twilio_number,
+      voiceScript,
+      statusCallbackUrl: `${BASE}/webhook/call-status`,
+      gatherUrl: `${BASE}/webhook/call-gather?conversationId=${conversation.id}&clientId=${client.id}`,
+      credentials: clientCredentials(client),
+    });
+    await db.updateConversation(conversation.id, {
+      call_sid: call.sid,
+      call_status: call.status,
+      call_attempted_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    await handleError('twilio', err);
   }
 
   // 8. Google Calendar (non-critical)
@@ -726,5 +715,137 @@ async function processGather({ speech, conversationId, clientId }) {
     await handleError('twilio', err);
   }
 }
+
+// ── INBOUND CALL HANDLING ────────────────────────────────────────────────────
+// Lead liga pro número Twilio → sistema atende → conecta com o dono (whisper)
+// Se dono não atender → grava recado e cria lead no sistema
+
+router.post('/voice', webhookRateLimit, (req, res) => {
+  handleInboundCall(req, res).catch(err => {
+    logger.error('webhook', 'inbound call error', err.message);
+    res.set('Content-Type', 'text/xml');
+    res.send(`<Response><Say voice="Polly.Joanna" language="en-US">Sorry, we're experiencing technical difficulties. Please call back shortly. Goodbye!</Say></Response>`);
+  });
+});
+
+async function handleInboundCall(req, res) {
+  const leadPhone   = normalizePhone(req.body.From);
+  const twilioNumber = (req.body.To || '').trim();
+
+  logger.info('webhook', `inbound call from=${leadPhone} to=${twilioNumber}`);
+
+  let client;
+  try { client = await db.getClientByTwilioNumber(twilioNumber); } catch {}
+
+  if (!client) {
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">This number is not currently active. Goodbye!</Say></Response>`);
+  }
+
+  // Cria ou recupera lead existente
+  let conversation;
+  const existingConv = await db.getExistingConversation(client.id, leadPhone).catch(() => null);
+  if (existingConv) {
+    conversation = existingConv;
+    db.appendMessage(existingConv.id, 'lead', '[Inbound call]').catch(() => {});
+  } else {
+    const isDup = await db.checkDuplicate(client.id, leadPhone, 30).catch(() => false);
+    if (!isDup) {
+      conversation = await db.saveLead({
+        clientId: client.id, leadPhone, leadName: 'Caller',
+        source: 'inbound_call', serviceType: 'general', message: '[Inbound call]',
+      }).catch(() => null);
+      if (conversation) {
+        await db.updateConversation(conversation.id, { stage: 'ai_responded' }).catch(() => {});
+        db.appendMessage(conversation.id, 'lead', '[Inbound call]').catch(() => {});
+      }
+    }
+  }
+
+  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const convId = conversation?.id || '';
+
+  // Toca para o dono com whisper "LeadPilot lead call"
+  res.set('Content-Type', 'text/xml');
+  res.send(`<Response>
+  <Say voice="Polly.Joanna" language="en-US">Thanks for calling ${client.business_name}! Connecting you with our team right now.</Say>
+  <Dial callerId="${req.body.From}" timeout="20"
+        action="${BASE}/webhook/voice-complete?clientId=${client.id}&amp;leadPhone=${leadPhone}&amp;convId=${convId}&amp;twilioNum=${encodeURIComponent(twilioNumber)}">
+    <Number url="${BASE}/webhook/voice-screen?businessName=${encodeURIComponent(client.business_name)}">${client.owner_phone}</Number>
+  </Dial>
+</Response>`);
+}
+
+// Whisper tocado para o dono antes de conectar — ele sabe que é um lead
+router.post('/voice-screen', (req, res) => {
+  const businessName = req.query.businessName || 'LeadPilot';
+  res.set('Content-Type', 'text/xml');
+  res.send(`<Response>
+  <Say voice="Polly.Joanna" language="en-US">Incoming lead call for ${businessName} from LeadPilot. Press any key to accept.</Say>
+  <Gather numDigits="1" timeout="5" />
+</Response>`);
+});
+
+// Resultado do Dial — se dono não atendeu, coleta recado
+router.post('/voice-complete', async (req, res) => {
+  const { DialCallStatus, clientId, leadPhone, convId, twilioNum } = { ...req.body, ...req.query };
+
+  if (DialCallStatus === 'completed') {
+    // Dono atendeu — conversa concluída
+    logger.info('webhook', `inbound call completed — owner answered, lead=${leadPhone}`);
+    res.set('Content-Type', 'text/xml');
+    return res.send('<Response></Response>');
+  }
+
+  logger.info('webhook', `inbound call missed (${DialCallStatus}) — taking voicemail for lead=${leadPhone}`);
+
+  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  res.set('Content-Type', 'text/xml');
+  res.send(`<Response>
+  <Say voice="Polly.Joanna" language="en-US">Our team is currently with another client. Please leave your name, number, and what you're looking for — we'll call you back within the hour!</Say>
+  <Record maxLength="30" transcribe="true"
+    transcribeCallback="${BASE}/webhook/voice-voicemail?clientId=${clientId}&amp;leadPhone=${leadPhone}&amp;convId=${convId}&amp;twilioNum=${encodeURIComponent(twilioNum)}" />
+  <Say voice="Polly.Joanna" language="en-US">Thank you! We'll be in touch soon. Goodbye!</Say>
+</Response>`);
+});
+
+// Callback de transcrição do recado — notifica dono via SMS
+router.post('/voice-voicemail', async (req, res) => {
+  res.sendStatus(200);
+  const { clientId, leadPhone, convId, twilioNum } = req.query;
+  const transcript = req.body.TranscriptionText || '(transcrição não disponível)';
+  const recordingUrl = req.body.RecordingUrl || '';
+
+  logger.info('webhook', `voicemail transcribed for lead=${leadPhone}: "${transcript.substring(0, 80)}"`);
+
+  try {
+    let client;
+    try { client = await db.getClientByTwilioNumber(decodeURIComponent(twilioNum || '')); } catch {}
+    if (!client) return;
+
+    // Notifica dono com transcrição
+    await twilioSvc.sendSms({
+      to: client.owner_phone,
+      from: client.twilio_number,
+      body: `📞 RECADO – ${client.business_name}\nLead: +${leadPhone}\nMensagem: "${transcript.substring(0, 140)}"\n${recordingUrl ? `Recording: ${recordingUrl}` : ''}\nLigue de volta!`,
+      credentials: clientCredentials(client),
+    }).catch(() => {});
+
+    // Salva no histórico
+    if (convId) {
+      db.appendMessage(convId, 'lead', `[Voicemail] ${transcript}`).catch(() => {});
+    }
+
+    // Atualiza lead com transcrição nas notas
+    if (convId) {
+      await db.updateConversation(convId, {
+        notes: `Voicemail: ${transcript}`,
+        last_response_at: new Date().toISOString(),
+      }).catch(() => {});
+    }
+  } catch (err) {
+    handleError('voicemail', err).catch(() => {});
+  }
+});
 
 module.exports = router;
