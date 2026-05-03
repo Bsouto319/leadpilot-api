@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeadPilot — Ligar para Lead</title>
+<script src="https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2/dist/twilio.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a; color: #e2e8f0;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .card {
+    background: #1e293b; border-radius: 16px; padding: 32px;
+    width: 100%; max-width: 400px;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+  }
+  .logo { text-align: center; margin-bottom: 28px; }
+  .logo h1 { color: #38bdf8; font-size: 26px; font-weight: 700; }
+  .logo p  { color: #64748b; font-size: 13px; margin-top: 4px; }
+  label {
+    display: block; font-size: 13px; color: #94a3b8;
+    margin-bottom: 6px; font-weight: 500;
+  }
+  input[type="text"], input[type="password"] {
+    width: 100%; padding: 12px 14px; background: #0f172a;
+    border: 1px solid #334155; border-radius: 8px; color: #e2e8f0;
+    font-size: 16px; outline: none; transition: border-color .2s;
+  }
+  input:focus { border-color: #38bdf8; }
+  .field { margin-bottom: 16px; }
+  .btn {
+    width: 100%; padding: 14px; border: none; border-radius: 8px;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+    transition: opacity .2s, background .2s;
+  }
+  .btn-primary { background: #38bdf8; color: #0f172a; }
+  .btn-primary:hover:not(:disabled) { background: #7dd3fc; }
+  .btn-green   { background: #22c55e; color: #fff; }
+  .btn-green:hover:not(:disabled) { background: #16a34a; }
+  .btn-red     { background: #ef4444; color: #fff; margin-top: 10px; }
+  .btn-red:hover:not(:disabled) { background: #dc2626; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .status {
+    text-align: center; padding: 12px; border-radius: 8px;
+    font-size: 14px; font-weight: 500; margin-top: 16px;
+  }
+  .status.idle    { background: #1e3a5f; color: #38bdf8; }
+  .status.ringing { background: #713f12; color: #fbbf24; }
+  .status.active  { background: #14532d; color: #22c55e; }
+  .status.error   { background: #450a0a; color: #f87171; }
+  .from-badge {
+    text-align: center; color: #64748b; font-size: 12px; margin-top: 10px;
+  }
+  .from-badge span { color: #94a3b8; font-weight: 500; }
+  .hidden { display: none !important; }
+  .setup-note {
+    background: #1c1917; border: 1px solid #78350f; border-radius: 8px;
+    padding: 14px; font-size: 13px; color: #fbbf24; margin-top: 16px;
+    line-height: 1.6;
+  }
+  .setup-note code {
+    background: #0f172a; padding: 2px 6px; border-radius: 4px;
+    font-family: monospace; font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <h1>📞 LeadPilot</h1>
+    <p>Ligar para Lead</p>
+  </div>
+
+  <!-- Login section -->
+  <div id="loginSection">
+    <div class="field">
+      <label for="adminKey">Admin Key</label>
+      <input type="password" id="adminKey" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <button class="btn btn-primary" id="loginBtn" onclick="login()">Entrar</button>
+    <div class="status error hidden" id="loginError"></div>
+  </div>
+
+  <!-- Call section -->
+  <div id="callSection" class="hidden">
+    <div class="field">
+      <label for="phoneInput">Número do Lead</label>
+      <input type="text" id="phoneInput"
+        placeholder="+15551234567 ou +5561999990000"
+        autocomplete="tel" inputmode="tel"/>
+    </div>
+    <button class="btn btn-green" id="dialBtn" onclick="dial()" disabled>📞 Ligar</button>
+    <button class="btn btn-red hidden" id="hangupBtn" onclick="hangup()">📵 Desligar</button>
+    <div class="status idle" id="statusBox">Pronto para ligar</div>
+    <div class="from-badge">Saindo de: <span id="fromNum">+1 (941) 845-6110</span></div>
+  </div>
+</div>
+
+<script>
+let device = null;
+let activeCall = null;
+
+async function login() {
+  const key = document.getElementById('adminKey').value.trim();
+  if (!key) return;
+  const btn = document.getElementById('loginBtn');
+  const errEl = document.getElementById('loginError');
+  btn.disabled = true;
+  btn.textContent = 'Conectando...';
+  errEl.classList.add('hidden');
+
+  try {
+    const resp = await fetch('/api/admin/voice-token', {
+      method: 'POST',
+      headers: { 'x-admin-key': key },
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+
+    device = new Twilio.Device(data.token, { logLevel: 1 });
+
+    device.on('error', (err) => {
+      setStatus('error', 'Erro Twilio: ' + err.message);
+    });
+
+    if (data.fromNumber) {
+      document.getElementById('fromNum').textContent = data.fromNumber;
+    }
+
+    document.getElementById('loginSection').classList.add('hidden');
+    document.getElementById('callSection').classList.remove('hidden');
+    document.getElementById('dialBtn').disabled = false;
+    setStatus('idle', 'Pronto para ligar');
+
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+}
+
+async function dial() {
+  const raw = document.getElementById('phoneInput').value.trim();
+  const to  = normalizePhone(raw);
+
+  if (!to) {
+    setStatus('error', 'Digite o número. Ex: +15557891234 ou +5561999990000');
+    return;
+  }
+
+  document.getElementById('dialBtn').classList.add('hidden');
+  document.getElementById('hangupBtn').classList.remove('hidden');
+  setStatus('ringing', '📞 Ligando para ' + to + '...');
+
+  try {
+    activeCall = await device.connect({ params: { To: to } });
+
+    activeCall.on('accept', () => {
+      setStatus('active', '✅ Em ligação...');
+    });
+
+    activeCall.on('disconnect', () => {
+      activeCall = null;
+      document.getElementById('dialBtn').classList.remove('hidden');
+      document.getElementById('hangupBtn').classList.add('hidden');
+      setStatus('idle', 'Ligação encerrada');
+    });
+
+    activeCall.on('error', (err) => {
+      activeCall = null;
+      document.getElementById('dialBtn').classList.remove('hidden');
+      document.getElementById('hangupBtn').classList.add('hidden');
+      setStatus('error', 'Erro: ' + err.message);
+    });
+
+  } catch (err) {
+    document.getElementById('dialBtn').classList.remove('hidden');
+    document.getElementById('hangupBtn').classList.add('hidden');
+    setStatus('error', err.message);
+  }
+}
+
+function hangup() {
+  if (activeCall) {
+    activeCall.disconnect();
+    activeCall = null;
+  }
+  if (device) device.disconnectAll();
+  document.getElementById('dialBtn').classList.remove('hidden');
+  document.getElementById('hangupBtn').classList.add('hidden');
+  setStatus('idle', 'Ligação encerrada');
+}
+
+function normalizePhone(raw) {
+  const s = raw.replace(/[\s\-\(\)\.]/g, '');
+  if (/^\+\d{7,15}$/.test(s)) return s;
+  if (/^\d{10}$/.test(s)) return '+1' + s;
+  if (/^\d{11}$/.test(s) && s[0] === '1') return '+' + s;
+  return null;
+}
+
+function setStatus(type, msg) {
+  const box = document.getElementById('statusBox');
+  box.className = 'status ' + type;
+  box.textContent = msg;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    if (!document.getElementById('loginSection').classList.contains('hidden')) {
+      login();
+    } else if (!document.getElementById('callSection').classList.contains('hidden')) {
+      if (!activeCall) dial();
+    }
+  }
+});
+</script>
+</body>
+</html>

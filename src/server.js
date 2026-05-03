@@ -27,6 +27,8 @@ app.use(express.json());
 
 // Static dashboard
 app.use('/dashboard', express.static(path.join(__dirname, '..', 'public', 'dashboard')));
+// Browser click-to-call page (admin only — protected by admin key in the UI)
+app.get('/call', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'call.html')));
 
 // Routes
 app.use('/webhook', webhookRoutes);

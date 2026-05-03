@@ -336,4 +336,67 @@ router.get('/errors', async (req, res) => {
   }
 });
 
+// Creates the TwiML Application in Twilio for browser click-to-call (run once)
+router.post('/setup-voice-app', async (req, res) => {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken  = process.env.TWILIO_AUTH_TOKEN;
+  const baseUrl    = process.env.BASE_URL;
+  if (!accountSid || !authToken || !baseUrl) {
+    return res.status(500).json({ error: 'TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or BASE_URL not set' });
+  }
+  const voiceUrl     = `${baseUrl}/webhook/voice-outbound`;
+  const twilioClient = require('twilio')(accountSid, authToken);
+
+  if (process.env.TWILIO_TWIML_APP_SID) {
+    try {
+      const existing = await twilioClient.applications(process.env.TWILIO_TWIML_APP_SID).fetch();
+      return res.json({ appSid: existing.sid, voiceUrl: existing.voiceUrl, alreadyConfigured: true });
+    } catch (_) { /* app not found, create new one */ }
+  }
+
+  try {
+    const app = await twilioClient.applications.create({
+      friendlyName: 'LeadPilot Click-to-Call',
+      voiceUrl,
+      voiceMethod: 'POST',
+    });
+    res.json({
+      appSid: app.sid,
+      voiceUrl: app.voiceUrl,
+      instruction: `Add TWILIO_TWIML_APP_SID=${app.sid} to Coolify env vars, then redeploy`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Generates an Access Token for the Twilio Voice JS SDK (browser softphone)
+router.post('/voice-token', (req, res) => {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken  = process.env.TWILIO_AUTH_TOKEN;
+  const appSid     = process.env.TWILIO_TWIML_APP_SID;
+
+  if (!appSid) {
+    return res.status(500).json({
+      error: 'TWILIO_TWIML_APP_SID não configurado. Chame POST /api/admin/setup-voice-app primeiro.',
+    });
+  }
+  if (!accountSid || !authToken) {
+    return res.status(500).json({ error: 'TWILIO_ACCOUNT_SID ou TWILIO_AUTH_TOKEN não configurado' });
+  }
+
+  try {
+    const { AccessToken } = require('twilio').jwt;
+    const { VoiceGrant }  = AccessToken;
+
+    const voiceGrant = new VoiceGrant({ outgoingApplicationSid: appSid, incomingAllow: false });
+    const token = new AccessToken(accountSid, accountSid, authToken, { identity: 'admin', ttl: 3600 });
+    token.addGrant(voiceGrant);
+
+    res.json({ token: token.toJwt(), fromNumber: process.env.ALERT_FROM || '+19418456110' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

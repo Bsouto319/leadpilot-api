@@ -990,4 +990,22 @@ router.post('/thumbtack-lead', express.json(), async (req, res) => {
   processThumbtackLead(req.body).catch(err => handleError('thumbtack', err));
 });
 
+// ── BROWSER CLICK-TO-CALL (Twilio Voice JS SDK) ───────────────────────────────
+// Called by Twilio when the admin browser initiates an outbound call
+// Returns TwiML: dial the requested number from the LeadPilot Twilio number
+router.post('/voice-outbound', (req, res) => {
+  const raw  = req.body.To || req.query.To || '';
+  const to   = raw.replace(/[\s\-\(\)]/g, '');
+  const from = process.env.ALERT_FROM || '+19418456110';
+
+  if (!to || !/^\+?\d{7,15}$/.test(to)) {
+    res.set('Content-Type', 'text/xml');
+    return res.send('<Response><Say>Número inválido. Por favor tente novamente.</Say></Response>');
+  }
+
+  res.set('Content-Type', 'text/xml');
+  res.send(`<Response><Dial callerId="${from}"><Number>${to}</Number></Dial></Response>`);
+  logger.info('webhook', `click-to-call outbound from=${from} to=${to}`);
+});
+
 module.exports = router;
