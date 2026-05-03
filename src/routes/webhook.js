@@ -84,6 +84,44 @@ async function handleHumanHandoff({ client, conversation, message }) {
   logger.info('webhook', `human handoff triggered for ${leadPhone}`);
 }
 
+function detectDisinterest(text) {
+  const msg = (text || '').toLowerCase();
+  return /\b(not\s+interested|no\s+thanks|no\s+thank\s+you|wrong\s+number|remove\s+(me|my\s+number)|don'?t\s+(contact|text|call|message)\s+me|stop\s+contacting|leave\s+me\s+alone|not\s+looking|already\s+(found|hired|have\s+someone)|don'?t\s+need(\s+this)?|nevermind|never\s+mind|i'?m\s+good|changed\s+my\s+mind|cancel(\s+that)?|no\s+longer\s+(need|interested))\b/.test(msg);
+}
+
+function isLikelyQuestion(text) {
+  const msg = (text || '').trim().toLowerCase();
+  const hasDate = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|morning|afternoon|evening|\bam\b|\bpm\b|\d{1,2}[\/\-]\d{1,2}|next\s+week|this\s+week|today|tonight)\b/.test(msg);
+  if (hasDate) return false;
+  if (msg.includes('?')) return true;
+  if (/^(how\s|what\s|where\s|which\s|who\s|why\s|do\s+you|are\s+you|can\s+you|will\s+you|is\s+there|does\s+your|have\s+you|how\s+much|how\s+long|do\s+you\s+do|do\s+you\s+work)\b/.test(msg)) return true;
+  return false;
+}
+
+async function answerWithAI({ client, message }) {
+  try {
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const base = client.ai_system_prompt
+      ? `You are a helpful assistant for ${client.business_name}. ${client.ai_system_prompt}`
+      : `You are a helpful assistant for ${client.business_name}. Answer questions briefly and professionally.`;
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 150,
+      messages: [
+        {
+          role: 'system',
+          content: `${base}\n\nAnswer the customer's question in 1-2 sentences. End by inviting them to schedule a FREE estimate. Keep the response concise (under 160 chars if possible).`,
+        },
+        { role: 'user', content: message },
+      ],
+    });
+    return completion.choices[0].message.content.trim();
+  } catch {
+    return null;
+  }
+}
+
 function detectServiceType(text) {
   const msg = (text || '').toLowerCase();
   if (/tile|tiling|grout|bullnose|porcelain/.test(msg)) return 'tile_install';
@@ -213,12 +251,30 @@ async function processSms(body) {
   // 2. Check if lead already exists (scheduling or address reply)
   const existingConv = await db.getExistingConversation(client.id, leadPhone);
   if (existingConv) {
+    // Log incoming message to history
+    db.appendMessage(existingConv.id, 'lead', message).catch(() => {});
+
     if (existingConv.stage === 'handoff') {
       logger.info('webhook', `lead ${leadPhone} already in human handoff, skipping AI`);
       return;
     }
+    if (existingConv.stage === 'closed') {
+      logger.info('webhook', `lead ${leadPhone} is closed (disinterest), skipping`);
+      return;
+    }
+    if (detectDisinterest(message)) {
+      await db.closeLead(existingConv.id);
+      logger.info('webhook', `lead ${leadPhone} expressed disinterest — closed`);
+      return;
+    }
     if (detectHumanHandoff(message)) {
       await handleHumanHandoff({ client, conversation: existingConv, message });
+      return;
+    }
+    if (existingConv.stage === 'no_show') {
+      logger.info('webhook', `no-show lead ${leadPhone} responded — restarting scheduling`);
+      await db.updateConversation(existingConv.id, { stage: 'ai_responded' });
+      await processSchedulingReply({ client, conversation: { ...existingConv, stage: 'ai_responded' }, message });
       return;
     }
     if (existingConv.stage === 'awaiting_address') {
@@ -294,12 +350,13 @@ async function processSms(body) {
   }
 
   // 6. Send SMS to lead — with business hours check and required compliance footer
+  const tzSms = client.timezone || 'America/New_York';
+  const withinHours = isWithinBusinessHours(tzSms);
   try {
-    const tz = client.timezone || 'America/New_York';
     const greeting = leadName && leadName !== 'Customer' ? ` ${leadName}` : '';
     let smsBody;
-    if (isWithinBusinessHours(tz)) {
-      smsBody = `Hi${greeting}! This is ${client.business_name}. We just called about your ${serviceType.replace(/_/g, ' ')} request.\n\nReply with your preferred day and time to schedule your FREE estimate — we'll confirm right away! 📅\n\nReply STOP to opt out.`;
+    if (withinHours) {
+      smsBody = `Hi${greeting}! This is ${client.business_name}. We're calling you right now about your ${serviceType.replace(/_/g, ' ')} request!\n\nIf we miss you, reply with your preferred day and time to schedule your FREE estimate 📅\n\nReply STOP to opt out.`;
     } else {
       smsBody = `Hi${greeting}! This is ${client.business_name}. We received your ${serviceType.replace(/_/g, ' ')} request.\n\nReply with your preferred day and time to schedule your FREE estimate and we'll confirm first thing in the morning! 📅\n\nReply STOP to opt out.`;
     }
@@ -309,28 +366,33 @@ async function processSms(body) {
       body: smsBody,
       credentials: clientCredentials(client),
     });
+    db.appendMessage(conversation.id, 'ai', smsBody).catch(() => {});
   } catch (err) {
     await handleError('twilio', err);
   }
 
-  // 7. Make outbound call
-  try {
-    const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
-    const call = await twilioSvc.makeCall({
-      to: `+${leadPhone}`,
-      from: client.twilio_number,
-      voiceScript,
-      statusCallbackUrl: `${BASE}/webhook/call-status`,
-      gatherUrl: `${BASE}/webhook/call-gather?conversationId=${conversation.id}&clientId=${client.id}`,
-      credentials: clientCredentials(client),
-    });
-    await db.updateConversation(conversation.id, {
-      call_sid: call.sid,
-      call_status: call.status,
-      call_attempted_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    await handleError('twilio', err);
+  // 7. Make outbound call (only during business hours — TCPA compliance)
+  if (withinHours) {
+    try {
+      const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+      const call = await twilioSvc.makeCall({
+        to: `+${leadPhone}`,
+        from: client.twilio_number,
+        voiceScript,
+        statusCallbackUrl: `${BASE}/webhook/call-status`,
+        gatherUrl: `${BASE}/webhook/call-gather?conversationId=${conversation.id}&clientId=${client.id}`,
+        credentials: clientCredentials(client),
+      });
+      await db.updateConversation(conversation.id, {
+        call_sid: call.sid,
+        call_status: call.status,
+        call_attempted_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      await handleError('twilio', err);
+    }
+  } else {
+    logger.info('webhook', `outside business hours, skipping call for ${leadPhone}`);
   }
 
   // 8. Google Calendar (non-critical)
@@ -361,11 +423,19 @@ async function processSms(body) {
     await handleError('twilio', err);
   }
 
+  // Log first message to history
+  db.appendMessage(conversation.id, 'lead', message).catch(() => {});
+
   logger.info('webhook', `lead processed id=${conversation.id} phone=${leadPhone}`);
 }
 
 // Process scheduling reply from lead
 async function processAddressReply({ client, conversation, message }) {
+  if (detectDisinterest(message)) {
+    await db.closeLead(conversation.id);
+    logger.info('webhook', `lead ${conversation.lead_phone} not interested in awaiting_address — closed`);
+    return;
+  }
   if (detectHumanHandoff(message)) {
     await handleHumanHandoff({ client, conversation, message });
     return;
@@ -410,12 +480,14 @@ async function processAddressReply({ client, conversation, message }) {
       }
     }
 
+    const confirmBody = `✅ All set! Your appointment with ${client.business_name} is confirmed:\n📅 ${formatted}\n📍 ${address}\n\nWe'll see you then! Reply STOP to cancel.`;
     await twilioSvc.sendSms({
       to: `+${conversation.lead_phone}`,
       from: client.twilio_number,
-      body: `✅ All set! Your appointment with ${client.business_name} is confirmed:\n📅 ${formatted}\n📍 ${address}\n\nWe'll see you then! Reply STOP to cancel.`,
+      body: confirmBody,
       credentials: clientCredentials(client),
     });
+    db.appendMessage(conversation.id, 'ai', confirmBody).catch(() => {});
 
     await twilioSvc.sendSms({
       to: client.owner_phone,
@@ -431,10 +503,32 @@ async function processAddressReply({ client, conversation, message }) {
 }
 
 async function processSchedulingReply({ client, conversation, message }) {
+  if (detectDisinterest(message)) {
+    await db.closeLead(conversation.id);
+    logger.info('webhook', `lead ${conversation.lead_phone} not interested — closed`);
+    return;
+  }
   if (detectHumanHandoff(message)) {
     await handleHumanHandoff({ client, conversation, message });
     return;
   }
+
+  // If lead asked a question (not a date), answer it and wait for scheduling reply
+  if (isLikelyQuestion(message)) {
+    const answer = await answerWithAI({ client, message });
+    if (answer) {
+      await twilioSvc.sendSms({
+        to: `+${conversation.lead_phone}`,
+        from: client.twilio_number,
+        body: answer + '\n\nReply STOP to opt out.',
+        credentials: clientCredentials(client),
+      });
+      db.appendMessage(conversation.id, 'ai', answer).catch(() => {});
+      logger.info('webhook', `Q&A answered for ${conversation.lead_phone}: "${message.substring(0, 60)}"`);
+      return; // stay in ai_responded — wait for date reply
+    }
+  }
+
   // Deduplication: re-fetch to confirm stage hasn't changed since webhook fired
   const fresh = await db.getConversationById(conversation.id);
   if (!fresh || fresh.stage !== 'ai_responded') {
@@ -508,12 +602,14 @@ async function processSchedulingReply({ client, conversation, message }) {
     }
 
     // Ask for address to complete booking
+    const addressRequestBody = `Great! ${formatted} works for us 📅\n\nOne last thing — what's the address for the estimate? (Street, City, State) 📍`;
     await twilioSvc.sendSms({
       to: `+${conversation.lead_phone}`,
       from: client.twilio_number,
-      body: `Great! ${formatted} works for us 📅\n\nOne last thing — what's the address for the estimate? (Street, City, State) 📍`,
+      body: addressRequestBody,
       credentials: clientCredentials(client),
     });
+    db.appendMessage(conversation.id, 'ai', addressRequestBody).catch(() => {});
 
     // Notify owner of pending appointment
     await twilioSvc.sendSms({

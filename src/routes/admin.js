@@ -65,10 +65,44 @@ router.get('/leads/export/csv', async (req, res) => {
 router.patch('/leads/:id', async (req, res) => {
   try {
     const allowed = {};
-    if (req.body.stage     !== undefined) allowed.stage     = req.body.stage;
-    if (req.body.notes     !== undefined) allowed.notes     = req.body.notes;
+    if (req.body.stage        !== undefined) allowed.stage        = req.body.stage;
+    if (req.body.notes        !== undefined) allowed.notes        = req.body.notes;
     if (req.body.scheduled_at !== undefined) allowed.scheduled_at = req.body.scheduled_at;
+    if (req.body.lead_name    !== undefined) allowed.lead_name    = req.body.lead_name;
     await db.updateConversation(req.params.id, allowed);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/leads/:id/messages', async (req, res) => {
+  try {
+    const messages = await db.getMessages(req.params.id);
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/leads/:id/send-sms', async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: 'message is required' });
+    const lead = await db.getConversationWithClient(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'lead not found' });
+    const twilioSvc = require('../services/twilio');
+    const creds = lead.clients?.twilio_account_sid ? {
+      accountSid: lead.clients.twilio_account_sid,
+      authToken: lead.clients.twilio_auth_token,
+    } : null;
+    await twilioSvc.sendSms({
+      to: `+${lead.lead_phone}`,
+      from: lead.clients.twilio_number,
+      body: message,
+      credentials: creds,
+    });
+    await db.appendMessage(req.params.id, 'owner', message);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -93,9 +127,35 @@ router.get('/clients', async (req, res) => {
   }
 });
 
+router.post('/clients', async (req, res) => {
+  try {
+    const required = ['business_name', 'twilio_number', 'owner_phone'];
+    for (const f of required) {
+      if (!req.body[f]) return res.status(400).json({ error: `${f} is required` });
+    }
+    const client = await db.createClient(req.body);
+    res.status(201).json(client);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.patch('/clients/:id', async (req, res) => {
   try {
-    const allowed = { active: req.body.active };
+    const editable = [
+      'active', 'business_name', 'owner_phone', 'timezone',
+      'ai_system_prompt', 'google_review_link',
+      'twilio_account_sid', 'twilio_auth_token',
+      'google_refresh_token', 'google_calendar_id',
+      'voice_script',
+    ];
+    const allowed = {};
+    for (const f of editable) {
+      if (req.body[f] !== undefined) allowed[f] = req.body[f];
+    }
+    if (Object.keys(allowed).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
     await db.updateClient(req.params.id, allowed);
     res.json({ ok: true });
   } catch (err) {

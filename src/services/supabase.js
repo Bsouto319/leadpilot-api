@@ -23,7 +23,7 @@ async function getExistingConversation(clientId, leadPhone) {
     .select('*')
     .eq('client_id', clientId)
     .eq('lead_phone', leadPhone)
-    .in('stage', ['ai_responded', 'new_lead', 'awaiting_address', 'handoff'])
+    .in('stage', ['ai_responded', 'new_lead', 'awaiting_address', 'handoff', 'no_show'])
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
@@ -340,6 +340,55 @@ async function getClientByUserId(userId) {
   return data;
 }
 
+async function createClient(fields) {
+  const { data, error } = await supabase
+    .from('clients')
+    .insert({
+      business_name:      fields.business_name,
+      twilio_number:      fields.twilio_number,
+      owner_phone:        fields.owner_phone,
+      timezone:           fields.timezone || 'America/New_York',
+      active:             true,
+      ai_system_prompt:   fields.ai_system_prompt   || null,
+      google_review_link: fields.google_review_link || null,
+      twilio_account_sid: fields.twilio_account_sid || null,
+      twilio_auth_token:  fields.twilio_auth_token  || null,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(`createClient: ${error.message}`);
+  return data;
+}
+
+async function closeLead(id) {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ stage: 'closed', last_response_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(`closeLead: ${error.message}`);
+}
+
+// ── Histórico de mensagens ────────────────────────────────────────────────────
+
+async function appendMessage(conversationId, role, body) {
+  await supabase
+    .from('conversation_messages')
+    .insert({ conversation_id: conversationId, role, body })
+    .then(({ error }) => {
+      if (error) logger.error('supabase', 'appendMessage failed', error.message);
+    });
+}
+
+async function getMessages(conversationId) {
+  const { data, error } = await supabase
+    .from('conversation_messages')
+    .select('id, role, body, created_at')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`getMessages: ${error.message}`);
+  return data || [];
+}
+
 module.exports = {
   getClientByTwilioNumber,
   getExistingConversation,
@@ -371,4 +420,8 @@ module.exports = {
   getClientByUserId,
   getConversationWithClient,
   getConversationById,
+  createClient,
+  closeLead,
+  appendMessage,
+  getMessages,
 };

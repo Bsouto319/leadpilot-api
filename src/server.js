@@ -134,5 +134,24 @@ function startCronJobs() {
     } catch (err) { handleError('cron-noshows', err).catch(() => {}); }
   }, { timezone: 'America/New_York' });
 
-  logger.info('server', 'cron jobs scheduled: reminders@9am, followups@10am, reviews@6pm, noshows@8pm');
+  // Every Monday at 8am — weekly performance report to all clients
+  cron.schedule('0 8 * * 1', async () => {
+    logger.info('cron', 'running weekly report');
+    try {
+      const stats = await db.getWeeklyStats();
+      for (const s of stats) {
+        if (!s.client || !s.client.owner_phone) continue;
+        const conversion = s.total > 0 ? Math.round((s.scheduled / s.total) * 100) : 0;
+        const msg =
+          `📊 LeadPilot Weekly – ${s.client.business_name}\n` +
+          `Leads: ${s.total} | Scheduled: ${s.scheduled}\n` +
+          `Conversion: ${conversion}%\n` +
+          `Powered by LeadPilot`;
+        await twilioSvc.sendSms({ to: s.client.owner_phone, from: s.client.twilio_number, body: msg });
+        logger.info('cron', `weekly report → ${s.client.business_name}`);
+      }
+    } catch (err) { handleError('cron-weekly', err).catch(() => {}); }
+  }, { timezone: 'America/New_York' });
+
+  logger.info('server', 'cron jobs scheduled: reminders@9am, followups@10am, reviews@6pm, noshows@8pm, weekly-report@mon8am');
 }
