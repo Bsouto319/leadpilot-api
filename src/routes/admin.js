@@ -371,18 +371,18 @@ router.post('/setup-voice-app', async (req, res) => {
 });
 
 // Generates an Access Token for the Twilio Voice JS SDK (browser softphone)
+// Requires TWILIO_API_KEY (SK...) and TWILIO_API_SECRET in env vars
 router.post('/voice-token', (req, res) => {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken  = process.env.TWILIO_AUTH_TOKEN;
-  const appSid     = process.env.TWILIO_TWIML_APP_SID;
+  const accountSid   = process.env.TWILIO_ACCOUNT_SID;
+  const apiKeySid    = process.env.TWILIO_API_KEY;
+  const apiKeySecret = process.env.TWILIO_API_SECRET;
+  const appSid       = process.env.TWILIO_TWIML_APP_SID;
 
   if (!appSid) {
-    return res.status(500).json({
-      error: 'TWILIO_TWIML_APP_SID não configurado. Chame POST /api/admin/setup-voice-app primeiro.',
-    });
+    return res.status(500).json({ error: 'TWILIO_TWIML_APP_SID não configurado.' });
   }
-  if (!accountSid || !authToken) {
-    return res.status(500).json({ error: 'TWILIO_ACCOUNT_SID ou TWILIO_AUTH_TOKEN não configurado' });
+  if (!accountSid || !apiKeySid || !apiKeySecret) {
+    return res.status(500).json({ error: 'TWILIO_ACCOUNT_SID, TWILIO_API_KEY ou TWILIO_API_SECRET não configurado.' });
   }
 
   try {
@@ -390,7 +390,7 @@ router.post('/voice-token', (req, res) => {
     const { VoiceGrant }  = AccessToken;
 
     const voiceGrant = new VoiceGrant({ outgoingApplicationSid: appSid, incomingAllow: false });
-    const token = new AccessToken(accountSid, accountSid, authToken, { identity: 'admin', ttl: 3600 });
+    const token = new AccessToken(accountSid, apiKeySid, apiKeySecret, { identity: 'admin', ttl: 3600 });
     token.addGrant(voiceGrant);
 
     res.json({ token: token.toJwt(), fromNumber: process.env.ALERT_FROM || '+19418456110' });
