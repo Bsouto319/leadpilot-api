@@ -382,7 +382,14 @@ router.post('/voice-token', (req, res) => {
     return res.status(500).json({ error: 'TWILIO_TWIML_APP_SID não configurado.' });
   }
   if (!accountSid || !apiKeySid || !apiKeySecret) {
-    return res.status(500).json({ error: 'TWILIO_ACCOUNT_SID, TWILIO_API_KEY ou TWILIO_API_SECRET não configurado.' });
+    return res.status(500).json({
+      error: 'Env vars faltando',
+      missing: [
+        !accountSid   && 'TWILIO_ACCOUNT_SID',
+        !apiKeySid    && 'TWILIO_API_KEY',
+        !apiKeySecret && 'TWILIO_API_SECRET',
+      ].filter(Boolean),
+    });
   }
 
   try {
