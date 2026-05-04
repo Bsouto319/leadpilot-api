@@ -241,7 +241,7 @@ router.patch('/clients/:id', async (req, res) => {
       'ai_system_prompt', 'google_review_link',
       'twilio_account_sid', 'twilio_auth_token',
       'google_refresh_token', 'google_calendar_id',
-      'voice_script',
+      'voice_script', 'manual_mode',
     ];
     const allowed = {};
     for (const f of editable) {
@@ -396,7 +396,7 @@ router.post('/voice-token', (req, res) => {
     const { AccessToken } = require('twilio').jwt;
     const { VoiceGrant }  = AccessToken;
 
-    const voiceGrant = new VoiceGrant({ outgoingApplicationSid: appSid, incomingAllow: false });
+    const voiceGrant = new VoiceGrant({ outgoingApplicationSid: appSid, incomingAllow: true });
     const token = new AccessToken(accountSid, apiKeySid, apiKeySecret, { identity: 'admin', ttl: 3600 });
     token.addGrant(voiceGrant);
 

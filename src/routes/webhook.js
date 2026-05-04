@@ -769,6 +769,16 @@ async function startVoiceIntake(req, res) {
 
   const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
 
+  // Modo manual: toca no browser do dashboard por 20s; se não atender, IA assume
+  if (client.manual_mode) {
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response>
+  <Dial timeout="20" action="${BASE}/webhook/voice-fallback?convId=${conversation.id}" method="POST">
+    <Client>admin</Client>
+  </Dial>
+</Response>`);
+  }
+
   // Saudação e primeira pergunta
   const greeting = `Thank you for calling ${client.business_name}! My name is Alex, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate — our team is top-notch and we'd love to help you. So, what project are you looking to get done?`;
 
@@ -979,6 +989,47 @@ async function processVoiceIntake(req, res) {
   // Fallback
   res.set('Content-Type', 'text/xml');
   res.send(`<Response><Say voice="Polly.Joanna" language="en-US">Thank you for calling ${client.business_name}. Have a wonderful day!</Say></Response>`);
+}
+
+// ── VOICE FALLBACK — browser não atendeu, IA assume ─────────────────────────
+// Chamado pelo Twilio após timeout do <Dial><Client>admin</Client></Dial>
+router.post('/voice-fallback', (req, res) => {
+  const { convId } = req.query;
+  const dialStatus = req.body.DialCallStatus || '';
+
+  if (dialStatus === 'completed') {
+    res.set('Content-Type', 'text/xml');
+    return res.send('<Response></Response>');
+  }
+
+  logger.info('webhook', `voice-fallback: browser didn't answer (${dialStatus}), AI taking over — conv=${convId}`);
+
+  resumeWithAI(req, res, convId).catch(err => {
+    logger.error('webhook', 'voice-fallback error', err.message);
+    res.set('Content-Type', 'text/xml');
+    res.send('<Response><Say voice="Polly.Joanna" language="en-US">We\'re sorry, our team is temporarily unavailable. We\'ll text you shortly. Goodbye!</Say></Response>');
+  });
+});
+
+async function resumeWithAI(req, res, convId) {
+  const conv = await db.getConversationWithClient(convId).catch(() => null);
+  const client = conv?.clients;
+  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+
+  if (!client) {
+    res.set('Content-Type', 'text/xml');
+    return res.send('<Response><Say voice="Polly.Joanna" language="en-US">Thank you for calling. Our team will follow up with you shortly. Goodbye!</Say></Response>');
+  }
+
+  const greeting = `Thank you for calling ${client.business_name}! My name is Alex, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate. So, what project are you looking to get done?`;
+
+  res.set('Content-Type', 'text/xml');
+  res.send(`<Response>
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${convId}&amp;step=service" method="POST">
+    <Say voice="Polly.Joanna" language="en-US">${greeting}</Say>
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${convId}&amp;step=service&amp;noInput=1</Redirect>
+</Response>`);
 }
 
 // ── THUMBTACK LEAD WEBHOOK ────────────────────────────────────────────────────
