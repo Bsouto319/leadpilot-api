@@ -1,14 +1,21 @@
 const express = require('express');
-const router = express.Router();
-const db = require('../services/supabase');
-const twilioSvc = require('../services/twilio');
+const crypto  = require('crypto');
+const router  = express.Router();
+const db      = require('../services/supabase');
+const twilioSvc   = require('../services/twilio');
 const calendarSvc = require('../services/calendar');
 const { handleError } = require('../middleware/alerting');
-const logger = require('../utils/logger');
+const logger  = require('../utils/logger');
 
 function authMiddleware(req, res, next) {
-  const key = req.headers['x-admin-key'];
-  if (!key || key !== process.env.ADMIN_KEY) return res.status(401).json({ error: 'Unauthorized' });
+  const key      = req.headers['x-admin-key'] || '';
+  const expected = process.env.ADMIN_KEY || '';
+  try {
+    const ok = key && expected && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(expected));
+    if (!ok) return res.status(401).json({ error: 'Unauthorized' });
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   next();
 }
 

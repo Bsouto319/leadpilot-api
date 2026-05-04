@@ -1,10 +1,20 @@
 const express = require('express');
-const router = express.Router();
-const db = require('../services/supabase');
+const crypto  = require('crypto');
+const router  = express.Router();
+const db      = require('../services/supabase');
+
+function timingSafeEqual(a, b) {
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return false;
+  }
+}
 
 function authMiddleware(req, res, next) {
-  const key = req.headers['x-admin-key'];
-  if (!key || key !== process.env.ADMIN_KEY) {
+  const key      = req.headers['x-admin-key'] || '';
+  const expected = process.env.ADMIN_KEY || '';
+  if (!key || !expected || !timingSafeEqual(key, expected)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();

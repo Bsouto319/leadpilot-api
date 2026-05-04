@@ -4,10 +4,12 @@ process.on('uncaughtException', (err) => {
   console.error(err.stack);
   process.exit(1);
 });
-const express = require('express');
-const path    = require('path');
-const cron    = require('node-cron');
-const logger  = require('./utils/logger');
+const express   = require('express');
+const path      = require('path');
+const cron      = require('node-cron');
+const helmet    = require('helmet');
+const rateLimit = require('express-rate-limit');
+const logger    = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 const webhookRoutes = require('./routes/webhook');
 const adminRoutes   = require('./routes/admin');
@@ -21,19 +23,62 @@ const { handleError } = require('./middleware/alerting');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Twilio sends form-encoded bodies
-app.use('/webhook', express.urlencoded({ extended: false }));
-app.use(express.json());
+// ── SECURITY HEADERS ─────────────────────────────────────────────────────────
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow Twilio callbacks
+  contentSecurityPolicy: false, // API — no HTML to protect
+}));
 
-// Static dashboard
+// ── CORS — only allow Vercel dashboard + same-origin ─────────────────────────
+const ALLOWED_ORIGINS = [
+  'https://leadpilot-dashboard-mu.vercel.app',
+  process.env.DASHBOARD_URL,
+].filter(Boolean);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin || '';
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-key');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    res.setHeader('Vary', 'Origin');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+// ── RATE LIMITING ─────────────────────────────────────────────────────────────
+// Admin: 120 req/min per IP — plenty for dashboard usage, blocks bots
+const adminLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, slow down.' },
+});
+
+// Cron: very tight — only internal calls should hit these
+const cronLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests.' },
+});
+
+// ── BODY PARSING with size limits ────────────────────────────────────────────
+// Twilio sends form-encoded bodies for webhooks
+app.use('/webhook', express.urlencoded({ extended: false, limit: '32kb' }));
+app.use(express.json({ limit: '64kb' }));
+
+// ── STATIC FILES ──────────────────────────────────────────────────────────────
 app.use('/dashboard', express.static(path.join(__dirname, '..', 'public', 'dashboard')));
-// Browser click-to-call page (admin only — protected by admin key in the UI)
 app.get('/call', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'call.html')));
 
-// Routes
+// ── ROUTES ────────────────────────────────────────────────────────────────────
 app.use('/webhook', webhookRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/cron',  cronRoutes);
+app.use('/api/admin', adminLimiter, adminRoutes);
+app.use('/api/cron',  cronLimiter,  cronRoutes);
 
 app.get('/', (req, res) => res.redirect('/dashboard'));
 
