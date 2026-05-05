@@ -244,6 +244,35 @@ router.post('/clients', async (req, res) => {
   }
 });
 
+router.post('/invite-client', async (req, res) => {
+  try {
+    const { business_name, owner_email, owner_name, owner_phone, twilio_number, niche, timezone } = req.body;
+    if (!business_name || !owner_email || !twilio_number) {
+      return res.status(400).json({ error: 'business_name, owner_email and twilio_number are required' });
+    }
+
+    const client = await db.createClient({
+      business_name, owner_name, owner_email, owner_phone: owner_phone || '',
+      twilio_number, niche: niche || 'general', timezone: timezone || 'America/New_York',
+    });
+
+    let invited = false;
+    let note = 'Client created. Add SUPABASE_SERVICE_ROLE_KEY to Coolify to enable email invites.';
+    try {
+      const user = await db.inviteUser(owner_email);
+      await db.linkUserToClient(client.id, user.id);
+      invited = true;
+      note = `Invite email sent to ${owner_email}`;
+    } catch (e) {
+      // graceful — client record was still created
+    }
+
+    res.status(201).json({ ok: true, client, invited, note });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.patch('/clients/:id', async (req, res) => {
   try {
     const editable = [

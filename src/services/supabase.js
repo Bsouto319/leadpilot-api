@@ -6,6 +6,12 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6Ik
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+const adminSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
+
 async function getClientByTwilioNumber(twilioNumber) {
   const { data, error } = await supabase
     .from('clients')
@@ -366,9 +372,12 @@ async function createClientRecord(fields) {
     .from('clients')
     .insert({
       business_name:      fields.business_name,
+      owner_name:         fields.owner_name         || null,
+      owner_email:        fields.owner_email         || null,
+      owner_phone:        fields.owner_phone         || '',
       twilio_number:      fields.twilio_number,
-      owner_phone:        fields.owner_phone,
-      timezone:           fields.timezone || 'America/New_York',
+      niche:              fields.niche               || 'general',
+      timezone:           fields.timezone            || 'America/New_York',
       active:             true,
       ai_system_prompt:   fields.ai_system_prompt   || null,
       google_review_link: fields.google_review_link || null,
@@ -379,6 +388,20 @@ async function createClientRecord(fields) {
     .single();
   if (error) throw new Error(`createClient: ${error.message}`);
   return data;
+}
+
+async function inviteUser(email) {
+  if (!adminSupabase) throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
+  const { data, error } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
+    redirectTo: 'https://app.contatobtech.com.br',
+  });
+  if (error) throw new Error(`inviteUser: ${error.message}`);
+  return data.user;
+}
+
+async function linkUserToClient(clientId, userId) {
+  const { error } = await supabase.from('clients').update({ user_id: userId }).eq('id', clientId);
+  if (error) throw new Error(`linkUserToClient: ${error.message}`);
 }
 
 async function closeLead(id) {
@@ -444,6 +467,8 @@ module.exports = {
   getConversationWithClient,
   getConversationById,
   createClient: createClientRecord,
+  inviteUser,
+  linkUserToClient,
   closeLead,
   appendMessage,
   getMessages,
