@@ -108,7 +108,7 @@ async function answerWithAI({ client, message }) {
       : `You are a helpful assistant for ${client.business_name}. Answer questions briefly and professionally.`;
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      max_tokens: 150,
+      max_tokens: 80,
       messages: [
         {
           role: 'system',
@@ -234,12 +234,14 @@ async function processSms(body) {
   }
 
   const serviceType = detectServiceType(message);
-  const leadName    = await extractLeadName(message);
 
-  // 1. Find client
-  let client;
+  // 1. Find client + extract name in parallel (eliminates sequential OpenAI wait)
+  let client, leadName;
   try {
-    client = await db.getClientByTwilioNumber(twilioNumber);
+    [leadName, client] = await Promise.all([
+      extractLeadName(message),
+      db.getClientByTwilioNumber(twilioNumber),
+    ]);
   } catch (err) {
     await handleError('supabase', err);
     return;
@@ -503,6 +505,9 @@ async function processSchedulingReply({ client, conversation, message }) {
     return;
   }
 
+  // Start fresh-fetch early so DB query runs in parallel with answerWithAI
+  const freshPromise = db.getConversationById(conversation.id);
+
   // If lead asked a question (not a date), answer it and wait for scheduling reply
   if (isLikelyQuestion(message)) {
     const answer = await answerWithAI({ client, message });
@@ -520,7 +525,7 @@ async function processSchedulingReply({ client, conversation, message }) {
   }
 
   // Deduplication: re-fetch to confirm stage hasn't changed since webhook fired
-  const fresh = await db.getConversationById(conversation.id);
+  const fresh = await freshPromise;
   if (!fresh || fresh.stage !== 'ai_responded') {
     logger.info('webhook', `scheduling reply skipped — stage changed to ${fresh?.stage} (duplicate webhook)`);
     return;
@@ -872,23 +877,15 @@ async function processVoiceIntake(req, res) {
       collected_data: { ...cd, voice_stage: 'asking_date', service_raw: speech, no_input_count: 0 },
     }).catch(() => {});
 
-    // GPT gera transição natural: confirma serviço + pergunta data
-    let transition;
-    try {
-      const OpenAI = require('openai');
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const sysInfo = client.ai_system_prompt ? `\n${client.ai_system_prompt}` : '';
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', max_tokens: 80,
-        messages: [
-          { role: 'system', content: `You are Lexy, a friendly AI scheduling assistant for ${client.business_name}.${sysInfo}\nYou're on a phone call. Be warm, brief (max 2 sentences), and excited about helping. No markdown, no asterisks.` },
-          { role: 'user', content: `Customer just said they need: "${speech}". Acknowledge their project enthusiastically in one short sentence, then ask what day this week or next works best for a FREE in-home estimate.` },
-        ],
-      });
-      transition = completion.choices[0].message.content.trim();
-    } catch {
-      transition = `${speech} — great choice! We do excellent work on that. What day this week or next works best for your FREE in-home estimate?`;
-    }
+    // Static template — elimina latência GPT entre turnos de voz
+    const serviceLabels = {
+      tile_install: 'tile installation', custom_home: 'custom home building',
+      remodel: 'remodeling', renovation: 'renovation',
+      tile_replacement: 'tile replacement', free_estimate: 'your project',
+      general: 'your project',
+    };
+    const serviceLabel = serviceLabels[serviceType] || speech || 'your project';
+    const transition = `Awesome, ${serviceLabel} — that's right in our wheelhouse! What day this week or next works best for your completely FREE in-home estimate?`;
 
     db.appendMessage(convId, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
