@@ -472,4 +472,5 @@ module.exports = {
   closeLead,
   appendMessage,
   getMessages,
+  supabaseClient: () => supabase,
 };

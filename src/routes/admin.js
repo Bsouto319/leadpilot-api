@@ -173,6 +173,8 @@ router.patch('/leads/:id', async (req, res) => {
     if (req.body.notes        !== undefined) allowed.notes        = req.body.notes;
     if (req.body.scheduled_at !== undefined) allowed.scheduled_at = req.body.scheduled_at;
     if (req.body.lead_name    !== undefined) allowed.lead_name    = req.body.lead_name;
+    if (req.body.lead_address !== undefined) allowed.lead_address = req.body.lead_address;
+    if (req.body.service_type !== undefined) allowed.service_type = req.body.service_type;
     await db.updateConversation(req.params.id, allowed);
     res.json({ ok: true });
   } catch (err) {
@@ -402,17 +404,12 @@ router.post('/test-alert', async (req, res) => {
 // Enriquece leads sem nome via CNAM lookup (Twilio Lookup API, ~$0.01/consulta)
 // Roda uma vez para preencher leads históricos — POST /api/admin/leads/enrich-names
 router.post('/leads/enrich-names', async (req, res) => {
-  const { createClient } = require('@supabase/supabase-js');
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY,
-  );
   const twilioSvc = require('../services/twilio');
   const logger    = require('../utils/logger');
 
   try {
-    // Busca leads com nome genérico
-    const { data: leads, error } = await supabase
+    // Usa o db module já inicializado no topo do arquivo (evita problema de env var)
+    const { data: leads, error } = await db.supabaseClient()
       .from('conversations')
       .select('id, lead_phone, lead_name')
       .in('lead_name', ['Caller', 'Customer', ''])
@@ -426,7 +423,7 @@ router.post('/leads/enrich-names', async (req, res) => {
       const phone = `+${lead.lead_phone}`;
       const name  = await twilioSvc.lookupCallerName(phone);
       if (name) {
-        await supabase.from('conversations').update({ lead_name: name }).eq('id', lead.id);
+        await db.updateConversation(lead.id, { lead_name: name });
         logger.info('admin', `enrich-names: ${phone} → ${name}`);
         results.push({ id: lead.id, phone, name, updated: true });
       } else {
