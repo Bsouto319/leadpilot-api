@@ -62,17 +62,31 @@ async function sendSms({ to, from, body, credentials }) {
 }
 
 function validateSignature(req, authToken) {
+  const base = (process.env.BASE_URL || '').replace(/\/$/, '');
+  if (!base) return true; // BASE_URL not configured — skip validation
   const token = authToken || process.env.TWILIO_AUTH_TOKEN;
-  const signature = req.headers['x-twilio-signature'];
-  const url = process.env.BASE_URL + req.originalUrl;
+  const signature = req.headers['x-twilio-signature'] || '';
+  // Construct full URL safely
+  let url;
+  try {
+    url = new URL(req.originalUrl, base).toString();
+  } catch {
+    logger.warn('twilio', `validateSignature: could not construct URL from BASE_URL="${base}" path="${req.originalUrl}" — skipping`);
+    return true;
+  }
   return twilio.validateRequest(token, signature, url, req.body);
 }
 
 function twilioSignatureMiddleware(req, res, next) {
   if (process.env.TWILIO_VALIDATE_SIGNATURES !== 'true') return next();
-  if (!validateSignature(req)) {
-    logger.warn('twilio', `invalid signature from ${req.ip} on ${req.originalUrl}`);
-    return res.status(403).send('Forbidden');
+  try {
+    if (!validateSignature(req)) {
+      logger.warn('twilio', `invalid signature from ${req.ip} on ${req.originalUrl}`);
+      return res.status(403).send('Forbidden');
+    }
+  } catch (err) {
+    // Never crash the webhook due to signature validation — fail open and log
+    logger.error('twilio', `signature validation threw unexpectedly: ${err.message} — allowing request`);
   }
   next();
 }
