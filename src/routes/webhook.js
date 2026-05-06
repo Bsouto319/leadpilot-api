@@ -778,7 +778,7 @@ async function startVoiceIntake(req, res) {
   await db.updateConversation(conversation.id, {
     call_sid: callSid,
     stage: 'new_lead',
-    collected_data: { voice_stage: 'asking_service', no_input_count: 0 },
+    collected_data: { voice_stage: 'asking_name', no_input_count: 0 },
     last_response_at: new Date().toISOString(),
   }).catch(() => {});
   db.appendMessage(conversation.id, 'lead', '[Inbound call started]').catch(() => {});
@@ -795,15 +795,15 @@ async function startVoiceIntake(req, res) {
 </Response>`);
   }
 
-  // Saudação e primeira pergunta
-  const greeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate — our team is top-notch and we'd love to help you. So, what project are you looking to get done?`;
+  // Saudação — pede nome primeiro para personalizar o atendimento
+  const greeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'd love to help you get a completely FREE, no-obligation in-home estimate. Could I start with your first name?`;
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=service" method="POST">
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=name" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${greeting}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=service&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=name&amp;noInput=1</Redirect>
 </Response>`);
 }
 
@@ -853,6 +853,7 @@ async function processVoiceIntake(req, res) {
   if (noInput || !speech) {
     // Primeira vez sem áudio — repete a pergunta
     const repeatMap = {
+      name:    `I'm sorry, I didn't catch that. Could you tell me your first name?`,
       service: `I'm sorry, I didn't quite catch that. What type of project are you looking to get done? For example, tile installation, flooring, or a home renovation?`,
       date:    `I didn't hear a date. What day works best for your free estimate? You can say something like "next Monday" or "this Friday afternoon."`,
       address: `I didn't catch the address. Could you say your street address, city, and state?`,
@@ -864,6 +865,34 @@ async function processVoiceIntake(req, res) {
     <Say voice="Polly.Joanna" language="en-US">${repeatMap[step] || 'Could you repeat that?'}</Say>
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${convId}&amp;step=${step}&amp;noInput=1</Redirect>
+</Response>`);
+  }
+
+  // ── STEP: name ────────────────────────────────────────────────────────────
+  if (step === 'name') {
+    // Extrai primeiro nome sem chamar GPT — remove prefixos comuns
+    const cleaned = speech
+      .replace(/^(my name is|i'm|i am|it's|this is|hey|hi|hello)\s+/i, '')
+      .trim();
+    const firstName = cleaned.split(/\s+/)[0];
+    const leadName  = firstName
+      ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
+      : 'Customer';
+
+    db.appendMessage(convId, 'lead', `[Name]: ${speech}`).catch(() => {});
+    await db.updateConversation(convId, {
+      lead_name: leadName,
+      collected_data: { ...cd, voice_stage: 'asking_service', name_raw: speech, no_input_count: 0 },
+    }).catch(() => {});
+
+    const transition = `Nice to meet you, ${leadName}! So, what project are you looking to get done today?`;
+    db.appendMessage(convId, 'ai', transition).catch(() => {});
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response>
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${convId}&amp;step=service" method="POST">
+    <Say voice="Polly.Joanna" language="en-US">${transition}</Say>
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${convId}&amp;step=service&amp;noInput=1</Redirect>
 </Response>`);
   }
 
