@@ -618,12 +618,23 @@ async function processSchedulingReply({ client, conversation, message }) {
 // Twilio call status callback
 router.post('/call-status', async (req, res) => {
   res.sendStatus(200);
-  const { CallSid, CallStatus } = req.body;
+  const { CallSid, CallStatus, ErrorCode, ErrorMessage, Direction, To, From } = req.body;
   if (!CallSid) return;
 
+  if (ErrorCode) {
+    const friendly = ErrorCode === '21216'
+      ? 'Conta restrita pelo provedor para chamadas +1 — aguardar suporte Twilio'
+      : ErrorMessage || 'Erro desconhecido';
+    logger.error('webhook', `call_error sid=${CallSid} direction=${Direction || '?'} to=${To || '?'} from=${From || '?'} code=${ErrorCode} msg=${friendly}`);
+  } else {
+    logger.info('webhook', `call_status sid=${CallSid} status=${CallStatus} direction=${Direction || '?'} to=${To || '?'}`);
+  }
+
   try {
-    await db.updateConversationByCallSid(CallSid, { call_status: CallStatus });
-    logger.info('webhook', `call-status sid=${CallSid} status=${CallStatus}`);
+    await db.updateConversationByCallSid(CallSid, {
+      call_status: CallStatus,
+      ...(ErrorCode ? { call_error_code: String(ErrorCode) } : {}),
+    });
   } catch (err) {
     handleError('supabase', err).catch(() => {});
   }

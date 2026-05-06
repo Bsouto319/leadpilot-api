@@ -273,6 +273,39 @@ router.post('/invite-client', async (req, res) => {
   }
 });
 
+// Cria subconta Twilio isolada para o cliente — isola riscos de fraude por conta
+router.post('/clients/:id/create-subaccount', async (req, res) => {
+  try {
+    const client = await db.getClientById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'client not found' });
+
+    if (client.twilio_account_sid) {
+      return res.status(409).json({ error: 'Client already has a subaccount', subaccountSid: client.twilio_account_sid });
+    }
+
+    const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    const sub = await twilio.api.accounts.create({
+      friendlyName: `LeadPilot – ${client.business_name}`,
+    });
+
+    await db.updateClient(req.params.id, {
+      twilio_account_sid: sub.sid,
+      twilio_auth_token:  sub.authToken,
+    });
+
+    const logger = require('../utils/logger');
+    logger.info('admin', `subaccount_created client=${client.business_name} sid=${sub.sid}`);
+
+    res.status(201).json({
+      ok: true,
+      subaccountSid: sub.sid,
+      note: `Subconta criada. Compre um número Twilio dentro da subconta ${sub.sid} e atualize twilio_number do cliente.`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, code: err.code });
+  }
+});
+
 router.patch('/clients/:id', async (req, res) => {
   try {
     const editable = [

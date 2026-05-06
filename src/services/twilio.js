@@ -29,23 +29,36 @@ async function makeCall({ to, from, voiceScript, statusCallbackUrl, gatherUrl, c
   <Pause length="1"/>
 </Response>`;
 
-  const call = await client.calls.create({
-    to,
-    from,
-    twiml,
-    statusCallback: statusCallbackUrl,
-    statusCallbackMethod: 'POST',
-  });
-
-  logger.info('twilio', `call initiated sid=${call.sid} to=${to}`);
-  return call;
+  try {
+    const call = await client.calls.create({
+      to,
+      from,
+      twiml,
+      statusCallback: statusCallbackUrl,
+      statusCallbackMethod: 'POST',
+    });
+    logger.info('twilio', `call_initiated sid=${call.sid} to=${to} from=${from} status=${call.status}`);
+    return call;
+  } catch (err) {
+    logger.error('twilio', `call_failed to=${to} from=${from} code=${err.code || 'N/A'} status=${err.status || 'N/A'} message=${err.message}`);
+    if (err.code === 21216) {
+      err.isAccountRestricted = true;
+      err.friendlyMessage = 'Conta Twilio restrita pelo provedor para chamadas +1. Aguardar liberação do suporte (Ticket #26755104).';
+    }
+    throw err;
+  }
 }
 
 async function sendSms({ to, from, body, credentials }) {
   const client = getClient(credentials);
-  const msg = await client.messages.create({ to, from, body });
-  logger.info('twilio', `sms sent sid=${msg.sid} to=${to}`);
-  return msg;
+  try {
+    const msg = await client.messages.create({ to, from, body });
+    logger.info('twilio', `sms_sent sid=${msg.sid} to=${to} from=${from} status=${msg.status}`);
+    return msg;
+  } catch (err) {
+    logger.error('twilio', `sms_failed to=${to} from=${from} code=${err.code || 'N/A'} message=${err.message}`);
+    throw err;
+  }
 }
 
 function validateSignature(req, authToken) {
