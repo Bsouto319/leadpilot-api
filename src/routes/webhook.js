@@ -791,7 +791,7 @@ async function startVoiceIntake(req, res) {
   }
 
   // Saudação e primeira pergunta
-  const greeting = `Thank you for calling ${client.business_name}! My name is Alex, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate — our team is top-notch and we'd love to help you. So, what project are you looking to get done?`;
+  const greeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate — our team is top-notch and we'd love to help you. So, what project are you looking to get done?`;
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
@@ -881,7 +881,7 @@ async function processVoiceIntake(req, res) {
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini', max_tokens: 80,
         messages: [
-          { role: 'system', content: `You are Alex, a friendly AI scheduling assistant for ${client.business_name}.${sysInfo}\nYou're on a phone call. Be warm, brief (max 2 sentences), and excited about helping. No markdown, no asterisks.` },
+          { role: 'system', content: `You are Lexy, a friendly AI scheduling assistant for ${client.business_name}.${sysInfo}\nYou're on a phone call. Be warm, brief (max 2 sentences), and excited about helping. No markdown, no asterisks.` },
           { role: 'user', content: `Customer just said they need: "${speech}". Acknowledge their project enthusiastically in one short sentence, then ask what day this week or next works best for a FREE in-home estimate.` },
         ],
       });
@@ -1032,7 +1032,7 @@ async function resumeWithAI(req, res, convId) {
     return res.send('<Response><Say voice="Polly.Joanna" language="en-US">Thank you for calling. Our team will follow up with you shortly. Goodbye!</Say></Response>');
   }
 
-  const greeting = `Thank you for calling ${client.business_name}! My name is Alex, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate. So, what project are you looking to get done?`;
+  const greeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate. So, what project are you looking to get done?`;
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
