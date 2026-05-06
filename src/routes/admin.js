@@ -399,6 +399,48 @@ router.post('/test-alert', async (req, res) => {
   }
 });
 
+// Enriquece leads sem nome via CNAM lookup (Twilio Lookup API, ~$0.01/consulta)
+// Roda uma vez para preencher leads históricos — POST /api/admin/leads/enrich-names
+router.post('/leads/enrich-names', async (req, res) => {
+  const { createClient } = require('@supabase/supabase-js');
+  const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY,
+  );
+  const twilioSvc = require('../services/twilio');
+  const logger    = require('../utils/logger');
+
+  try {
+    // Busca leads com nome genérico
+    const { data: leads, error } = await supabase
+      .from('conversations')
+      .select('id, lead_phone, lead_name')
+      .in('lead_name', ['Caller', 'Customer', ''])
+      .not('lead_phone', 'is', null);
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!leads?.length) return res.json({ ok: true, enriched: 0, message: 'No leads to enrich' });
+
+    const results = [];
+    for (const lead of leads) {
+      const phone = `+${lead.lead_phone}`;
+      const name  = await twilioSvc.lookupCallerName(phone);
+      if (name) {
+        await supabase.from('conversations').update({ lead_name: name }).eq('id', lead.id);
+        logger.info('admin', `enrich-names: ${phone} → ${name}`);
+        results.push({ id: lead.id, phone, name, updated: true });
+      } else {
+        results.push({ id: lead.id, phone, name: null, updated: false });
+      }
+    }
+
+    const enriched = results.filter(r => r.updated).length;
+    res.json({ ok: true, enriched, total: leads.length, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/errors', async (req, res) => {
   try {
     const errors = await db.getErrors();

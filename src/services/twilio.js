@@ -91,4 +91,20 @@ function twilioSignatureMiddleware(req, res, next) {
   next();
 }
 
-module.exports = { makeCall, sendSms, validateSignature, twilioSignatureMiddleware };
+// CNAM lookup — retorna primeiro nome limpo ou null se não encontrado
+// Funciona para números +1 (EUA/Canadá). Custo: ~$0.01/consulta.
+async function lookupCallerName(phoneNumber) {
+  try {
+    const client = getClient();
+    const result = await client.lookups.v1.phoneNumbers(phoneNumber).fetch({ type: ['caller-name'] });
+    const raw = result.callerName?.callerName;
+    if (!raw || raw.trim() === '') return null;
+    // Pega só o primeiro nome (CNAM às vezes retorna nome completo em maiúsculas)
+    const first = raw.trim().split(/\s+/)[0];
+    return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+  } catch {
+    return null; // nunca bloqueia o fluxo principal
+  }
+}
+
+module.exports = { makeCall, sendSms, validateSignature, twilioSignatureMiddleware, lookupCallerName };

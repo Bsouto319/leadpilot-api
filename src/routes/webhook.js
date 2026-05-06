@@ -235,13 +235,18 @@ async function processSms(body) {
 
   const serviceType = detectServiceType(message);
 
-  // 1. Find client + extract name in parallel (eliminates sequential OpenAI wait)
+  // 1. Client + CNAM lookup + name from message — tudo em paralelo
   let client, leadName;
   try {
-    [leadName, client] = await Promise.all([
+    const [cnam, nameFromMsg, clientResult] = await Promise.all([
+      twilioSvc.lookupCallerName(`+${leadPhone}`),
       extractLeadName(message),
       db.getClientByTwilioNumber(twilioNumber),
     ]);
+    // CNAM tem prioridade — é o nome real do cadastro da operadora
+    leadName = cnam || nameFromMsg || 'Customer';
+    client   = clientResult;
+    if (cnam) logger.info('webhook', `CNAM resolved: ${leadPhone} → ${cnam}`);
   } catch (err) {
     await handleError('supabase', err);
     return;
@@ -759,26 +764,42 @@ async function startVoiceIntake(req, res) {
     return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">This number is not currently active. Goodbye!</Say></Response>`);
   }
 
+  // CNAM lookup + busca conversa existente em paralelo — não bloqueia a ligação
+  const [cnamName, existingConv] = await Promise.all([
+    twilioSvc.lookupCallerName(`+${leadPhone}`),
+    db.getExistingConversation(client.id, leadPhone).catch(() => null),
+  ]);
+  if (cnamName) logger.info('webhook', `CNAM voice: ${leadPhone} → ${cnamName}`);
+
   // Criar lead (ou reutilizar existente recente)
-  let conversation = await db.getExistingConversation(client.id, leadPhone).catch(() => null);
+  let conversation = existingConv;
   if (!conversation) {
     const isDup = await db.checkDuplicate(client.id, leadPhone, 30).catch(() => false);
     if (!isDup) {
       conversation = await db.saveLead({
-        clientId: client.id, leadPhone, leadName: 'Caller',
+        clientId: client.id, leadPhone,
+        leadName: cnamName || 'Caller',
         source: 'inbound_call', serviceType: 'general', message: '[Inbound call]',
       }).catch(() => null);
     }
+  } else if (cnamName && (!conversation.lead_name || conversation.lead_name === 'Caller' || conversation.lead_name === 'Customer')) {
+    // Atualiza nome se já tinha conversa mas sem nome real
+    db.updateConversation(conversation.id, { lead_name: cnamName }).catch(() => {});
   }
+
   if (!conversation) {
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">Thanks for calling ${client.business_name}! Our team will follow up with you shortly. Goodbye!</Say></Response>`);
   }
 
+  // Se CNAM resolveu o nome, pula step de nome e vai direto pro serviço
+  const firstStep   = cnamName ? 'service' : 'name';
+  const voiceStage  = cnamName ? 'asking_service' : 'asking_name';
+
   await db.updateConversation(conversation.id, {
     call_sid: callSid,
     stage: 'new_lead',
-    collected_data: { voice_stage: 'asking_name', no_input_count: 0 },
+    collected_data: { voice_stage: voiceStage, no_input_count: 0, ...(cnamName ? { name_raw: cnamName } : {}) },
     last_response_at: new Date().toISOString(),
   }).catch(() => {});
   db.appendMessage(conversation.id, 'lead', '[Inbound call started]').catch(() => {});
@@ -795,15 +816,17 @@ async function startVoiceIntake(req, res) {
 </Response>`);
   }
 
-  // Saudação — pede nome primeiro para personalizar o atendimento
-  const greeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'd love to help you get a completely FREE, no-obligation in-home estimate. Could I start with your first name?`;
+  // Saudação personalizada se CNAM resolveu o nome
+  const greeting = cnamName
+    ? `Hi ${cnamName}! Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'd love to help you get a completely FREE, no-obligation in-home estimate. What project are you looking to get done?`
+    : `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'd love to help you get a completely FREE, no-obligation in-home estimate. Could I start with your first name?`;
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=name" method="POST">
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=${firstStep}" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${greeting}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=name&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=${firstStep}&amp;noInput=1</Redirect>
 </Response>`);
 }
 
