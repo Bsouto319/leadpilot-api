@@ -752,17 +752,7 @@ async function processGather({ speech, conversationId, clientId }) {
 // Lead liga → IA atende, coleta serviço + data + endereço → salva lead completo
 // Rodrigo vê no dashboard e decide quando confirmar/ligar de volta
 
-// Responde IMEDIATAMENTE — "one moment" toca enquanto /voice-init processa o DB
 router.post('/voice', webhookRateLimit, (req, res) => {
-  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
-  res.set('Content-Type', 'text/xml');
-  res.send(`<Response>
-  <Say voice="Polly.Joanna" language="en-US">Thank you for calling! Just one moment please.</Say>
-  <Redirect method="POST">${BASE}/webhook/voice-init</Redirect>
-</Response>`);
-});
-
-router.post('/voice-init', (req, res) => {
   startVoiceIntake(req, res).catch(err => {
     logger.error('webhook', 'voice intake error', err.message);
     res.set('Content-Type', 'text/xml');
@@ -834,8 +824,8 @@ async function startVoiceIntake(req, res) {
 </Response>`);
   }
 
-  // Responde imediatamente — CNAM já foi disparado async acima
-  const greeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'd love to help you get a completely FREE, no-obligation in-home estimate. Could I start with your first name?`;
+  // Greeting curto — menos texto = Polly sintetiza ~300ms ao invés de ~800ms
+  const greeting = `Hi! Thanks for calling ${client.business_name}. What's your first name?`;
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
