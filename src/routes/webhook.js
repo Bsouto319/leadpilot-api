@@ -752,7 +752,17 @@ async function processGather({ speech, conversationId, clientId }) {
 // Lead liga → IA atende, coleta serviço + data + endereço → salva lead completo
 // Rodrigo vê no dashboard e decide quando confirmar/ligar de volta
 
+// Responde IMEDIATAMENTE — "one moment" toca enquanto /voice-init processa o DB
 router.post('/voice', webhookRateLimit, (req, res) => {
+  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  res.set('Content-Type', 'text/xml');
+  res.send(`<Response>
+  <Say voice="Polly.Joanna" language="en-US">Thank you for calling! Just one moment please.</Say>
+  <Redirect method="POST">${BASE}/webhook/voice-init</Redirect>
+</Response>`);
+});
+
+router.post('/voice-init', (req, res) => {
   startVoiceIntake(req, res).catch(err => {
     logger.error('webhook', 'voice intake error', err.message);
     res.set('Content-Type', 'text/xml');
@@ -774,20 +784,19 @@ async function startVoiceIntake(req, res) {
     return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">This number is not currently active. Goodbye!</Say></Response>`);
   }
 
-  // Busca conversa existente — rápido, não bloqueia
-  const existingConv = await db.getExistingConversation(client.id, leadPhone).catch(() => null);
+  // Paraleliza: busca conversa existente + checa duplicata ao mesmo tempo
+  const [existingConv, isDup] = await Promise.all([
+    db.getExistingConversation(client.id, leadPhone).catch(() => null),
+    db.checkDuplicate(client.id, leadPhone, 30).catch(() => false),
+  ]);
 
-  // Criar lead (ou reutilizar existente recente)
   let conversation = existingConv;
-  if (!conversation) {
-    const isDup = await db.checkDuplicate(client.id, leadPhone, 30).catch(() => false);
-    if (!isDup) {
-      conversation = await db.saveLead({
-        clientId: client.id, leadPhone,
-        leadName: 'Caller',
-        source: 'inbound_call', serviceType: 'general', message: '[Inbound call]',
-      }).catch(() => null);
-    }
+  if (!conversation && !isDup) {
+    conversation = await db.saveLead({
+      clientId: client.id, leadPhone,
+      leadName: 'Caller',
+      source: 'inbound_call', serviceType: 'general', message: '[Inbound call]',
+    }).catch(() => null);
   }
 
   if (!conversation) {
@@ -1026,8 +1035,8 @@ async function processVoiceIntake(req, res) {
       last_response_at: new Date().toISOString(),
     }).catch(() => {});
 
-    // Confirmação por SMS para o lead
-    const confirmSms = `✅ You're all set! Here's your FREE estimate summary:\n📋 ${serviceRaw}\n📅 ${formatted}\n📍 ${address}\n\n${client.business_name} will reach out to confirm. We look forward to meeting you!\n\nReply STOP to opt out.`;
+    // Confirmação por SMS para o lead — mesmo número que o lead ligou
+    const confirmSms = `✅ You're all set! Here's your FREE estimate summary:\n📋 ${serviceRaw}\n📅 ${formatted}\n📍 ${address}\n\n${client.business_name} will reach out to personally confirm your appointment.\n\n💬 Prefer to speak with a real person? Just reply HUMAN and we'll schedule a call at your convenience.\n\nReply STOP to opt out.`;
     await twilioSvc.sendSms({
       to: `+${conv.lead_phone}`,
       from: client.twilio_number,
