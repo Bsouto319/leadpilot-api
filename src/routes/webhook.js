@@ -774,12 +774,8 @@ async function startVoiceIntake(req, res) {
     return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">This number is not currently active. Goodbye!</Say></Response>`);
   }
 
-  // CNAM lookup + busca conversa existente em paralelo — não bloqueia a ligação
-  const [cnamName, existingConv] = await Promise.all([
-    twilioSvc.lookupCallerName(`+${leadPhone}`),
-    db.getExistingConversation(client.id, leadPhone).catch(() => null),
-  ]);
-  if (cnamName) logger.info('webhook', `CNAM voice: ${leadPhone} → ${cnamName}`);
+  // Busca conversa existente — rápido, não bloqueia
+  const existingConv = await db.getExistingConversation(client.id, leadPhone).catch(() => null);
 
   // Criar lead (ou reutilizar existente recente)
   let conversation = existingConv;
@@ -788,13 +784,10 @@ async function startVoiceIntake(req, res) {
     if (!isDup) {
       conversation = await db.saveLead({
         clientId: client.id, leadPhone,
-        leadName: cnamName || 'Caller',
+        leadName: 'Caller',
         source: 'inbound_call', serviceType: 'general', message: '[Inbound call]',
       }).catch(() => null);
     }
-  } else if (cnamName && (!conversation.lead_name || conversation.lead_name === 'Caller' || conversation.lead_name === 'Customer')) {
-    // Atualiza nome se já tinha conversa mas sem nome real
-    db.updateConversation(conversation.id, { lead_name: cnamName }).catch(() => {});
   }
 
   if (!conversation) {
@@ -802,17 +795,23 @@ async function startVoiceIntake(req, res) {
     return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">Thanks for calling ${client.business_name}! Our team will follow up with you shortly. Goodbye!</Say></Response>`);
   }
 
-  // Se CNAM resolveu o nome, pula step de nome e vai direto pro serviço
-  const firstStep   = cnamName ? 'service' : 'name';
-  const voiceStage  = cnamName ? 'asking_service' : 'asking_name';
-
   await db.updateConversation(conversation.id, {
     call_sid: callSid,
     stage: 'new_lead',
-    collected_data: { voice_stage: voiceStage, no_input_count: 0, ...(cnamName ? { name_raw: cnamName } : {}) },
+    collected_data: { voice_stage: 'asking_name', no_input_count: 0 },
     last_response_at: new Date().toISOString(),
   }).catch(() => {});
   db.appendMessage(conversation.id, 'lead', '[Inbound call started]').catch(() => {});
+
+  // CNAM lookup async — não bloqueia a resposta, atualiza o nome no DB quando resolver
+  twilioSvc.lookupCallerName(`+${leadPhone}`).then(cnamName => {
+    if (!cnamName) return;
+    logger.info('webhook', `CNAM async resolved: ${leadPhone} → ${cnamName}`);
+    db.updateConversation(conversation.id, {
+      lead_name: cnamName,
+      collected_data: { voice_stage: 'asking_service', no_input_count: 0, name_raw: cnamName },
+    }).catch(() => {});
+  }).catch(() => {});
 
   const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
 
@@ -826,17 +825,15 @@ async function startVoiceIntake(req, res) {
 </Response>`);
   }
 
-  // Saudação personalizada se CNAM resolveu o nome
-  const greeting = cnamName
-    ? `Hi ${cnamName}! Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'd love to help you get a completely FREE, no-obligation in-home estimate. What project are you looking to get done?`
-    : `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'd love to help you get a completely FREE, no-obligation in-home estimate. Could I start with your first name?`;
+  // Responde imediatamente — CNAM já foi disparado async acima
+  const greeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'd love to help you get a completely FREE, no-obligation in-home estimate. Could I start with your first name?`;
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=${firstStep}" method="POST">
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=name" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${greeting}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=${firstStep}&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=name&amp;noInput=1</Redirect>
 </Response>`);
 }
 
