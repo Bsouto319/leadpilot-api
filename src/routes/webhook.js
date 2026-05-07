@@ -357,22 +357,8 @@ async function processSms(body) {
     await handleError('supabase', err);
   }
 
-  // 6. Send SMS to lead immediately (lead initiated contact — always respond ASAP)
-  try {
-    const hi = leadName && leadName !== 'Customer' ? `Hi ${leadName}!` : 'Hi there!';
-    const smsBody = `${hi} 🏠 ${client.business_name} here — calling you RIGHT NOW about your ${serviceType.replace(/_/g, ' ')} project!\n\nIf we miss you, just reply with your best day & time and we'll lock in your FREE estimate. We have openings this week! 📅\n\nReply STOP to opt out.`;
-    await twilioSvc.sendSms({
-      to: `+${leadPhone}`,
-      from: client.twilio_number,
-      body: smsBody,
-      credentials: clientCredentials(client),
-    });
-    db.appendMessage(conversation.id, 'ai', smsBody).catch(() => {});
-  } catch (err) {
-    await handleError('twilio', err);
-  }
-
-  // 7. Make outbound call immediately — lead initiated contact so consent is established
+  // 6. Make outbound call immediately — lead initiated contact so consent is established
+  // SMS is only sent as fallback via call-status webhook if call is not answered
   try {
     const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
     const call = await twilioSvc.makeCall({
@@ -647,6 +633,30 @@ router.post('/call-status', async (req, res) => {
     });
   } catch (err) {
     handleError('supabase', err).catch(() => {});
+  }
+
+  // Fallback SMS when outbound call to lead was not answered
+  if (Direction === 'outbound-api' && ['no-answer', 'busy', 'failed'].includes(CallStatus)) {
+    try {
+      const conv = await db.getConversationByCallSid(CallSid);
+      if (conv && conv.clients) {
+        const client = conv.clients;
+        const leadName = conv.lead_name && conv.lead_name !== 'Caller' && conv.lead_name !== 'Customer' ? conv.lead_name : null;
+        const hi = leadName ? `Hi ${leadName}!` : 'Hi there!';
+        const serviceLabel = (conv.service_type || 'project').replace(/_/g, ' ');
+        const smsBody = `${hi} 🏠 This is ${client.business_name} — we just tried calling you about your ${serviceLabel} project!\n\nNo worries — this is just our first reach-out. A real person from our team will personally follow up with you very soon 👷\n\nWant to schedule a call at a specific time? Just reply with when works best and we'll call you then. FREE estimate, zero commitment.\n\nReply STOP to opt out.`;
+        await twilioSvc.sendSms({
+          to: `+${conv.lead_phone}`,
+          from: client.twilio_number,
+          body: smsBody,
+          credentials: clientCredentials(client),
+        });
+        db.appendMessage(conv.id, 'ai', smsBody).catch(() => {});
+        logger.info('webhook', `fallback SMS sent to ${conv.lead_phone} after ${CallStatus} outbound call`);
+      }
+    } catch (err) {
+      handleError('twilio', err).catch(() => {});
+    }
   }
 });
 

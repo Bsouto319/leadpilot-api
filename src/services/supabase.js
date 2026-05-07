@@ -357,6 +357,15 @@ async function getConversationById(id) {
   return data || null;
 }
 
+async function getConversationByCallSid(callSid) {
+  const { data } = await supabase
+    .from('conversations')
+    .select('*, clients(*)')
+    .eq('call_sid', callSid)
+    .single();
+  return data || null;
+}
+
 async function getClientByUserId(userId) {
   const { data, error } = await supabase
     .from('clients')
@@ -466,6 +475,7 @@ module.exports = {
   getClientByUserId,
   getConversationWithClient,
   getConversationById,
+  getConversationByCallSid,
   createClient: createClientRecord,
   inviteUser,
   linkUserToClient,
