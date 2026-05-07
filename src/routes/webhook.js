@@ -774,14 +774,10 @@ async function startVoiceIntake(req, res) {
     return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">This number is not currently active. Goodbye!</Say></Response>`);
   }
 
-  // Paraleliza: busca conversa existente + checa duplicata ao mesmo tempo
-  const [existingConv, isDup] = await Promise.all([
-    db.getExistingConversation(client.id, leadPhone).catch(() => null),
-    db.checkDuplicate(client.id, leadPhone, 30).catch(() => false),
-  ]);
-
+  // Inbound calls sempre criam conversa — anti-duplicata é só para SMS
+  const existingConv = await db.getExistingConversation(client.id, leadPhone).catch(() => null);
   let conversation = existingConv;
-  if (!conversation && !isDup) {
+  if (!conversation) {
     conversation = await db.saveLead({
       clientId: client.id, leadPhone,
       leadName: 'Caller',
