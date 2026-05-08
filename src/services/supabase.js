@@ -75,22 +75,33 @@ async function checkDuplicate(clientId, leadPhone, minutes = 60) {
   return data;
 }
 
-async function saveLead({ clientId, leadPhone, leadName = 'Customer', source, serviceType, message }) {
+async function saveLead({ clientId, leadPhone, leadName = 'Customer', source, serviceType, message, thumbtackLeadId = null }) {
+  const row = {
+    client_id: clientId,
+    lead_name: leadName,
+    lead_phone: leadPhone,
+    source,
+    stage: 'new_lead',
+    service_type: serviceType,
+    email_body: message,
+  };
+  if (thumbtackLeadId) row.thumbtack_lead_id = thumbtackLeadId;
   const { data, error } = await supabase
     .from('conversations')
-    .insert({
-      client_id: clientId,
-      lead_name: leadName,
-      lead_phone: leadPhone,
-      source,
-      stage: 'new_lead',
-      service_type: serviceType,
-      email_body: message,
-    })
+    .insert(row)
     .select()
     .single();
   if (error) throw new Error(`Supabase saveLead: ${error.message}`);
   return data;
+}
+
+async function getConversationByThumbtackLeadId(thumbtackLeadId) {
+  const { data } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('thumbtack_lead_id', thumbtackLeadId)
+    .single();
+  return data || null;
 }
 
 async function updateConversation(id, fields) {
@@ -494,6 +505,7 @@ module.exports = {
   getConversationById,
   getConversationByCallSid,
   getConversationWithClientByCallSid,
+  getConversationByThumbtackLeadId,
   createClient: createClientRecord,
   inviteUser,
   linkUserToClient,

@@ -26,7 +26,7 @@ function clientCredentials(client) {
   return null;
 }
 
-async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, serviceNote, apiKey }) {
+async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, serviceNote, apiKey, thumbtackLeadId }) {
   const expectedKey = process.env.THUMBTACK_WEBHOOK_SECRET;
   if (expectedKey && apiKey !== undefined && apiKey !== expectedKey) {
     logger.warn('thumbtack', 'invalid apiKey');
@@ -56,6 +56,15 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     return;
   }
 
+  // Dedup por thumbtackLeadId (evita reprocessar o mesmo lead se Thumbtack reenviar)
+  if (thumbtackLeadId) {
+    const existing = await db.getConversationByThumbtackLeadId(thumbtackLeadId).catch(() => null);
+    if (existing) {
+      logger.info('thumbtack', `thumbtackLeadId ${thumbtackLeadId} already processed, skipping`);
+      return;
+    }
+  }
+
   let isDuplicate;
   try {
     isDuplicate = await db.checkDuplicate(client.id, leadPhone, 60);
@@ -81,6 +90,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       source: 'thumbtack',
       serviceType,
       message,
+      thumbtackLeadId: thumbtackLeadId || null,
     });
   } catch (err) {
     await handleError('supabase', err);

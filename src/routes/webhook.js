@@ -1108,13 +1108,49 @@ async function resumeWithAI(req, res, callSid) {
 </Response>`);
 }
 
-// ── THUMBTACK LEAD WEBHOOK ────────────────────────────────────────────────────
-// Payload: { clientId, leadPhone, leadName?, serviceNote?, apiKey }
-// leadPhone = Thumbtack virtual number assigned to this lead
-// The Twilio number on the Thumbtack profile must match client.twilio_number
+// ── THUMBTACK LEAD WEBHOOK (formato legado) ───────────────────────────────────
 router.post('/thumbtack-lead', express.json(), async (req, res) => {
   res.sendStatus(200);
   processThumbtackLead(req.body).catch(err => handleError('thumbtack', err));
+});
+
+// ── THUMBTACK NATIVE WEBHOOK ──────────────────────────────────────────────────
+// URL: POST /webhook/thumbtack?clientId=XXX&secret=YYY
+// Payload nativo do Thumbtack Pro (Partner API)
+router.post('/thumbtack', express.json(), async (req, res) => {
+  res.sendStatus(200);
+
+  const { clientId, secret } = req.query;
+  const expectedSecret = process.env.THUMBTACK_WEBHOOK_SECRET;
+  if (expectedSecret && secret !== expectedSecret) {
+    logger.warn('thumbtack', `invalid secret from ${req.ip}`);
+    return;
+  }
+  if (!clientId) {
+    logger.warn('thumbtack', 'missing clientId in URL — configure webhook URL as /webhook/thumbtack?clientId=XXX&secret=YYY');
+    return;
+  }
+
+  const body = req.body;
+  logger.info('thumbtack', `native webhook received leadID=${body.leadID || 'N/A'} clientId=${clientId}`);
+
+  // Mapeia payload nativo → formato interno
+  const rawPhone  = body.customer?.phone || '';
+  const leadName  = body.customer?.name  || 'Customer';
+  const category  = body.request?.category    || '';
+  const desc      = body.request?.description || '';
+  const location  = body.request?.location;
+  const locationStr = location ? `${location.city || ''}, ${location.state || ''} ${location.zipCode || ''}`.trim() : '';
+  const serviceNote = [category, desc, locationStr].filter(Boolean).join(' — ');
+
+  processThumbtackLead({
+    clientId,
+    leadPhone: rawPhone,
+    leadName,
+    serviceNote: serviceNote || 'Thumbtack lead',
+    thumbtackLeadId: body.leadID,
+    apiKey: expectedSecret,
+  }).catch(err => handleError('thumbtack', err));
 });
 
 // ── BROWSER CLICK-TO-CALL (Twilio Voice JS SDK) ───────────────────────────────
