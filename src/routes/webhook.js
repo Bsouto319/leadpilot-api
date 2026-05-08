@@ -9,18 +9,12 @@ const { handleError } = require('../middleware/alerting');
 const { processThumbtackLead } = require('../services/thumbtack');
 const elevenlabs = require('../services/elevenlabs');
 
-// Helper: returns <Play> if ElevenLabs phrase cached, otherwise <Say> fallback.
-// Dynamic prefix (lead name, service, etc.) is always <Say> — short and cheap.
-function el(client, phraseKey, fallbackText, dynamicPrefix) {
+// Helper: returns <Play> if ElevenLabs phrase cached, otherwise <Say alice> fallback.
+function el(client, phraseKey, fallbackText) {
   const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
   const hasEl = client.elevenlabs_greeting_url && elevenlabs.hasPhrase(client.id, phraseKey);
-  const say   = (t) => `<Say voice="Polly.Joanna" language="en-US">${t}</Say>`;
-
-  if (!hasEl) return say(dynamicPrefix ? `${dynamicPrefix} ${fallbackText}` : fallbackText);
-
-  const play = `<Play>${elevenlabs.phraseUrl(BASE, client.id, phraseKey)}</Play>`;
-  // Dynamic prefix (e.g. "Nice to meet you, John!") stays as Polly — short text, imperceptible quality diff
-  return dynamicPrefix ? `${say(dynamicPrefix)} ${play}` : play;
+  if (!hasEl) return `<Say voice="alice" language="en-US">${fallbackText}</Say>`;
+  return `<Play>${elevenlabs.phraseUrl(BASE, client.id, phraseKey)}</Play>`;
 }
 
 // Simple in-memory rate limiter: max 10 requests per IP per minute
@@ -709,7 +703,7 @@ router.post('/call-gather', async (req, res) => {
 
   if (!speech) {
     res.set('Content-Type', 'text/xml');
-    return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">We didn't catch that. We'll follow up with you soon. Thank you!</Say></Response>`);
+    return res.send(`<Response><Say voice="alice" language="en-US">We didn't catch that. We'll follow up with you soon. Thank you!</Say></Response>`);
   }
 
   // Parse date/time and book calendar async
@@ -717,7 +711,7 @@ router.post('/call-gather', async (req, res) => {
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Say voice="Polly.Joanna" language="en-US">Perfect! We have noted your preference and our team will confirm shortly. Thank you and have a wonderful day!</Say>
+  <Say voice="alice" language="en-US">Perfect! We have noted your preference and our team will confirm shortly. Thank you and have a wonderful day!</Say>
 </Response>`);
 });
 
@@ -796,7 +790,7 @@ router.post('/voice', webhookRateLimit, (req, res) => {
   startVoiceIntake(req, res).catch(err => {
     logger.error('webhook', 'voice intake error', err.message);
     res.set('Content-Type', 'text/xml');
-    res.send(`<Response><Say voice="Polly.Joanna" language="en-US">We're sorry, we're experiencing a technical issue. Please try again in a moment. Goodbye!</Say></Response>`);
+    res.send(`<Response><Say voice="alice" language="en-US">We're sorry, we're experiencing a technical issue. Please try again in a moment. Goodbye!</Say></Response>`);
   });
 });
 
@@ -812,7 +806,7 @@ async function startVoiceIntake(req, res) {
   try { client = await db.getClientByTwilioNumber(twilioNumber); } catch {}
   if (!client) {
     res.set('Content-Type', 'text/xml');
-    return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">This number is not currently active. Goodbye!</Say></Response>`);
+    return res.send(`<Response><Say voice="alice" language="en-US">This number is not currently active. Goodbye!</Say></Response>`);
   }
 
   const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
@@ -833,10 +827,10 @@ async function startVoiceIntake(req, res) {
 </Response>`);
   }
 
-  // Responde IMEDIATAMENTE — usa <Play> (ElevenLabs pré-gerado) se disponível, senão Polly
+  // Responde IMEDIATAMENTE — usa <Play> (ElevenLabs pré-gerado) se disponível, senão Alice (Twilio)
   const greetingTwiml = client.elevenlabs_greeting_url
     ? `<Play>${client.elevenlabs_greeting_url}</Play>`
-    : `<Say voice="Polly.Joanna" language="en-US">Hi! Thanks for calling ${client.business_name}. What's your first name?</Say>`;
+    : `<Say voice="alice" language="en-US">Hi! Thanks for calling ${client.business_name}. What's your first name?</Say>`;
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
@@ -845,7 +839,7 @@ async function startVoiceIntake(req, res) {
   <Redirect method="POST">${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name&amp;noInput=1</Redirect>
 </Response>`);
 
-  // DB async — tem ~2.5s (tempo do Polly falar) antes do lead terminar de responder
+  // DB async — tem ~2.5s (tempo do greeting falar) antes do lead terminar de responder
   try {
     const existingConv = await db.getExistingConversation(client.id, leadPhone).catch(() => null);
     let conversation = existingConv;
@@ -895,7 +889,7 @@ router.post('/voice-intake', (req, res) => {
   processVoiceIntake(req, res).catch(err => {
     logger.error('webhook', 'voice-intake error', err.message);
     res.set('Content-Type', 'text/xml');
-    res.send(`<Response><Say voice="Polly.Joanna" language="en-US">I'm sorry, something went wrong. Our team will follow up with you by text. Have a great day!</Say></Response>`);
+    res.send(`<Response><Say voice="alice" language="en-US">I'm sorry, something went wrong. Our team will follow up with you by text. Have a great day!</Say></Response>`);
   });
 });
 
@@ -917,7 +911,7 @@ async function processVoiceIntake(req, res) {
 
   if (!conv) {
     res.set('Content-Type', 'text/xml');
-    return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">Sorry, I couldn't find your appointment. Please try calling again. Goodbye!</Say></Response>`);
+    return res.send(`<Response><Say voice="alice" language="en-US">Sorry, I couldn't find your appointment. Please try calling again. Goodbye!</Say></Response>`);
   }
 
   // Sempre usar conv.id para DB e URLs — funciona com ambos os modos de lookup
@@ -1149,7 +1143,7 @@ router.post('/voice-fallback', (req, res) => {
   resumeWithAI(req, res, callSid).catch(err => {
     logger.error('webhook', 'voice-fallback error', err.message);
     res.set('Content-Type', 'text/xml');
-    res.send('<Response><Say voice="Polly.Joanna" language="en-US">We\'re sorry, our team is temporarily unavailable. We\'ll text you shortly. Goodbye!</Say></Response>');
+    res.send('<Response><Say voice="alice" language="en-US">We\'re sorry, our team is temporarily unavailable. We\'ll text you shortly. Goodbye!</Say></Response>');
   });
 });
 
@@ -1160,7 +1154,7 @@ async function resumeWithAI(req, res, callSid) {
 
   if (!client) {
     res.set('Content-Type', 'text/xml');
-    return res.send('<Response><Say voice="Polly.Joanna" language="en-US">Thank you for calling. Our team will follow up with you shortly. Goodbye!</Say></Response>');
+    return res.send('<Response><Say voice="alice" language="en-US">Thank you for calling. Our team will follow up with you shortly. Goodbye!</Say></Response>');
   }
 
   const id = conv.id;
@@ -1169,7 +1163,7 @@ async function resumeWithAI(req, res, callSid) {
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
-    <Say voice="Polly.Joanna" language="en-US">${greeting}</Say>
+    <Say voice="alice" language="en-US">${greeting}</Say>
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
 </Response>`);

@@ -37,8 +37,7 @@ function trackUsage(chars) {
 function getDailyUsage() { return { ..._dailyUsage, limit: DAILY_CHAR_LIMIT() }; }
 
 // ── Phrase definitions (static content per client) ────────────────────────────
-// Dynamic parts (lead name, date, service) stay as Polly <Say> in webhook.js.
-// These pre-generated suffixes are the long, quality-sensitive parts.
+// All phrases are standalone ElevenLabs Hope. Dynamic parts (name, date) go in SMS only.
 function getClientPhrases(businessName) {
   const b = businessName || 'us';
   return {
@@ -56,7 +55,7 @@ function getClientPhrases(businessName) {
     no_input_address:
       `I didn't catch the address. Could you say your street address, city, and state?`,
 
-    // Step transitions — standalone phrases, no Polly prefix needed
+    // Step transitions — standalone phrases
     ask_service_suffix:
       `Great! So, what type of project are you looking to get done?`,
     ask_date_suffix:

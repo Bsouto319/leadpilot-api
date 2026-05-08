@@ -22,9 +22,9 @@ function escapeXml(str) {
 async function makeCall({ to, from, voiceScript, statusCallbackUrl, gatherUrl, credentials }) {
   const client = getClient(credentials);
   const twiml = `<Response>
-  <Say voice="Polly.Joanna" language="en-US">${escapeXml(voiceScript)}</Say>
+  <Say voice="alice" language="en-US">${escapeXml(voiceScript)}</Say>
   <Pause length="1"/>
-  <Say voice="Polly.Joanna" language="en-US">To schedule your free estimate, simply reply to our text message with your preferred day and time. We will confirm right away. Thank you and have a wonderful day!</Say>
+  <Say voice="alice" language="en-US">To schedule your free estimate, simply reply to our text message with your preferred day and time. We will confirm right away. Thank you and have a wonderful day!</Say>
 </Response>`;
 
   try {
