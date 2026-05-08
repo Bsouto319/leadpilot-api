@@ -500,6 +500,9 @@ async function processAddressReply({ client, conversation, message }) {
   }
 }
 
+// Máximo de respostas AI por SMS por conversa — evita loops e gastos excessivos
+const MAX_SMS_AI_RESPONSES = parseInt(process.env.MAX_SMS_AI_RESPONSES || '5');
+
 async function processSchedulingReply({ client, conversation, message }) {
   if (detectDisinterest(message)) {
     await db.closeLead(conversation.id);
@@ -507,6 +510,16 @@ async function processSchedulingReply({ client, conversation, message }) {
     return;
   }
   if (detectHumanHandoff(message)) {
+    await handleHumanHandoff({ client, conversation, message });
+    return;
+  }
+
+  const cd = conversation.collected_data || {};
+  const smsAiCount = cd.sms_ai_responses || 0;
+
+  // Limite atingido → handoff automático (para o loop e elimina gastos extras)
+  if (smsAiCount >= MAX_SMS_AI_RESPONSES) {
+    logger.warn('webhook', `SMS AI limit reached (${smsAiCount}) for ${conversation.lead_phone} — auto handoff`);
     await handleHumanHandoff({ client, conversation, message });
     return;
   }
@@ -525,7 +538,11 @@ async function processSchedulingReply({ client, conversation, message }) {
         credentials: clientCredentials(client),
       });
       db.appendMessage(conversation.id, 'ai', answer).catch(() => {});
-      logger.info('webhook', `Q&A answered for ${conversation.lead_phone}: "${message.substring(0, 60)}"`);
+      // Incrementa contador de respostas AI para este lead
+      await db.updateConversation(conversation.id, {
+        collected_data: { ...cd, sms_ai_responses: smsAiCount + 1 },
+      }).catch(() => {});
+      logger.info('webhook', `Q&A answered (${smsAiCount + 1}/${MAX_SMS_AI_RESPONSES}) for ${conversation.lead_phone}: "${message.substring(0, 60)}"`);
       return; // stay in ai_responded — wait for date reply
     }
   }
@@ -558,15 +575,23 @@ async function processSchedulingReply({ client, conversation, message }) {
 
     const raw = completion.choices[0].message.content.trim();
 
-    // If GPT couldn't find a date, ask the lead to clarify
+    // If GPT couldn't find a date, ask the lead to clarify (conta como resposta AI)
     if (raw === 'INVALID' || isNaN(Date.parse(raw))) {
+      const clarifyCount = (cd.sms_ai_responses || 0) + 1;
+      if (clarifyCount > MAX_SMS_AI_RESPONSES) {
+        await handleHumanHandoff({ client, conversation, message });
+        return;
+      }
       await twilioSvc.sendSms({
         to: `+${conversation.lead_phone}`,
         from: client.twilio_number,
         body: `Hey! 😊 Just need a day and time to lock in your FREE estimate with ${client.business_name}. We're super flexible — something like "Monday at 2pm" or "Friday morning" works great. What do you have? 📅`,
         credentials: clientCredentials(client),
       });
-      logger.info('webhook', `could not parse date from reply: "${message}", asked lead to clarify`);
+      await db.updateConversation(conversation.id, {
+        collected_data: { ...cd, sms_ai_responses: clarifyCount },
+      }).catch(() => {});
+      logger.info('webhook', `could not parse date from reply: "${message}", asked lead to clarify (${clarifyCount}/${MAX_SMS_AI_RESPONSES})`);
       return;
     }
 
