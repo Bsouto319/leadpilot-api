@@ -363,18 +363,27 @@ async function markFollowupSent(id, day) {
 }
 
 async function getCompletedAppointments() {
+  // Só considera visita concluída se scheduled_at foi há pelo menos 20 horas
+  // (evita disparar review para agendamentos do mesmo dia ou tests)
   const since = new Date();
-  since.setHours(since.getHours() - 2);
+  since.setHours(since.getHours() - 20);
 
   const { data, error } = await supabase
     .from('conversations')
-    .select('*, clients(business_name, twilio_number, google_review_link)')
+    .select('*, clients(business_name, twilio_number, google_review_link, owner_phone, twilio_account_sid, twilio_auth_token)')
     .eq('stage', 'scheduled')
     .is('review_sent_at', null)
     .not('scheduled_at', 'is', null)
     .lte('scheduled_at', since.toISOString());
   if (error) throw new Error(error.message);
-  return data || [];
+
+  // Dedup por lead_phone — nunca envia 2 reviews para o mesmo número na mesma rodada
+  const seen = new Set();
+  return (data || []).filter(conv => {
+    if (seen.has(conv.lead_phone)) return false;
+    seen.add(conv.lead_phone);
+    return true;
+  });
 }
 
 async function markReviewSent(id) {
