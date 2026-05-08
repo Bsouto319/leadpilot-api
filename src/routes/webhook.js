@@ -793,12 +793,14 @@ async function startVoiceIntake(req, res) {
 </Response>`);
   }
 
-  // Responde IMEDIATAMENTE — Polly começa a sintetizar enquanto o DB trabalha em background
-  const greeting = `Hi! Thanks for calling ${client.business_name}. What's your first name?`;
+  // Responde IMEDIATAMENTE — usa <Play> (ElevenLabs pré-gerado) se disponível, senão Polly
+  const greetingTwiml = client.elevenlabs_greeting_url
+    ? `<Play>${client.elevenlabs_greeting_url}</Play>`
+    : `<Say voice="Polly.Joanna" language="en-US">Hi! Thanks for calling ${client.business_name}. What's your first name?</Say>`;
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
-    <Say voice="Polly.Joanna" language="en-US">${greeting}</Say>
+    ${greetingTwiml}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name&amp;noInput=1</Redirect>
 </Response>`);

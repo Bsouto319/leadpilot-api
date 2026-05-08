@@ -517,4 +517,42 @@ router.post('/voice-token', (req, res) => {
   }
 });
 
+// ── ELEVENLABS — pré-geração de saudação de voz ───────────────────────────────
+// POST /api/admin/elevenlabs-greeting
+// Body: { clientId, text?, voiceId? }
+// Gera MP3 via ElevenLabs, armazena em cache/disco e salva URL no cliente.
+router.post('/elevenlabs-greeting', express.json(), async (req, res) => {
+  const { clientId, text, voiceId } = req.body || {};
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+
+  let client;
+  try {
+    client = await db.getClientById(clientId);
+  } catch (err) {
+    return res.status(404).json({ error: 'client not found' });
+  }
+  if (!client) return res.status(404).json({ error: 'client not found' });
+
+  const elevenlabs = require('../services/elevenlabs');
+  const greetingText = text || `Hi! Thanks for calling ${client.business_name}. What's your first name?`;
+
+  try {
+    await elevenlabs.generateAndCacheGreeting(clientId, greetingText, voiceId);
+  } catch (err) {
+    return res.status(500).json({ error: `ElevenLabs error: ${err.message}` });
+  }
+
+  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const greetingUrl = `${BASE}/audio/greeting/${clientId}`;
+
+  try {
+    await db.updateClient(clientId, { elevenlabs_greeting_url: greetingUrl });
+    db.invalidateClientCacheById(clientId);
+  } catch (err) {
+    return res.status(500).json({ error: `DB update error: ${err.message}` });
+  }
+
+  res.json({ ok: true, greetingUrl, greetingText, voiceId: voiceId || 'rachel' });
+});
+
 module.exports = router;

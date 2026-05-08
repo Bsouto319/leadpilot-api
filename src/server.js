@@ -75,6 +75,18 @@ app.use(express.json({ limit: '64kb' }));
 app.use('/dashboard', express.static(path.join(__dirname, '..', 'public', 'dashboard')));
 app.get('/call', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'call.html')));
 
+// ── AUDIO — serve pre-generated ElevenLabs greeting MP3s ─────────────────────
+// Twilio's <Play> will fetch this; no auth needed (public, cached 24h)
+app.get('/audio/greeting/:clientId', (req, res) => {
+  const elevenlabs = require('./services/elevenlabs');
+  const buf = elevenlabs.getGreetingBuffer(req.params.clientId);
+  if (!buf) return res.status(404).send('Greeting not generated yet. POST /api/admin/elevenlabs-greeting first.');
+  res.set('Content-Type', 'audio/mpeg');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.set('Content-Length', buf.length);
+  res.send(buf);
+});
+
 // ── ROUTES ────────────────────────────────────────────────────────────────────
 app.use('/webhook', webhookRoutes);
 app.use('/api/admin', adminLimiter, adminRoutes);

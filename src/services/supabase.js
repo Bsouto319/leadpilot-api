@@ -188,6 +188,12 @@ async function updateClient(id, fields) {
   if (error) throw new Error(error.message);
 }
 
+function invalidateClientCacheById(clientId) {
+  for (const [key, entry] of _clientCache.entries()) {
+    if (entry.data?.id === clientId) { _clientCache.delete(key); break; }
+  }
+}
+
 async function getErrors() {
   const { data, error } = await supabase
     .from('system_errors')
@@ -513,4 +519,5 @@ module.exports = {
   appendMessage,
   getMessages,
   supabaseClient: () => supabase,
+  invalidateClientCacheById,
 };
