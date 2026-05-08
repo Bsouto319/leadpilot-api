@@ -13,7 +13,7 @@ const adminSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
   : null;
 
 const _clientCache = new Map(); // twilioNumber → { data, expiresAt }
-const CLIENT_CACHE_TTL = 60_000; // 60s
+const CLIENT_CACHE_TTL = 600_000; // 10 min
 
 // Cache de conversa por callSid — elimina round-trip ao Supabase em cada turn de voz
 // TTL de 45 min cobre qualquer ligação; auto-purge evita acúmulo
@@ -61,6 +61,17 @@ async function getClientByTwilioNumber(twilioNumber) {
   if (error) throw new Error(`Supabase getClient: ${error.message}`);
   _clientCache.set(twilioNumber, { data, expiresAt: now + CLIENT_CACHE_TTL });
   return data;
+}
+
+async function preWarmClientCache() {
+  const { data } = await supabase
+    .from('clients')
+    .select('*, pricing(*)')
+    .eq('active', true);
+  if (!data) return;
+  const expiresAt = Date.now() + CLIENT_CACHE_TTL;
+  data.forEach(c => { if (c.twilio_number) _clientCache.set(c.twilio_number, { data: c, expiresAt }); });
+  logger.info('supabase', `pre-warmed client cache: ${data.length} clients`);
 }
 
 async function getClientById(id) {
@@ -519,6 +530,7 @@ async function getMessages(conversationId) {
 
 module.exports = {
   getClientByTwilioNumber,
+  preWarmClientCache,
   getClientById,
   getClientsWithGmailToken,
   getExistingConversation,

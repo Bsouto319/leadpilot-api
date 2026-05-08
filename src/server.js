@@ -80,22 +80,25 @@ app.get('/call', (req, res) => res.sendFile(path.join(__dirname, '..', 'public',
 //          GET /audio/greeting/:clientId     (backward compat)
 const elevenlabsSvc = require('./services/elevenlabs');
 
-app.get('/audio/:clientId/:phraseKey', (req, res) => {
-  const buf = elevenlabsSvc.getBuffer(req.params.clientId, req.params.phraseKey);
-  if (!buf) return res.status(404).send(`Phrase "${req.params.phraseKey}" not generated. POST /api/admin/elevenlabs-phrases first.`);
+function serveAudio(res, buf, label) {
+  if (!buf) return res.status(404).send(`Audio "${label}" not generated yet. POST /api/admin/elevenlabs-phrases first.`);
+  const etag = `"${buf.length.toString(16)}"`;
   res.set('Content-Type', 'audio/mpeg');
-  res.set('Cache-Control', 'public, max-age=86400');
+  res.set('Cache-Control', 'public, max-age=604800, immutable'); // 7 days — regeneração muda a URL via novo deploy
+  res.set('ETag', etag);
+  if (res.req.headers['if-none-match'] === etag) return res.status(304).end();
   res.set('Content-Length', buf.length);
   res.send(buf);
+}
+
+app.get('/audio/:clientId/:phraseKey', (req, res) => {
+  const buf = elevenlabsSvc.getBuffer(req.params.clientId, req.params.phraseKey);
+  serveAudio(res, buf, req.params.phraseKey);
 });
 
 app.get('/audio/greeting/:clientId', (req, res) => {
   const buf = elevenlabsSvc.getGreetingBuffer(req.params.clientId);
-  if (!buf) return res.status(404).send('Greeting not generated yet.');
-  res.set('Content-Type', 'audio/mpeg');
-  res.set('Cache-Control', 'public, max-age=86400');
-  res.set('Content-Length', buf.length);
-  res.send(buf);
+  serveAudio(res, buf, 'greeting');
 });
 
 // ── ROUTES ────────────────────────────────────────────────────────────────────
@@ -110,6 +113,8 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   logger.info('server', `LeadPilot API running on port ${PORT}`);
   startCronJobs();
+  // Pre-warm client cache so first inbound call has zero DB latency
+  db.preWarmClientCache().catch(err => logger.warn('server', `cache pre-warm failed: ${err.message}`));
 });
 
 process.on('unhandledRejection', (reason) => {
