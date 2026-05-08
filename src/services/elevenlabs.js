@@ -68,6 +68,10 @@ function getClientPhrases(businessName) {
     date_retry:
       `I didn't quite get that. Could you say a specific day and time? For example, next Monday at 2 P M, or this Friday morning.`,
 
+    // Booking confirmed farewell — generic (date/address go in the SMS confirmation)
+    booking_confirmed:
+      `Perfect! You're all set. You'll receive a text confirmation right now with all the details. We can't wait to help you, and thank you for choosing ${b}! Have an amazing day!`,
+
     // Abandoned / fallback — has business name
     abandoned:
       `It sounds like we're having trouble hearing you. No worries — we'll send you a text message to continue. Thank you for calling ${b} and have a wonderful day!`,

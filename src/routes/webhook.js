@@ -1119,12 +1119,12 @@ async function processVoiceIntake(req, res) {
       credentials: clientCredentials(client),
     }).catch(() => {});
 
-    const farewell = `Perfect! You're all set for ${formatted} at ${address}. You'll get a text confirmation right now with all the details. We can't wait to help you with ${serviceRaw}. Thank you for choosing ${client.business_name} and have an amazing day!`;
+    const farewell = `Perfect! You're all set. You'll receive a text confirmation right now with all the details. We can't wait to help you, and thank you for choosing ${client.business_name}! Have an amazing day!`;
     db.appendMessage(id, 'ai', farewell).catch(() => {});
 
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Say voice="Polly.Joanna" language="en-US">${farewell}</Say>
+  ${el(client, 'booking_confirmed', farewell)}
 </Response>`);
   }
 
