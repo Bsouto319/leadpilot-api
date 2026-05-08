@@ -12,7 +12,14 @@ const adminSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
     })
   : null;
 
+const _clientCache = new Map(); // twilioNumber → { data, expiresAt }
+const CLIENT_CACHE_TTL = 60_000; // 60s
+
 async function getClientByTwilioNumber(twilioNumber) {
+  const now = Date.now();
+  const cached = _clientCache.get(twilioNumber);
+  if (cached && cached.expiresAt > now) return cached.data;
+
   const { data, error } = await supabase
     .from('clients')
     .select('*, pricing(*)')
@@ -20,6 +27,7 @@ async function getClientByTwilioNumber(twilioNumber) {
     .eq('active', true)
     .single();
   if (error) throw new Error(`Supabase getClient: ${error.message}`);
+  _clientCache.set(twilioNumber, { data, expiresAt: now + CLIENT_CACHE_TTL });
   return data;
 }
 
@@ -366,6 +374,15 @@ async function getConversationByCallSid(callSid) {
   return data || null;
 }
 
+async function getConversationWithClientByCallSid(callSid) {
+  const { data } = await supabase
+    .from('conversations')
+    .select('*, clients(*)')
+    .eq('call_sid', callSid)
+    .single();
+  return data || null;
+}
+
 async function getClientByUserId(userId) {
   const { data, error } = await supabase
     .from('clients')
@@ -476,6 +493,7 @@ module.exports = {
   getConversationWithClient,
   getConversationById,
   getConversationByCallSid,
+  getConversationWithClientByCallSid,
   createClient: createClientRecord,
   inviteUser,
   linkUserToClient,

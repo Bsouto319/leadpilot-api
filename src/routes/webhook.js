@@ -767,6 +767,7 @@ async function startVoiceIntake(req, res) {
 
   logger.info('webhook', `inbound call from=${leadPhone} to=${twilioNumber}`);
 
+  // Única operação no caminho crítico — o cache cobre chamadas repetidas em <60s
   let client;
   try { client = await db.getClientByTwilioNumber(twilioNumber); } catch {}
   if (!client) {
@@ -774,62 +775,67 @@ async function startVoiceIntake(req, res) {
     return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">This number is not currently active. Goodbye!</Say></Response>`);
   }
 
-  // Inbound calls sempre criam conversa — anti-duplicata é só para SMS
-  const existingConv = await db.getExistingConversation(client.id, leadPhone).catch(() => null);
-  let conversation = existingConv;
-  if (!conversation) {
-    conversation = await db.saveLead({
-      clientId: client.id, leadPhone,
-      leadName: 'Caller',
-      source: 'inbound_call', serviceType: 'general', message: '[Inbound call]',
-    }).catch(() => null);
-  }
-
-  if (!conversation) {
-    res.set('Content-Type', 'text/xml');
-    return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">Thanks for calling ${client.business_name}! Our team will follow up with you shortly. Goodbye!</Say></Response>`);
-  }
-
-  await db.updateConversation(conversation.id, {
-    call_sid: callSid,
-    stage: 'new_lead',
-    collected_data: { voice_stage: 'asking_name', no_input_count: 0 },
-    last_response_at: new Date().toISOString(),
-  }).catch(() => {});
-  db.appendMessage(conversation.id, 'lead', '[Inbound call started]').catch(() => {});
-
-  // CNAM lookup async — não bloqueia a resposta, atualiza o nome no DB quando resolver
-  twilioSvc.lookupCallerName(`+${leadPhone}`).then(cnamName => {
-    if (!cnamName) return;
-    logger.info('webhook', `CNAM async resolved: ${leadPhone} → ${cnamName}`);
-    db.updateConversation(conversation.id, {
-      lead_name: cnamName,
-      collected_data: { voice_stage: 'asking_service', no_input_count: 0, name_raw: cnamName },
-    }).catch(() => {});
-  }).catch(() => {});
-
   const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
 
-  // Modo manual: toca no browser do dashboard por 20s; se não atender, IA assume
+  // Modo manual: toca no browser antes de cair na IA
   if (client.manual_mode) {
+    // Ainda precisa de conversa para o fallback — cria async antes de responder
+    db.getExistingConversation(client.id, leadPhone).catch(() => null).then(async existingConv => {
+      let conv = existingConv;
+      if (!conv) conv = await db.saveLead({ clientId: client.id, leadPhone, leadName: 'Caller', source: 'inbound_call', serviceType: 'general', message: '[Inbound call]' }).catch(() => null);
+      if (conv) await db.updateConversation(conv.id, { call_sid: callSid, stage: 'new_lead', collected_data: { voice_stage: 'asking_name', no_input_count: 0 }, last_response_at: new Date().toISOString() }).catch(() => {});
+    }).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Dial timeout="20" action="${BASE}/webhook/voice-fallback?convId=${conversation.id}" method="POST">
+  <Dial timeout="20" action="${BASE}/webhook/voice-fallback?callSid=${callSid}" method="POST">
     <Client>admin</Client>
   </Dial>
 </Response>`);
   }
 
-  // Greeting curto — menos texto = Polly sintetiza ~300ms ao invés de ~800ms
+  // Responde IMEDIATAMENTE — Polly começa a sintetizar enquanto o DB trabalha em background
   const greeting = `Hi! Thanks for calling ${client.business_name}. What's your first name?`;
-
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=name" method="POST">
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${greeting}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${conversation.id}&amp;step=name&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name&amp;noInput=1</Redirect>
 </Response>`);
+
+  // DB async — tem ~2.5s (tempo do Polly falar) antes do lead terminar de responder
+  try {
+    const existingConv = await db.getExistingConversation(client.id, leadPhone).catch(() => null);
+    let conversation = existingConv;
+    if (!conversation) {
+      conversation = await db.saveLead({
+        clientId: client.id, leadPhone,
+        leadName: 'Caller',
+        source: 'inbound_call', serviceType: 'general', message: '[Inbound call]',
+      }).catch(() => null);
+    }
+    if (conversation) {
+      await db.updateConversation(conversation.id, {
+        call_sid: callSid,
+        stage: 'new_lead',
+        collected_data: { voice_stage: 'asking_name', no_input_count: 0 },
+        last_response_at: new Date().toISOString(),
+      }).catch(() => {});
+      db.appendMessage(conversation.id, 'lead', '[Inbound call started]').catch(() => {});
+
+      // CNAM lookup async — atualiza nome no DB quando resolver
+      twilioSvc.lookupCallerName(`+${leadPhone}`).then(cnamName => {
+        if (!cnamName) return;
+        logger.info('webhook', `CNAM async resolved: ${leadPhone} → ${cnamName}`);
+        db.updateConversation(conversation.id, {
+          lead_name: cnamName,
+          collected_data: { voice_stage: 'asking_service', no_input_count: 0, name_raw: cnamName },
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+  } catch (err) {
+    logger.error('webhook', `voice async DB error: ${err.message}`);
+  }
 }
 
 // Multi-turn AI intake — cada step coleta um dado e avança a conversa
@@ -842,14 +848,21 @@ router.post('/voice-intake', (req, res) => {
 });
 
 async function processVoiceIntake(req, res) {
-  const { convId, step, noInput } = req.query;
+  const { convId, callSid, step, noInput } = req.query;
   const speech = (req.body.SpeechResult || '').trim();
 
-  const conv = await db.getConversationWithClient(convId);
+  // Lookup por callSid (novo fluxo) ou convId (compatibilidade)
+  let conv = null;
+  if (callSid) conv = await db.getConversationWithClientByCallSid(callSid).catch(() => null);
+  if (!conv && convId) conv = await db.getConversationWithClient(convId).catch(() => null);
+
   if (!conv) {
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">Sorry, I couldn't find your appointment. Please try calling again. Goodbye!</Say></Response>`);
   }
+
+  // Sempre usar conv.id para DB e URLs — funciona com ambos os modos de lookup
+  const id = conv.id;
 
   const client  = conv.clients;
   const BASE    = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
@@ -861,7 +874,7 @@ async function processVoiceIntake(req, res) {
 
   if (noInputCount >= 2) {
     // Duas tentativas sem resposta — encerra com elegância e manda SMS
-    await db.updateConversation(convId, {
+    await db.updateConversation(id, {
       stage: 'ai_responded',
       collected_data: { ...cd, voice_stage: 'abandoned', no_input_count: noInputCount },
     }).catch(() => {});
@@ -883,13 +896,13 @@ async function processVoiceIntake(req, res) {
       date:    `I didn't hear a date. What day works best for your free estimate? You can say something like "next Monday" or "this Friday afternoon."`,
       address: `I didn't catch the address. Could you say your street address, city, and state?`,
     };
-    await db.updateConversation(convId, { collected_data: { ...cd, no_input_count: noInputCount } }).catch(() => {});
+    await db.updateConversation(id, { collected_data: { ...cd, no_input_count: noInputCount } }).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${convId}&amp;step=${step}" method="POST">
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${repeatMap[step] || 'Could you repeat that?'}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${convId}&amp;step=${step}&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}&amp;noInput=1</Redirect>
 </Response>`);
   }
 
@@ -904,29 +917,29 @@ async function processVoiceIntake(req, res) {
       ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
       : 'Customer';
 
-    db.appendMessage(convId, 'lead', `[Name]: ${speech}`).catch(() => {});
-    await db.updateConversation(convId, {
+    db.appendMessage(id, 'lead', `[Name]: ${speech}`).catch(() => {});
+    await db.updateConversation(id, {
       lead_name: leadName,
       collected_data: { ...cd, voice_stage: 'asking_service', name_raw: speech, no_input_count: 0 },
     }).catch(() => {});
 
     const transition = `Nice to meet you, ${leadName}! So, what project are you looking to get done today?`;
-    db.appendMessage(convId, 'ai', transition).catch(() => {});
+    db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${convId}&amp;step=service" method="POST">
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${transition}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${convId}&amp;step=service&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
 </Response>`);
   }
 
   // ── STEP: service ─────────────────────────────────────────────────────────
   if (step === 'service') {
     const serviceType = detectServiceType(speech);
-    db.appendMessage(convId, 'lead', `[Service]: ${speech}`).catch(() => {});
+    db.appendMessage(id, 'lead', `[Service]: ${speech}`).catch(() => {});
 
-    await db.updateConversation(convId, {
+    await db.updateConversation(id, {
       service_type: serviceType,
       collected_data: { ...cd, voice_stage: 'asking_date', service_raw: speech, no_input_count: 0 },
     }).catch(() => {});
@@ -941,19 +954,19 @@ async function processVoiceIntake(req, res) {
     const serviceLabel = serviceLabels[serviceType] || speech || 'your project';
     const transition = `Awesome, ${serviceLabel} — that's right in our wheelhouse! What day this week or next works best for your completely FREE in-home estimate?`;
 
-    db.appendMessage(convId, 'ai', transition).catch(() => {});
+    db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${convId}&amp;step=date" method="POST">
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${transition}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${convId}&amp;step=date&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
 </Response>`);
   }
 
   // ── STEP: date ────────────────────────────────────────────────────────────
   if (step === 'date') {
-    db.appendMessage(convId, 'lead', `[Date]: ${speech}`).catch(() => {});
+    db.appendMessage(id, 'lead', `[Date]: ${speech}`).catch(() => {});
 
     // GPT parse da data
     let isoDate = null;
@@ -973,40 +986,40 @@ async function processVoiceIntake(req, res) {
     } catch {}
 
     if (!isoDate) {
-      await db.updateConversation(convId, { collected_data: { ...cd, no_input_count: 0 } }).catch(() => {});
+      await db.updateConversation(id, { collected_data: { ...cd, no_input_count: 0 } }).catch(() => {});
       const retry = `I didn't quite get that. Could you say a specific day and time? For example: "next Monday at 2pm" or "this Friday morning."`;
-      db.appendMessage(convId, 'ai', retry).catch(() => {});
+      db.appendMessage(id, 'ai', retry).catch(() => {});
       res.set('Content-Type', 'text/xml');
       return res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${convId}&amp;step=date" method="POST">
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${retry}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${convId}&amp;step=date&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
 </Response>`);
     }
 
     const formatted = new Date(isoDate).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    await db.updateConversation(convId, {
+    await db.updateConversation(id, {
       scheduled_at: isoDate,
       stage: 'awaiting_address',
       collected_data: { ...cd, voice_stage: 'asking_address', date_iso: isoDate, date_raw: speech, no_input_count: 0 },
     }).catch(() => {});
 
     const askAddress = `${formatted} — we'll make it happen! Last step: what's the address where you'd like us to come out? Street, city, and state.`;
-    db.appendMessage(convId, 'ai', askAddress).catch(() => {});
+    db.appendMessage(id, 'ai', askAddress).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="6" timeout="10" action="${BASE}/webhook/voice-intake?convId=${convId}&amp;step=address" method="POST">
+  <Gather input="speech" speechTimeout="6" timeout="10" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${askAddress}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${convId}&amp;step=address&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address&amp;noInput=1</Redirect>
 </Response>`);
   }
 
   // ── STEP: address ─────────────────────────────────────────────────────────
   if (step === 'address') {
     const address = speech;
-    db.appendMessage(convId, 'lead', `[Address]: ${address}`).catch(() => {});
+    db.appendMessage(id, 'lead', `[Address]: ${address}`).catch(() => {});
 
     const isoDate   = cd.date_iso || conv.scheduled_at;
     const formatted = isoDate
@@ -1014,7 +1027,7 @@ async function processVoiceIntake(req, res) {
       : 'your scheduled time';
     const serviceRaw = cd.service_raw || conv.service_type || 'your project';
 
-    await db.updateConversation(convId, {
+    await db.updateConversation(id, {
       lead_address: address,
       stage: 'scheduled',
       collected_data: { ...cd, voice_stage: 'complete', address_raw: address, no_input_count: 0 },
@@ -1029,7 +1042,7 @@ async function processVoiceIntake(req, res) {
       body: confirmSms,
       credentials: clientCredentials(client),
     }).catch(() => {});
-    db.appendMessage(convId, 'ai', confirmSms).catch(() => {});
+    db.appendMessage(id, 'ai', confirmSms).catch(() => {});
 
     // Notifica o dono
     await twilioSvc.sendSms({
@@ -1040,7 +1053,7 @@ async function processVoiceIntake(req, res) {
     }).catch(() => {});
 
     const farewell = `Perfect! You're all set for ${formatted} at ${address}. You'll get a text confirmation right now with all the details. We can't wait to help you with ${serviceRaw}. Thank you for choosing ${client.business_name} and have an amazing day!`;
-    db.appendMessage(convId, 'ai', farewell).catch(() => {});
+    db.appendMessage(id, 'ai', farewell).catch(() => {});
 
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
@@ -1056,7 +1069,7 @@ async function processVoiceIntake(req, res) {
 // ── VOICE FALLBACK — browser não atendeu, IA assume ─────────────────────────
 // Chamado pelo Twilio após timeout do <Dial><Client>admin</Client></Dial>
 router.post('/voice-fallback', (req, res) => {
-  const { convId } = req.query;
+  const { callSid } = req.query;
   const dialStatus = req.body.DialCallStatus || '';
 
   if (dialStatus === 'completed') {
@@ -1064,17 +1077,17 @@ router.post('/voice-fallback', (req, res) => {
     return res.send('<Response></Response>');
   }
 
-  logger.info('webhook', `voice-fallback: browser didn't answer (${dialStatus}), AI taking over — conv=${convId}`);
+  logger.info('webhook', `voice-fallback: browser didn't answer (${dialStatus}), AI taking over — callSid=${callSid}`);
 
-  resumeWithAI(req, res, convId).catch(err => {
+  resumeWithAI(req, res, callSid).catch(err => {
     logger.error('webhook', 'voice-fallback error', err.message);
     res.set('Content-Type', 'text/xml');
     res.send('<Response><Say voice="Polly.Joanna" language="en-US">We\'re sorry, our team is temporarily unavailable. We\'ll text you shortly. Goodbye!</Say></Response>');
   });
 });
 
-async function resumeWithAI(req, res, convId) {
-  const conv = await db.getConversationWithClient(convId).catch(() => null);
+async function resumeWithAI(req, res, callSid) {
+  const conv = await db.getConversationWithClientByCallSid(callSid).catch(() => null);
   const client = conv?.clients;
   const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
 
@@ -1083,14 +1096,15 @@ async function resumeWithAI(req, res, convId) {
     return res.send('<Response><Say voice="Polly.Joanna" language="en-US">Thank you for calling. Our team will follow up with you shortly. Goodbye!</Say></Response>');
   }
 
+  const id = conv.id;
   const greeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate. So, what project are you looking to get done?`;
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${convId}&amp;step=service" method="POST">
+  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
     <Say voice="Polly.Joanna" language="en-US">${greeting}</Say>
   </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${convId}&amp;step=service&amp;noInput=1</Redirect>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
 </Response>`);
 }
 
