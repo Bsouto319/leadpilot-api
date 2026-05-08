@@ -7,6 +7,21 @@ const openaiSvc = require('../services/openai');
 const calendarSvc = require('../services/calendar');
 const { handleError } = require('../middleware/alerting');
 const { processThumbtackLead } = require('../services/thumbtack');
+const elevenlabs = require('../services/elevenlabs');
+
+// Helper: returns <Play> if ElevenLabs phrase cached, otherwise <Say> fallback.
+// Dynamic prefix (lead name, service, etc.) is always <Say> — short and cheap.
+function el(client, phraseKey, fallbackText, dynamicPrefix) {
+  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const hasEl = client.elevenlabs_greeting_url && elevenlabs.hasPhrase(client.id, phraseKey);
+  const say   = (t) => `<Say voice="Polly.Joanna" language="en-US">${t}</Say>`;
+
+  if (!hasEl) return say(dynamicPrefix ? `${dynamicPrefix} ${fallbackText}` : fallbackText);
+
+  const play = `<Play>${elevenlabs.phraseUrl(BASE, client.id, phraseKey)}</Play>`;
+  // Dynamic prefix (e.g. "Nice to meet you, John!") stays as Polly — short text, imperceptible quality diff
+  return dynamicPrefix ? `${say(dynamicPrefix)} ${play}` : play;
+}
 
 // Simple in-memory rate limiter: max 10 requests per IP per minute
 const rateLimitMap = new Map();
@@ -887,22 +902,24 @@ async function processVoiceIntake(req, res) {
       credentials: clientCredentials(client),
     }).catch(() => {});
     res.set('Content-Type', 'text/xml');
-    return res.send(`<Response><Say voice="Polly.Joanna" language="en-US">It sounds like we're having trouble hearing you. No worries — we'll send you a text message to continue. Thank you for calling ${client.business_name} and have a wonderful day!</Say></Response>`);
+    return res.send(`<Response>${el(client, 'abandoned', `It sounds like we're having trouble hearing you. No worries — we'll send you a text message to continue. Thank you for calling ${client.business_name} and have a wonderful day!`)}</Response>`);
   }
 
   if (noInput || !speech) {
-    // Primeira vez sem áudio — repete a pergunta
-    const repeatMap = {
+    // Primeira vez sem áudio — repete a pergunta com ElevenLabs se disponível
+    const repeatPhraseKey = { name: 'no_input_name', service: 'no_input_service', date: 'no_input_date', address: 'no_input_address' };
+    const repeatFallback  = {
       name:    `I'm sorry, I didn't catch that. Could you tell me your first name?`,
       service: `I'm sorry, I didn't quite catch that. What type of project are you looking to get done? For example, tile installation, flooring, or a home renovation?`,
       date:    `I didn't hear a date. What day works best for your free estimate? You can say something like "next Monday" or "this Friday afternoon."`,
       address: `I didn't catch the address. Could you say your street address, city, and state?`,
     };
+    const repeatTwiml = el(client, repeatPhraseKey[step] || 'no_input_name', repeatFallback[step] || 'Could you repeat that?');
     await db.updateConversation(id, { collected_data: { ...cd, no_input_count: noInputCount } }).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}" method="POST">
-    <Say voice="Polly.Joanna" language="en-US">${repeatMap[step] || 'Could you repeat that?'}</Say>
+    ${repeatTwiml}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}&amp;noInput=1</Redirect>
 </Response>`);
@@ -928,9 +945,10 @@ async function processVoiceIntake(req, res) {
     const transition = `Nice to meet you, ${leadName}! So, what project are you looking to get done today?`;
     db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
+    // "Nice to meet you, {Name}!" → Polly (dynamic) | "So, what project..." → ElevenLabs (static)
     return res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
-    <Say voice="Polly.Joanna" language="en-US">${transition}</Say>
+    ${el(client, 'ask_service_suffix', `So, what project are you looking to get done today?`, `Nice to meet you, ${leadName}!`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
 </Response>`);
@@ -958,9 +976,10 @@ async function processVoiceIntake(req, res) {
 
     db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
+    // "Awesome, {service}!" → Polly (dynamic) | "That's right in our wheelhouse!..." → ElevenLabs
     return res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
-    <Say voice="Polly.Joanna" language="en-US">${transition}</Say>
+    ${el(client, 'ask_date_suffix', `That's right in our wheelhouse! What day this week or next works best for your completely FREE in-home estimate?`, `Awesome, ${serviceLabel}!`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
 </Response>`);
@@ -994,7 +1013,7 @@ async function processVoiceIntake(req, res) {
       res.set('Content-Type', 'text/xml');
       return res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
-    <Say voice="Polly.Joanna" language="en-US">${retry}</Say>
+    ${el(client, 'date_retry', retry)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
 </Response>`);
@@ -1010,9 +1029,10 @@ async function processVoiceIntake(req, res) {
     const askAddress = `${formatted} — we'll make it happen! Last step: what's the address where you'd like us to come out? Street, city, and state.`;
     db.appendMessage(id, 'ai', askAddress).catch(() => {});
     res.set('Content-Type', 'text/xml');
+    // "{formatted} —" → Polly (dynamic date) | "We'll make it happen! Last step..." → ElevenLabs
     return res.send(`<Response>
   <Gather input="speech" speechTimeout="6" timeout="10" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address" method="POST">
-    <Say voice="Polly.Joanna" language="en-US">${askAddress}</Say>
+    ${el(client, 'ask_address_suffix', `We'll make it happen! Last step: what's the address where you'd like us to come out? Street, city, and state.`, `${formatted}.`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address&amp;noInput=1</Redirect>
 </Response>`);
@@ -1065,7 +1085,7 @@ async function processVoiceIntake(req, res) {
 
   // Fallback
   res.set('Content-Type', 'text/xml');
-  res.send(`<Response><Say voice="Polly.Joanna" language="en-US">Thank you for calling ${client.business_name}. Have a wonderful day!</Say></Response>`);
+  res.send(`<Response>${el(client, 'fallback', `Thank you for calling ${client.business_name}. Have a wonderful day!`)}</Response>`);
 }
 
 // ── VOICE FALLBACK — browser não atendeu, IA assume ─────────────────────────
