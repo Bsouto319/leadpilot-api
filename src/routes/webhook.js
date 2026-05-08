@@ -993,10 +993,9 @@ async function processVoiceIntake(req, res) {
     const transition = `Nice to meet you, ${leadName}! So, what project are you looking to get done today?`;
     db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
-    // "Nice to meet you, {Name}!" → Polly (dynamic) | "So, what project..." → ElevenLabs (static)
     return res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
-    ${el(client, 'ask_service_suffix', `So, what project are you looking to get done today?`, `Nice to meet you, ${leadName}!`)}
+    ${el(client, 'ask_service_suffix', `Great! So, what type of project are you looking to get done?`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
 </Response>`);
@@ -1024,10 +1023,9 @@ async function processVoiceIntake(req, res) {
 
     db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
-    // "Awesome, {service}!" → Polly (dynamic) | "That's right in our wheelhouse!..." → ElevenLabs
     return res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
-    ${el(client, 'ask_date_suffix', `That's right in our wheelhouse! What day this week or next works best for your completely FREE in-home estimate?`, `Awesome, ${serviceLabel}!`)}
+    ${el(client, 'ask_date_suffix', `Perfect! What day this week or next works best for your completely FREE in-home estimate?`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
 </Response>`);
@@ -1077,10 +1075,9 @@ async function processVoiceIntake(req, res) {
     const askAddress = `${formatted} — we'll make it happen! Last step: what's the address where you'd like us to come out? Street, city, and state.`;
     db.appendMessage(id, 'ai', askAddress).catch(() => {});
     res.set('Content-Type', 'text/xml');
-    // "{formatted} —" → Polly (dynamic date) | "We'll make it happen! Last step..." → ElevenLabs
     return res.send(`<Response>
   <Gather input="speech" speechTimeout="6" timeout="10" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address" method="POST">
-    ${el(client, 'ask_address_suffix', `We'll make it happen! Last step: what's the address where you'd like us to come out? Street, city, and state.`, `${formatted}.`)}
+    ${el(client, 'ask_address_suffix', `Excellent! Last step — what's the address where you'd like us to come out? Street, city, and state.`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address&amp;noInput=1</Redirect>
 </Response>`);

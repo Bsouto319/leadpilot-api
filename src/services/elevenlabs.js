@@ -56,13 +56,13 @@ function getClientPhrases(businessName) {
     no_input_address:
       `I didn't catch the address. Could you say your street address, city, and state?`,
 
-    // Step suffixes — the long static part; webhook prepends the short dynamic prefix via Polly
+    // Step transitions — standalone phrases, no Polly prefix needed
     ask_service_suffix:
-      `So, what project are you looking to get done today?`,
+      `Great! So, what type of project are you looking to get done?`,
     ask_date_suffix:
-      `That's right in our wheelhouse! What day this week or next works best for your completely FREE in-home estimate?`,
+      `Perfect! What day this week or next works best for your completely FREE in-home estimate?`,
     ask_address_suffix:
-      `We'll make it happen! Last step — what's the address where you'd like us to come out? Street, city, and state.`,
+      `Excellent! Last step — what's the address where you'd like us to come out? Street, city, and state.`,
 
     // Date parse retry — mostly static
     date_retry:
