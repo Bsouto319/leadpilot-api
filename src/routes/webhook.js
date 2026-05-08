@@ -840,6 +840,15 @@ async function startVoiceIntake(req, res) {
       }).catch(() => {});
       db.appendMessage(conversation.id, 'lead', '[Inbound call started]').catch(() => {});
 
+      // Popula cache callSid → conversa+cliente para eliminar DB round-trip nos próximos turns
+      db.cacheConvByCallSid(callSid, {
+        ...conversation,
+        call_sid: callSid,
+        stage: 'new_lead',
+        collected_data: { voice_stage: 'asking_name', no_input_count: 0 },
+        clients: client,
+      });
+
       // CNAM lookup async — atualiza nome no DB quando resolver
       twilioSvc.lookupCallerName(`+${leadPhone}`).then(cnamName => {
         if (!cnamName) return;
@@ -848,6 +857,7 @@ async function startVoiceIntake(req, res) {
           lead_name: cnamName,
           collected_data: { voice_stage: 'asking_service', no_input_count: 0, name_raw: cnamName },
         }).catch(() => {});
+        db.patchConvCache(callSid, { lead_name: cnamName, collected_data: { voice_stage: 'asking_service', no_input_count: 0, name_raw: cnamName } });
       }).catch(() => {});
     }
   } catch (err) {
@@ -868,9 +878,16 @@ async function processVoiceIntake(req, res) {
   const { convId, callSid, step, noInput } = req.query;
   const speech = (req.body.SpeechResult || '').trim();
 
-  // Lookup por callSid (novo fluxo) ou convId (compatibilidade)
+  // Cache-first: elimina o round-trip Europa→Supabase(US) em cada turn de voz
+  // Fallback para DB se não estiver em cache (ex: reinício do servidor mid-call)
   let conv = null;
-  if (callSid) conv = await db.getConversationWithClientByCallSid(callSid).catch(() => null);
+  if (callSid) {
+    conv = db.getConvFromCallSidCache(callSid);
+    if (!conv) {
+      conv = await db.getConversationWithClientByCallSid(callSid).catch(() => null);
+      if (conv) db.cacheConvByCallSid(callSid, conv); // popula cache para próximos turns
+    }
+  }
   if (!conv && convId) conv = await db.getConversationWithClient(convId).catch(() => null);
 
   if (!conv) {
@@ -886,12 +903,18 @@ async function processVoiceIntake(req, res) {
   const tz      = client.timezone || 'America/New_York';
   const cd      = conv.collected_data || {};
 
+  // Helper: persiste no DB e atualiza cache simultaneamente
+  const updateConv = (updates) => {
+    if (callSid) db.patchConvCache(callSid, updates);
+    return db.updateConversation(id, updates).catch(() => {});
+  };
+
   // Contabiliza tentativas sem áudio
   const noInputCount = noInput ? (cd.no_input_count || 0) + 1 : 0;
 
   if (noInputCount >= 2) {
     // Duas tentativas sem resposta — encerra com elegância e manda SMS
-    await db.updateConversation(id, {
+    await updateConv( {
       stage: 'ai_responded',
       collected_data: { ...cd, voice_stage: 'abandoned', no_input_count: noInputCount },
     }).catch(() => {});
@@ -915,7 +938,7 @@ async function processVoiceIntake(req, res) {
       address: `I didn't catch the address. Could you say your street address, city, and state?`,
     };
     const repeatTwiml = el(client, repeatPhraseKey[step] || 'no_input_name', repeatFallback[step] || 'Could you repeat that?');
-    await db.updateConversation(id, { collected_data: { ...cd, no_input_count: noInputCount } }).catch(() => {});
+    await updateConv( { collected_data: { ...cd, no_input_count: noInputCount } }).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
   <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}" method="POST">
@@ -937,7 +960,7 @@ async function processVoiceIntake(req, res) {
       : 'Customer';
 
     db.appendMessage(id, 'lead', `[Name]: ${speech}`).catch(() => {});
-    await db.updateConversation(id, {
+    await updateConv( {
       lead_name: leadName,
       collected_data: { ...cd, voice_stage: 'asking_service', name_raw: speech, no_input_count: 0 },
     }).catch(() => {});
@@ -959,7 +982,7 @@ async function processVoiceIntake(req, res) {
     const serviceType = detectServiceType(speech);
     db.appendMessage(id, 'lead', `[Service]: ${speech}`).catch(() => {});
 
-    await db.updateConversation(id, {
+    await updateConv( {
       service_type: serviceType,
       collected_data: { ...cd, voice_stage: 'asking_date', service_raw: speech, no_input_count: 0 },
     }).catch(() => {});
@@ -1007,7 +1030,7 @@ async function processVoiceIntake(req, res) {
     } catch {}
 
     if (!isoDate) {
-      await db.updateConversation(id, { collected_data: { ...cd, no_input_count: 0 } }).catch(() => {});
+      await updateConv( { collected_data: { ...cd, no_input_count: 0 } }).catch(() => {});
       const retry = `I didn't quite get that. Could you say a specific day and time? For example: "next Monday at 2pm" or "this Friday morning."`;
       db.appendMessage(id, 'ai', retry).catch(() => {});
       res.set('Content-Type', 'text/xml');
@@ -1020,7 +1043,7 @@ async function processVoiceIntake(req, res) {
     }
 
     const formatted = new Date(isoDate).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    await db.updateConversation(id, {
+    await updateConv( {
       scheduled_at: isoDate,
       stage: 'awaiting_address',
       collected_data: { ...cd, voice_stage: 'asking_address', date_iso: isoDate, date_raw: speech, no_input_count: 0 },
@@ -1049,7 +1072,7 @@ async function processVoiceIntake(req, res) {
       : 'your scheduled time';
     const serviceRaw = cd.service_raw || conv.service_type || 'your project';
 
-    await db.updateConversation(id, {
+    await updateConv( {
       lead_address: address,
       stage: 'scheduled',
       collected_data: { ...cd, voice_stage: 'complete', address_raw: address, no_input_count: 0 },

@@ -15,6 +15,38 @@ const adminSupabase = process.env.SUPABASE_SERVICE_ROLE_KEY
 const _clientCache = new Map(); // twilioNumber → { data, expiresAt }
 const CLIENT_CACHE_TTL = 60_000; // 60s
 
+// Cache de conversa por callSid — elimina round-trip ao Supabase em cada turn de voz
+// TTL de 45 min cobre qualquer ligação; auto-purge evita acúmulo
+const _callConvCache = new Map(); // callSid → { data: conv+clients, expiresAt }
+const CALL_CONV_TTL  = 45 * 60_000; // 45 min
+
+function cacheConvByCallSid(callSid, convWithClients) {
+  if (!callSid) return;
+  _callConvCache.set(callSid, { data: convWithClients, expiresAt: Date.now() + CALL_CONV_TTL });
+  // Limpa entradas expiradas quando o Map passa de 200 entradas
+  if (_callConvCache.size > 200) {
+    const now = Date.now();
+    for (const [k, v] of _callConvCache) { if (v.expiresAt < now) _callConvCache.delete(k); }
+  }
+}
+
+function patchConvCache(callSid, updates) {
+  const entry = _callConvCache.get(callSid);
+  if (!entry) return;
+  entry.data = { ...entry.data, ...updates };
+  if (updates.collected_data !== undefined) {
+    entry.data.collected_data = updates.collected_data;
+  }
+}
+
+function getConvFromCallSidCache(callSid) {
+  if (!callSid) return null;
+  const entry = _callConvCache.get(callSid);
+  if (entry && entry.expiresAt > Date.now()) return entry.data;
+  _callConvCache.delete(callSid);
+  return null;
+}
+
 async function getClientByTwilioNumber(twilioNumber) {
   const now = Date.now();
   const cached = _clientCache.get(twilioNumber);
@@ -520,4 +552,7 @@ module.exports = {
   getMessages,
   supabaseClient: () => supabase,
   invalidateClientCacheById,
+  cacheConvByCallSid,
+  patchConvCache,
+  getConvFromCallSidCache,
 };
