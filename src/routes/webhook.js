@@ -9,6 +9,49 @@ const { handleError } = require('../middleware/alerting');
 const { processThumbtackLead } = require('../services/thumbtack');
 const elevenlabs = require('../services/elevenlabs');
 
+// Parser rápido de data por regex — cobre ~90% dos casos sem chamar OpenAI.
+// Retorna ISO string ou null (fallback para GPT).
+function fastParseDate(speech, tz) {
+  const msg = (speech || '').toLowerCase();
+  const nowLocal = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+  const todayDow = nowLocal.getDay();
+
+  // Parse horário
+  let h = 14, m = 0;
+  const tm = msg.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (tm) {
+    h = parseInt(tm[1]); m = tm[2] ? parseInt(tm[2]) : 0;
+    if (tm[3].toLowerCase() === 'pm' && h < 12) h += 12;
+    if (tm[3].toLowerCase() === 'am' && h === 12) h = 0;
+  } else if (/\bmorning\b|\bearly\b/.test(msg)) h = 9;
+  else if (/\bafternoon\b/.test(msg)) h = 14;
+  else if (/\bevening\b|\bnight\b/.test(msg)) h = 18;
+
+  const makeIso = (daysFromToday) => {
+    const d = new Date(nowLocal);
+    d.setDate(d.getDate() + daysFromToday);
+    d.setHours(h, m, 0, 0);
+    return d.toISOString();
+  };
+
+  if (/\btoday\b|\btonight\b/.test(msg)) return makeIso(0);
+  if (/\btomorrow\b/.test(msg)) return makeIso(1);
+
+  const dowMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+  for (const [name, dow] of Object.entries(dowMap)) {
+    if (new RegExp(`\\b${name}\\b`).test(msg)) {
+      let diff = dow - todayDow;
+      if (diff <= 0) diff += 7;
+      return makeIso(diff);
+    }
+  }
+
+  const inMatch = msg.match(/\bin (\d+) days?\b/);
+  if (inMatch) return makeIso(parseInt(inMatch[1]));
+
+  return null; // GPT fallback para casos complexos
+}
+
 // Helper: returns <Play> if ElevenLabs phrase cached, otherwise <Say alice> fallback.
 function el(client, phraseKey, fallbackText) {
   const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
@@ -1279,21 +1322,24 @@ async function parseVoiceDate(req, res) {
     return db.updateConversation(id, updates).catch(() => {});
   };
 
-  let isoDate = null;
-  try {
-    const OpenAI = require('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const localNow = new Date().toLocaleString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', max_tokens: 30,
-      messages: [
-        { role: 'system', content: `Current date/time in ${tz}: ${localNow}. Extract a specific ISO 8601 datetime from the user's words. "next Monday" = the very next Monday. Vague time (afternoon) = 2pm. Morning = 9am. No date info = INVALID. Respond ONLY with ISO datetime string or INVALID.` },
-        { role: 'user', content: speech },
-      ],
-    });
-    const raw = completion.choices[0].message.content.trim();
-    if (raw !== 'INVALID' && !isNaN(Date.parse(raw))) isoDate = raw;
-  } catch {}
+  // Tenta parse rápido por regex (~0ms) — só chama GPT se falhar
+  let isoDate = fastParseDate(speech, tz);
+  if (!isoDate) {
+    try {
+      const OpenAI = require('openai');
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const localNow = new Date().toLocaleString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini', max_tokens: 30,
+        messages: [
+          { role: 'system', content: `Current date/time in ${tz}: ${localNow}. Extract a specific ISO 8601 datetime from the user's words. "next Monday" = the very next Monday. Vague time (afternoon) = 2pm. Morning = 9am. No date info = INVALID. Respond ONLY with ISO datetime string or INVALID.` },
+          { role: 'user', content: speech },
+        ],
+      });
+      const raw = completion.choices[0].message.content.trim();
+      if (raw !== 'INVALID' && !isNaN(Date.parse(raw))) isoDate = raw;
+    } catch {}
+  }
 
   if (!isoDate) {
     await updateConv({ collected_data: { ...cd, no_input_count: 0 } });
