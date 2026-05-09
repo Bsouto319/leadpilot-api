@@ -331,6 +331,15 @@ router.patch('/clients/:id', async (req, res) => {
   }
 });
 
+router.patch('/conversations/:id/visited', async (req, res) => {
+  try {
+    await db.markAsVisited(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/appointments', async (req, res) => {
   try {
     const clientId = req.query.clientId || '';

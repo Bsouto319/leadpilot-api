@@ -275,6 +275,22 @@ async function processSms(body) {
       logger.info('webhook', `lead ${leadPhone} already in human handoff, skipping AI`);
       return;
     }
+    if (existingConv.stage === 'scheduled') {
+      logger.info('webhook', `lead ${leadPhone} already scheduled, sending reminder instead of new conv`);
+      const tz = client.timezone || 'America/New_York';
+      const formatted = existingConv.scheduled_at
+        ? new Date(existingConv.scheduled_at).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : 'your scheduled time';
+      const reminder = `Hi ${existingConv.lead_name || 'there'}! 👋 You already have a FREE estimate scheduled with ${client.business_name} on ${formatted}. See you then! Reply STOP to cancel.`;
+      await twilioSvc.sendSms({
+        to: `+${leadPhone}`,
+        from: client.twilio_number,
+        body: reminder,
+        credentials: clientCredentials(client),
+      }).catch(() => {});
+      db.appendMessage(existingConv.id, 'ai', reminder).catch(() => {});
+      return;
+    }
     if (existingConv.stage === 'closed') {
       logger.info('webhook', `lead ${leadPhone} is closed (disinterest), skipping`);
       return;
@@ -368,23 +384,31 @@ async function processSms(body) {
 
   // 6. Make outbound call immediately — lead initiated contact so consent is established
   // SMS is only sent as fallback via call-status webhook if call is not answered
-  try {
-    const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
-    const call = await twilioSvc.makeCall({
-      to: `+${leadPhone}`,
-      from: client.twilio_number,
-      voiceScript,
-      statusCallbackUrl: `${BASE}/webhook/call-status`,
-      gatherUrl: `${BASE}/webhook/call-gather?conversationId=${conversation.id}&clientId=${client.id}`,
-      credentials: clientCredentials(client),
-    });
-    await db.updateConversation(conversation.id, {
-      call_sid: call.sid,
-      call_status: call.status,
-      call_attempted_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    await handleError('twilio', err);
+  // Re-fetch conversa para evitar race condition: dois webhooks simultâneos criam duas ligações
+  const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
+  let convFresh;
+  try { convFresh = await db.getConversationById(conversation.id); } catch {}
+  if (convFresh?.call_sid && activeCallStatuses.includes(convFresh.call_status)) {
+    logger.warn('webhook', `skipping outbound call — active call already exists sid=${convFresh.call_sid} status=${convFresh.call_status}`);
+  } else {
+    try {
+      const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+      const call = await twilioSvc.makeCall({
+        to: `+${leadPhone}`,
+        from: client.twilio_number,
+        voiceScript,
+        statusCallbackUrl: `${BASE}/webhook/call-status`,
+        intakeUrl: `${BASE}/webhook/voice-outbound-intake?conversationId=${conversation.id}&clientId=${client.id}`,
+        credentials: clientCredentials(client),
+      });
+      await db.updateConversation(conversation.id, {
+        call_sid: call.sid,
+        call_status: call.status,
+        call_attempted_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      await handleError('twilio', err);
+    }
   }
 
   // 8. Google Calendar (non-critical)
@@ -833,7 +857,7 @@ async function startVoiceIntake(req, res) {
     : `<Say voice="alice" language="en-US">Hi! Thanks for calling ${client.business_name}. What's your first name?</Say>`;
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
     ${greetingTwiml}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name&amp;noInput=1</Redirect>
@@ -960,7 +984,7 @@ async function processVoiceIntake(req, res) {
     await updateConv( { collected_data: { ...cd, no_input_count: noInputCount } }).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}" method="POST">
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}" method="POST">
     ${repeatTwiml}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}&amp;noInput=1</Redirect>
@@ -988,7 +1012,7 @@ async function processVoiceIntake(req, res) {
     db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
     ${el(client, 'ask_service_suffix', `Great! So, what type of project are you looking to get done?`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
@@ -1018,7 +1042,7 @@ async function processVoiceIntake(req, res) {
     db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
     ${el(client, 'ask_date_suffix', `Perfect! What day this week or next works best for your completely FREE in-home estimate?`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
@@ -1028,52 +1052,12 @@ async function processVoiceIntake(req, res) {
   // ── STEP: date ────────────────────────────────────────────────────────────
   if (step === 'date') {
     db.appendMessage(id, 'lead', `[Date]: ${speech}`).catch(() => {});
-
-    // GPT parse da data
-    let isoDate = null;
-    try {
-      const OpenAI = require('openai');
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const localNow = new Date().toLocaleString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', max_tokens: 30,
-        messages: [
-          { role: 'system', content: `Current date/time in ${tz}: ${localNow}. Extract a specific ISO 8601 datetime from the user's words. "next Monday" = the very next Monday. Vague time (afternoon) = 2pm. Morning = 9am. No date info = INVALID. Respond ONLY with ISO datetime string or INVALID.` },
-          { role: 'user', content: speech },
-        ],
-      });
-      const raw = completion.choices[0].message.content.trim();
-      if (raw !== 'INVALID' && !isNaN(Date.parse(raw))) isoDate = raw;
-    } catch {}
-
-    if (!isoDate) {
-      await updateConv( { collected_data: { ...cd, no_input_count: 0 } }).catch(() => {});
-      const retry = `I didn't quite get that. Could you say a specific day and time? For example: "next Monday at 2pm" or "this Friday morning."`;
-      db.appendMessage(id, 'ai', retry).catch(() => {});
-      res.set('Content-Type', 'text/xml');
-      return res.send(`<Response>
-  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
-    ${el(client, 'date_retry', retry)}
-  </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
-</Response>`);
-    }
-
-    const formatted = new Date(isoDate).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    await updateConv( {
-      scheduled_at: isoDate,
-      stage: 'awaiting_address',
-      collected_data: { ...cd, voice_stage: 'asking_address', date_iso: isoDate, date_raw: speech, no_input_count: 0 },
-    }).catch(() => {});
-
-    const askAddress = `${formatted} — we'll make it happen! Last step: what's the address where you'd like us to come out? Street, city, and state.`;
-    db.appendMessage(id, 'ai', askAddress).catch(() => {});
+    // Responde imediatamente para evitar silêncio — GPT parse acontece no próximo turn
+    const encodedSpeech = encodeURIComponent(speech);
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="3" timeout="10" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address" method="POST">
-    ${el(client, 'ask_address_suffix', `Excellent! Last step — what's the address where you'd like us to come out? Street, city, and state.`)}
-  </Gather>
-  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address&amp;noInput=1</Redirect>
+  <Say voice="alice" language="en-US">Got it! Just a moment...</Say>
+  <Redirect method="POST">${BASE}/webhook/voice-parse-date?convId=${id}&amp;speech=${encodedSpeech}</Redirect>
 </Response>`);
   }
 
@@ -1162,7 +1146,7 @@ async function resumeWithAI(req, res, callSid) {
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
     <Say voice="alice" language="en-US">${greeting}</Say>
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
@@ -1213,6 +1197,134 @@ router.post('/thumbtack', express.json(), async (req, res) => {
     apiKey: expectedSecret,
   }).catch(err => handleError('thumbtack', err));
 });
+
+// ── OUTBOUND CALL INTAKE — chamada feita pelo sistema, lead atende ────────────
+// Lead recebeu ligação outbound (via SMS ou Thumbtack) e atendeu.
+// Usa o mesmo fluxo de voz inteligente que o inbound, evitando o TwiML estático.
+router.post('/voice-outbound-intake', (req, res) => {
+  startOutboundVoiceIntake(req, res).catch(err => {
+    logger.error('webhook', 'voice-outbound-intake error', err.message);
+    res.set('Content-Type', 'text/xml');
+    res.send(`<Response><Say voice="alice" language="en-US">We're sorry, we're experiencing a technical issue. Goodbye!</Say></Response>`);
+  });
+});
+
+async function startOutboundVoiceIntake(req, res) {
+  const { conversationId, clientId } = req.query;
+  const callSid = req.body.CallSid || '';
+  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+
+  let client;
+  try { client = await db.getClientById(clientId); } catch {}
+  if (!client) {
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response><Say voice="alice" language="en-US">Thank you for calling. Have a wonderful day!</Say></Response>`);
+  }
+
+  // Atualiza call_sid na conversa existente — não cria nova
+  if (conversationId && callSid) {
+    db.updateConversation(conversationId, {
+      call_sid: callSid,
+      call_status: 'in-progress',
+    }).catch(() => {});
+    // Popula cache para eliminar round-trip nos próximos turns do voice-intake
+    db.getConversationWithClient(conversationId).then(conv => {
+      if (conv) db.cacheConvByCallSid(callSid, { ...conv, call_sid: callSid, clients: client });
+    }).catch(() => {});
+  }
+
+  const greetingTwiml = client.elevenlabs_greeting_url
+    ? `<Play>${client.elevenlabs_greeting_url}</Play>`
+    : `<Say voice="alice" language="en-US">Hi! Thanks for answering. This is ${client.business_name}. What's your first name?</Say>`;
+
+  res.set('Content-Type', 'text/xml');
+  res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
+    ${greetingTwiml}
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name&amp;noInput=1</Redirect>
+</Response>`);
+}
+
+// ── VOICE PARSE DATE — GPT parse assíncrono para eliminar silêncio ───────────
+// Chamado via <Redirect> após o lead falar a data. Assim o Twilio já recebeu
+// resposta e não conta latência do OpenAI como silêncio na ligação.
+router.post('/voice-parse-date', (req, res) => {
+  parseVoiceDate(req, res).catch(err => {
+    logger.error('webhook', 'voice-parse-date error', err.message);
+    res.set('Content-Type', 'text/xml');
+    res.send(`<Response><Say voice="alice" language="en-US">I'm sorry, something went wrong. Our team will follow up with you by text. Have a great day!</Say></Response>`);
+  });
+});
+
+async function parseVoiceDate(req, res) {
+  const { convId } = req.query;
+  const speech = decodeURIComponent(req.query.speech || '');
+
+  const conv = await db.getConversationWithClient(convId).catch(() => null);
+  if (!conv) {
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response><Say voice="alice" language="en-US">Sorry, I couldn't find your appointment. Goodbye!</Say></Response>`);
+  }
+
+  const client  = conv.clients;
+  const id      = conv.id;
+  const BASE    = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const tz      = client.timezone || 'America/New_York';
+  const cd      = conv.collected_data || {};
+  const callSid = conv.call_sid;
+
+  const updateConv = (updates) => {
+    if (callSid) db.patchConvCache(callSid, updates);
+    return db.updateConversation(id, updates).catch(() => {});
+  };
+
+  let isoDate = null;
+  try {
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const localNow = new Date().toLocaleString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', max_tokens: 30,
+      messages: [
+        { role: 'system', content: `Current date/time in ${tz}: ${localNow}. Extract a specific ISO 8601 datetime from the user's words. "next Monday" = the very next Monday. Vague time (afternoon) = 2pm. Morning = 9am. No date info = INVALID. Respond ONLY with ISO datetime string or INVALID.` },
+        { role: 'user', content: speech },
+      ],
+    });
+    const raw = completion.choices[0].message.content.trim();
+    if (raw !== 'INVALID' && !isNaN(Date.parse(raw))) isoDate = raw;
+  } catch {}
+
+  if (!isoDate) {
+    await updateConv({ collected_data: { ...cd, no_input_count: 0 } });
+    const retry = `I didn't quite get that. Could you say a specific day and time? For example: "next Monday at 2pm" or "this Friday morning."`;
+    db.appendMessage(id, 'ai', retry).catch(() => {});
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
+    ${el(client, 'date_retry', retry)}
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
+</Response>`);
+  }
+
+  const formatted = new Date(isoDate).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  await updateConv({
+    scheduled_at: isoDate,
+    stage: 'awaiting_address',
+    collected_data: { ...cd, voice_stage: 'asking_address', date_iso: isoDate, date_raw: speech, no_input_count: 0 },
+  });
+
+  const askAddress = `${formatted} — we'll make it happen! Last step: what's the address where you'd like us to come out? Street, city, and state.`;
+  db.appendMessage(id, 'ai', askAddress).catch(() => {});
+  res.set('Content-Type', 'text/xml');
+  return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="10" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address" method="POST">
+    ${el(client, 'ask_address_suffix', `Excellent! Last step — what's the address where you'd like us to come out? Street, city, and state.`)}
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address&amp;noInput=1</Redirect>
+</Response>`);
+}
 
 // ── BROWSER CLICK-TO-CALL (Twilio Voice JS SDK) ───────────────────────────────
 // Called by Twilio when the admin browser initiates an outbound call

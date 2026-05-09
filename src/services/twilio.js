@@ -19,22 +19,26 @@ function escapeXml(str) {
     .replace(/'/g, '&apos;');
 }
 
-async function makeCall({ to, from, voiceScript, statusCallbackUrl, gatherUrl, credentials }) {
+async function makeCall({ to, from, voiceScript, statusCallbackUrl, gatherUrl, intakeUrl, credentials }) {
   const client = getClient(credentials);
-  const twiml = `<Response>
+  const callParams = {
+    to,
+    from,
+    statusCallback: statusCallbackUrl,
+    statusCallbackMethod: 'POST',
+  };
+  if (intakeUrl) {
+    callParams.url = intakeUrl;
+  } else {
+    callParams.twiml = `<Response>
   <Say voice="alice" language="en-US">${escapeXml(voiceScript)}</Say>
   <Pause length="1"/>
   <Say voice="alice" language="en-US">To schedule your free estimate, simply reply to our text message with your preferred day and time. We will confirm right away. Thank you and have a wonderful day!</Say>
 </Response>`;
+  }
 
   try {
-    const call = await client.calls.create({
-      to,
-      from,
-      twiml,
-      statusCallback: statusCallbackUrl,
-      statusCallbackMethod: 'POST',
-    });
+    const call = await client.calls.create(callParams);
     logger.info('twilio', `call_initiated sid=${call.sid} to=${to} from=${from} status=${call.status}`);
     return call;
   } catch (err) {

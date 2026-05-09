@@ -131,23 +131,30 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     await handleError('twilio', err);
   }
 
-  try {
-    const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
-    const call = await twilioSvc.makeCall({
-      to: `+${leadPhone}`,
-      from: client.twilio_number,
-      voiceScript,
-      statusCallbackUrl: `${BASE}/webhook/call-status`,
-      gatherUrl: `${BASE}/webhook/call-gather?conversationId=${conversation.id}&clientId=${client.id}`,
-      credentials: clientCredentials(client),
-    });
-    await db.updateConversation(conversation.id, {
-      call_sid: call.sid,
-      call_status: call.status,
-      call_attempted_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    await handleError('twilio', err);
+  const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
+  let convFresh;
+  try { convFresh = await db.getConversationById(conversation.id); } catch {}
+  if (convFresh?.call_sid && activeCallStatuses.includes(convFresh.call_status)) {
+    logger.info('thumbtack', `skipping outbound call — active call already exists sid=${convFresh.call_sid}`);
+  } else {
+    try {
+      const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+      const call = await twilioSvc.makeCall({
+        to: `+${leadPhone}`,
+        from: client.twilio_number,
+        voiceScript,
+        statusCallbackUrl: `${BASE}/webhook/call-status`,
+        intakeUrl: `${BASE}/webhook/voice-outbound-intake?conversationId=${conversation.id}&clientId=${client.id}`,
+        credentials: clientCredentials(client),
+      });
+      await db.updateConversation(conversation.id, {
+        call_sid: call.sid,
+        call_status: call.status,
+        call_attempted_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      await handleError('twilio', err);
+    }
   }
 
   try {

@@ -101,7 +101,7 @@ async function getExistingConversation(clientId, leadPhone) {
     .select('*')
     .eq('client_id', clientId)
     .eq('lead_phone', leadPhone)
-    .in('stage', ['ai_responded', 'new_lead', 'awaiting_address', 'handoff', 'no_show'])
+    .in('stage', ['ai_responded', 'new_lead', 'awaiting_address', 'handoff', 'no_show', 'scheduled'])
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
@@ -374,18 +374,13 @@ async function markFollowupSent(id, day) {
 }
 
 async function getCompletedAppointments() {
-  // Só considera visita concluída se scheduled_at foi há pelo menos 20 horas
-  // (evita disparar review para agendamentos do mesmo dia ou tests)
-  const since = new Date();
-  since.setHours(since.getHours() - 20);
-
+  // Considera visita concluída apenas quando o dono marcou manualmente via "Mark as Visited"
   const { data, error } = await supabase
     .from('conversations')
     .select('*, clients(business_name, twilio_number, google_review_link, owner_phone, twilio_account_sid, twilio_auth_token)')
-    .eq('stage', 'scheduled')
+    .eq('stage', 'visited')
     .is('review_sent_at', null)
-    .not('scheduled_at', 'is', null)
-    .lte('scheduled_at', since.toISOString());
+    .not('visited_at', 'is', null);
   if (error) throw new Error(error.message);
 
   // Dedup por lead_phone — nunca envia 2 reviews para o mesmo número na mesma rodada
@@ -398,10 +393,21 @@ async function getCompletedAppointments() {
 }
 
 async function markReviewSent(id) {
+  // Só marca review_sent_at — stage 'completed' só via ação manual
   await supabase.from('conversations').update({
     review_sent_at: new Date().toISOString(),
-    stage: 'completed',
   }).eq('id', id);
+}
+
+async function markAsVisited(id) {
+  const { error } = await supabase
+    .from('conversations')
+    .update({
+      stage: 'visited',
+      visited_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (error) throw new Error(`markAsVisited: ${error.message}`);
 }
 
 async function getNoShowLeads() {
@@ -413,6 +419,7 @@ async function getNoShowLeads() {
     .select('*, clients(business_name, twilio_number)')
     .eq('stage', 'scheduled')
     .is('review_sent_at', null)
+    .is('visited_at', null)
     .not('scheduled_at', 'is', null)
     .lte('scheduled_at', cutoff.toISOString());
   if (error) throw new Error(error.message);
@@ -558,6 +565,7 @@ module.exports = {
   markFollowupSent,
   getCompletedAppointments,
   markReviewSent,
+  markAsVisited,
   getNoShowLeads,
   getClientByUserId,
   getConversationWithClient,
