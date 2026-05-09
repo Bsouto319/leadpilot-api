@@ -833,7 +833,7 @@ async function startVoiceIntake(req, res) {
     : `<Say voice="alice" language="en-US">Hi! Thanks for calling ${client.business_name}. What's your first name?</Say>`;
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
+  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
     ${greetingTwiml}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name&amp;noInput=1</Redirect>
@@ -960,7 +960,7 @@ async function processVoiceIntake(req, res) {
     await updateConv( { collected_data: { ...cd, no_input_count: noInputCount } }).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}" method="POST">
+  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}" method="POST">
     ${repeatTwiml}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=${step}&amp;noInput=1</Redirect>
@@ -988,7 +988,7 @@ async function processVoiceIntake(req, res) {
     db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
+  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
     ${el(client, 'ask_service_suffix', `Great! So, what type of project are you looking to get done?`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
@@ -1018,7 +1018,7 @@ async function processVoiceIntake(req, res) {
     db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
+  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
     ${el(client, 'ask_date_suffix', `Perfect! What day this week or next works best for your completely FREE in-home estimate?`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
@@ -1052,7 +1052,7 @@ async function processVoiceIntake(req, res) {
       db.appendMessage(id, 'ai', retry).catch(() => {});
       res.set('Content-Type', 'text/xml');
       return res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
+  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
     ${el(client, 'date_retry', retry)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
@@ -1070,7 +1070,7 @@ async function processVoiceIntake(req, res) {
     db.appendMessage(id, 'ai', askAddress).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="6" timeout="10" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address" method="POST">
+  <Gather input="speech" speechTimeout="3" timeout="10" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address" method="POST">
     ${el(client, 'ask_address_suffix', `Excellent! Last step — what's the address where you'd like us to come out? Street, city, and state.`)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address&amp;noInput=1</Redirect>
@@ -1162,7 +1162,7 @@ async function resumeWithAI(req, res, callSid) {
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
-  <Gather input="speech" speechTimeout="4" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
+  <Gather input="speech" speechTimeout="2" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
     <Say voice="alice" language="en-US">${greeting}</Say>
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
