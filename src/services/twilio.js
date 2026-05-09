@@ -93,6 +93,8 @@ function twilioSignatureMiddleware(req, res, next) {
 // Funciona para números +1 (EUA/Canadá). Custo: ~$0.01/consulta.
 async function lookupCallerName(phoneNumber) {
   try {
+    // CNAM only works for US/Canada (+1). Skip lookup for other countries.
+    if (!phoneNumber.startsWith('+1')) return null;
     const client = getClient();
     const result = await client.lookups.v1.phoneNumbers(phoneNumber).fetch({ type: ['caller-name'] });
     const raw = result.callerName?.callerName;
