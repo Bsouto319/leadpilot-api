@@ -74,6 +74,8 @@ app.use(express.json({ limit: '64kb' }));
 // ── STATIC FILES ──────────────────────────────────────────────────────────────
 app.use('/dashboard', express.static(path.join(__dirname, '..', 'public', 'dashboard')));
 app.get('/call', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'call.html')));
+app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'privacy.html')));
+app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'terms.html')));
 
 // ── AUDIO — serve pre-generated ElevenLabs MP3s (public — Twilio fetches these)
 // Routes:  GET /audio/:clientId/:phraseKey   (all phrases)
