@@ -54,7 +54,7 @@ function fastParseDate(speech, tz) {
 
 // Helper: returns <Play> if ElevenLabs phrase cached, otherwise <Say alice> fallback.
 function el(client, phraseKey, fallbackText) {
-  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
   const hasEl = client.elevenlabs_greeting_url && elevenlabs.hasPhrase(client.id, phraseKey);
   if (!hasEl) return `<Say voice="alice" language="en-US">${fallbackText}</Say>`;
   return `<Play>${elevenlabs.phraseUrl(BASE, client.id, phraseKey)}</Play>`;
@@ -435,7 +435,7 @@ async function processSms(body) {
     logger.warn('webhook', `skipping outbound call — active call already exists sid=${convFresh.call_sid} status=${convFresh.call_status}`);
   } else {
     try {
-      const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+      const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
       const call = await twilioSvc.makeCall({
         to: `+${leadPhone}`,
         from: client.twilio_number,
@@ -876,7 +876,7 @@ async function startVoiceIntake(req, res) {
     return res.send(`<Response><Say voice="alice" language="en-US">This number is not currently active. Goodbye!</Say></Response>`);
   }
 
-  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
 
   // Modo manual: toca no browser antes de cair na IA
   if (client.manual_mode) {
@@ -985,7 +985,7 @@ async function processVoiceIntake(req, res) {
   const id = conv.id;
 
   const client  = conv.clients;
-  const BASE    = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const BASE    = process.env.BASE_URL || 'https://leads.btechsouto.shop';
   const tz      = client.timezone || 'America/New_York';
   const cd      = conv.collected_data || {};
 
@@ -1177,7 +1177,7 @@ router.post('/voice-fallback', (req, res) => {
 async function resumeWithAI(req, res, callSid) {
   const conv = await db.getConversationWithClientByCallSid(callSid).catch(() => null);
   const client = conv?.clients;
-  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
 
   if (!client) {
     res.set('Content-Type', 'text/xml');
@@ -1255,7 +1255,7 @@ router.post('/voice-outbound-intake', (req, res) => {
 async function startOutboundVoiceIntake(req, res) {
   const { conversationId, clientId } = req.query;
   const callSid = req.body.CallSid || '';
-  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
 
   let client;
   try { client = await db.getClientById(clientId); } catch {}
@@ -1312,7 +1312,7 @@ async function parseVoiceDate(req, res) {
 
   const client  = conv.clients;
   const id      = conv.id;
-  const BASE    = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const BASE    = process.env.BASE_URL || 'https://leads.btechsouto.shop';
   const tz      = client.timezone || 'America/New_York';
   const cd      = conv.collected_data || {};
   const callSid = conv.call_sid;

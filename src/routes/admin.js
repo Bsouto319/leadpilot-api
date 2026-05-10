@@ -540,7 +540,7 @@ router.post('/elevenlabs-phrases', express.json(), async (req, res) => {
   if (!client) return res.status(404).json({ error: 'client not found' });
 
   const elevenlabs = require('../services/elevenlabs');
-  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
 
   let result;
   try {
@@ -595,7 +595,7 @@ router.post('/elevenlabs-greeting', express.json(), async (req, res) => {
     return res.status(500).json({ error: `ElevenLabs error: ${err.message}` });
   }
 
-  const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+  const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
   const greetingUrl = `${BASE}/audio/${clientId}/greeting`;
 
   try {

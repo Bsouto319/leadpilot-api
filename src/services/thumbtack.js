@@ -138,7 +138,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     logger.info('thumbtack', `skipping outbound call — active call already exists sid=${convFresh.call_sid}`);
   } else {
     try {
-      const BASE = process.env.BASE_URL || 'http://asso488k40o4gsc8c0w80gcw.31.97.240.160.sslip.io';
+      const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
       const call = await twilioSvc.makeCall({
         to: `+${leadPhone}`,
         from: client.twilio_number,
