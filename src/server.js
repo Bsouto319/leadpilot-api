@@ -23,6 +23,9 @@ const { handleError } = require('./middleware/alerting');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust Coolify/Railway reverse proxy — required for express-rate-limit + req.ip
+app.set('trust proxy', 1);
+
 // ── SECURITY HEADERS ─────────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow Twilio callbacks
