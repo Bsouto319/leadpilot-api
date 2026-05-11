@@ -1220,7 +1220,7 @@ router.post('/thumbtack', express.json(), async (req, res) => {
   }
 
   const body = req.body;
-  logger.info('thumbtack', `native webhook received leadID=${body.leadID || 'N/A'} clientId=${clientId}`);
+  logger.info('thumbtack', `native webhook received leadID=${body.leadID || 'N/A'} clientId=${clientId} body=${JSON.stringify(body)}`);
 
   // Mapeia payload nativo → formato interno
   const rawPhone  = body.customer?.phone || '';
