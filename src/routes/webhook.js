@@ -304,7 +304,8 @@ async function processSms(body) {
     return;
   }
   if (!client) {
-    logger.warn('webhook', `no active client for number ${twilioNumber}`);
+    logger.warn('webhook', `no active client for number ${twilioNumber} — forwarding to Bruno as prospect reply`);
+    notifyProspectReply(leadPhone, message).catch(() => {});
     return;
   }
 
@@ -1228,6 +1229,31 @@ async function resumeWithAI(req, res, callSid) {
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
 </Response>`);
+}
+
+// ── PROSPECT REPLY NOTIFIER — forward cold-outreach replies to Bruno via WhatsApp
+async function notifyProspectReply(fromPhone, text) {
+  const uazapiUrl   = process.env.UAZAPI_URL   || 'https://btechsoutoshop.uazapi.com';
+  const uazapiToken = process.env.UAZAPI_TOKEN;
+  const alertPhone  = (process.env.ALERT_PHONE || '5561982025951').replace('+', '');
+
+  if (!uazapiToken) {
+    logger.warn('webhook', 'notifyProspectReply: UAZAPI_TOKEN not set — skipping');
+    return;
+  }
+
+  const msg = `📩 *LeadPilot — Prospect respondeu!*\n\nDe: +${fromPhone}\nMensagem: ${text}`;
+  const r = await fetch(`${uazapiUrl}/message/sendText/${uazapiToken}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ number: alertPhone, text: msg }),
+  });
+  if (!r.ok) {
+    const err = await r.text();
+    logger.warn('webhook', `notifyProspectReply: UAZAPI ${r.status}: ${err.slice(0, 200)}`);
+  } else {
+    logger.info('webhook', `notifyProspectReply: WhatsApp alert sent for +${fromPhone}`);
+  }
 }
 
 // ── THUMBTACK LEAD WEBHOOK (formato legado) ───────────────────────────────────
