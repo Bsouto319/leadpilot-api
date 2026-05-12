@@ -1067,10 +1067,10 @@ async function processVoiceIntake(req, res) {
       : 'Customer';
 
     db.appendMessage(id, 'lead', `[Name]: ${speech}`).catch(() => {});
-    await updateConv( {
+    updateConv({
       lead_name: leadName,
       collected_data: { ...cd, voice_stage: 'asking_service', name_raw: speech, no_input_count: 0 },
-    }).catch(() => {});
+    });
 
     const transition = `Nice to meet you, ${leadName}! So, what project are you looking to get done today?`;
     db.appendMessage(id, 'ai', transition).catch(() => {});
@@ -1088,10 +1088,10 @@ async function processVoiceIntake(req, res) {
     const serviceType = detectServiceType(speech);
     db.appendMessage(id, 'lead', `[Service]: ${speech}`).catch(() => {});
 
-    await updateConv( {
+    updateConv({
       service_type: serviceType,
       collected_data: { ...cd, voice_stage: 'asking_date', service_raw: speech, no_input_count: 0 },
-    }).catch(() => {});
+    });
 
     // Static template — elimina latência GPT entre turnos de voz
     const serviceLabels = {
@@ -1127,47 +1127,60 @@ async function processVoiceIntake(req, res) {
 
   // ── STEP: address ─────────────────────────────────────────────────────────
   if (step === 'address') {
-    const address = speech;
-    db.appendMessage(id, 'lead', `[Address]: ${address}`).catch(() => {});
-
-    const isoDate   = cd.date_iso || conv.scheduled_at;
-    const formatted = isoDate
+    const address    = speech;
+    const isoDate    = cd.date_iso || conv.scheduled_at;
+    const formatted  = isoDate
       ? new Date(isoDate).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
       : 'your scheduled time';
     const serviceRaw = cd.service_raw || conv.service_type || 'your project';
+    const farewell   = `Perfect! You're all set. You'll receive a text confirmation right now with all the details. One of our team members will personally reach out to confirm everything — you're in great hands! Thank you so much for choosing ${client.business_name}, and have an amazing day!`;
 
-    await updateConv( {
-      lead_address: address,
-      stage: 'scheduled',
-      collected_data: { ...cd, voice_stage: 'complete', address_raw: address, no_input_count: 0 },
-      last_response_at: new Date().toISOString(),
-    }).catch(() => {});
-
-    // Confirmação por SMS para o lead — mesmo número que o lead ligou
-    const confirmSms = `✅ You're all set! Here's your FREE estimate summary:\n📋 ${serviceRaw}\n📅 ${formatted}\n📍 ${address}\n\n${client.business_name} will reach out to personally confirm your appointment.\n\n💬 Prefer to speak with a real person? Just reply HUMAN and we'll schedule a call at your convenience.\n\nReply STOP to opt out.`;
-    await twilioSvc.sendSms({
-      to: `+${conv.lead_phone}`,
-      from: client.twilio_number,
-      body: confirmSms,
-      credentials: clientCredentials(client),
-    }).catch(() => {});
-    db.appendMessage(id, 'ai', confirmSms).catch(() => {});
-
-    // Notifica o dono
-    await twilioSvc.sendSms({
-      to: client.owner_phone,
-      from: client.twilio_number,
-      body: `📞 NOVA VISITA AGENDADA – ${client.business_name}\nFone: +${conv.lead_phone}\nServiço: ${serviceRaw}\nData: ${formatted}\nEndereço: ${address}\n\nVer no dashboard para confirmar ✅`,
-      credentials: clientCredentials(client),
-    }).catch(() => {});
-
-    const farewell = `Perfect! You're all set. You'll receive a text confirmation right now with all the details. We can't wait to help you, and thank you for choosing ${client.business_name}! Have an amazing day!`;
-    db.appendMessage(id, 'ai', farewell).catch(() => {});
-
+    // Respond immediately so Twilio plays farewell without waiting for DB/SMS
     res.set('Content-Type', 'text/xml');
-    return res.send(`<Response>
+    res.send(`<Response>
   ${el(client, 'booking_confirmed', farewell)}
 </Response>`);
+
+    // Async: DB write + SMS confirmations (non-blocking)
+    ;(async () => {
+      db.appendMessage(id, 'lead', `[Address]: ${address}`).catch(() => {});
+      await updateConv({
+        lead_address: address,
+        stage: 'scheduled',
+        collected_data: { ...cd, voice_stage: 'complete', address_raw: address, no_input_count: 0 },
+        last_response_at: new Date().toISOString(),
+      }).catch(() => {});
+
+      // Calendar update with address
+      if (client.google_refresh_token && client.google_calendar_id) {
+        calendarSvc.updateEventAddress({
+          refreshToken: client.google_refresh_token,
+          calendarId: client.google_calendar_id,
+          leadPhone: conv.lead_phone,
+          address,
+          scheduledAt: isoDate,
+        }).catch(() => {});
+      }
+
+      const confirmSms = `✅ You're all set! Here's your FREE estimate summary:\n📋 ${serviceRaw}\n📅 ${formatted}\n📍 ${address}\n\n${client.business_name} will reach out to personally confirm your appointment — a real team member will contact you soon!\n\n💬 Questions? Just reply here. Reply STOP to opt out.`;
+      await twilioSvc.sendSms({
+        to: `+${conv.lead_phone}`,
+        from: client.twilio_number,
+        body: confirmSms,
+        credentials: clientCredentials(client),
+      }).catch(() => {});
+      db.appendMessage(id, 'ai', confirmSms).catch(() => {});
+      db.appendMessage(id, 'ai', farewell).catch(() => {});
+
+      await twilioSvc.sendSms({
+        to: client.owner_phone,
+        from: client.twilio_number,
+        body: `📞 NOVA VISITA AGENDADA – ${client.business_name}\nFone: +${conv.lead_phone}\nServiço: ${serviceRaw}\nData: ${formatted}\nEndereço: ${address}\n\nVer no dashboard para confirmar ✅`,
+        credentials: clientCredentials(client),
+      }).catch(() => {});
+    })().catch(() => {});
+
+    return;
   }
 
   // Fallback

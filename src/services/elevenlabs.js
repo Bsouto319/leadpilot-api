@@ -69,7 +69,7 @@ function getClientPhrases(businessName) {
 
     // Booking confirmed farewell — generic (date/address go in the SMS confirmation)
     booking_confirmed:
-      `Perfect! You're all set. You'll receive a text confirmation right now with all the details. We can't wait to help you, and thank you for choosing ${b}! Have an amazing day!`,
+      `Perfect! You're all set. You'll receive a text confirmation right now with all the details. One of our team members will personally reach out to confirm everything — you're in great hands! Thank you so much for choosing ${b}, and have an amazing day!`,
 
     // Abandoned / fallback — has business name
     abandoned:
