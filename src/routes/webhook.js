@@ -754,6 +754,33 @@ router.post('/call-status', async (req, res) => {
         });
         db.appendMessage(conv.id, 'ai', smsBody).catch(() => {});
         logger.info('webhook', `fallback SMS sent to ${conv.lead_phone} after ${CallStatus} outbound call`);
+
+        // Alert owner — lead did not answer
+        if (client.owner_phone) {
+          const leadName = conv.lead_name && conv.lead_name !== 'Caller' && conv.lead_name !== 'Customer' ? conv.lead_name : 'Unknown';
+          const serviceLabel = (conv.service_type || 'general').replace(/_/g, ' ');
+          const statusLabel = CallStatus === 'no-answer' ? 'did not answer' : CallStatus === 'busy' ? 'line was busy' : 'call failed';
+          const alertBody = `⚠️ LEAD ALERT — ${client.business_name}\nNew lead ${statusLabel}.\n\nName: ${leadName}\nPhone: +${conv.lead_phone}\nService: ${serviceLabel}\nSource: ${conv.source || 'unknown'}\n\nA fallback SMS was sent automatically. Follow up manually if needed.\nDashboard: https://app.contatobtech.com.br`;
+          await twilioSvc.sendSms({
+            to: client.owner_phone,
+            from: client.twilio_number,
+            body: alertBody,
+            credentials: clientCredentials(client),
+          }).catch(() => {});
+          logger.info('webhook', `owner alert sent to ${client.owner_phone} — lead ${conv.lead_phone} ${statusLabel}`);
+        }
+
+        // Alert admin (Bruno) if managing this client and different from owner
+        const adminPhone = process.env.ALERT_PHONE;
+        if (adminPhone && adminPhone !== client.owner_phone) {
+          const alertAdmin = `⚠️ [ADMIN] Lead não atendeu — ${client.business_name}\nNome: ${conv.lead_name || '?'}\nFone: +${conv.lead_phone}\nStatus: ${CallStatus}\nDashboard: https://app.contatobtech.com.br`;
+          await twilioSvc.sendSms({
+            to: adminPhone,
+            from: client.twilio_number,
+            body: alertAdmin,
+            credentials: clientCredentials(client),
+          }).catch(() => {});
+        }
       }
     } catch (err) {
       handleError('twilio', err).catch(() => {});
