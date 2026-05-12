@@ -43,7 +43,7 @@ function getClientPhrases(businessName) {
   return {
     // Full greeting — 1 per client
     greeting:
-      `Hi! Thanks for calling ${b}. What's your first name?`,
+      `Hi! I'm Lexy, the virtual scheduling assistant for ${b}. I'm here to help you schedule your free estimate. What's your first name?`,
 
     // No-input retries — fully static
     no_input_name:
