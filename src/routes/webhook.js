@@ -1246,7 +1246,7 @@ async function notifyProspectReply(fromPhone, text) {
   const r = await fetch(`${uazapiUrl}/message/sendText/${uazapiToken}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ number: alertPhone, text: msg }),
+    body: JSON.stringify({ phone: alertPhone, text: msg }),
   });
   if (!r.ok) {
     const err = await r.text();
