@@ -742,8 +742,8 @@ router.post('/call-status', async (req, res) => {
       const conv = await db.getConversationByCallSid(CallSid);
       if (conv && conv.clients) {
         const client = conv.clients;
-        const leadName = conv.lead_name && conv.lead_name !== 'Caller' && conv.lead_name !== 'Customer' ? conv.lead_name : null;
-        const hi = leadName ? `Hi ${leadName}!` : 'Hi there!';
+        const leadNameRaw = conv.lead_name && conv.lead_name !== 'Caller' && conv.lead_name !== 'Customer' ? conv.lead_name : null;
+        const hi = leadNameRaw ? `Hi ${leadNameRaw}!` : 'Hi there!';
         const serviceLabel = (conv.service_type || 'project').replace(/_/g, ' ');
         const smsBody = `${hi} 🏠 This is ${client.business_name} — we just tried calling you about your ${serviceLabel} project!\n\nNo worries — this is just our first reach-out. A real person from our team will personally follow up with you very soon 👷\n\nWant to schedule a call at a specific time? Just reply with when works best and we'll call you then. FREE estimate, zero commitment.\n\nReply STOP to opt out.`;
         await twilioSvc.sendSms({
@@ -756,10 +756,10 @@ router.post('/call-status', async (req, res) => {
         logger.info('webhook', `fallback SMS sent to ${conv.lead_phone} after ${CallStatus} outbound call`);
 
         // Alert all configured phones when lead does not answer
-        const leadName = conv.lead_name && conv.lead_name !== 'Caller' && conv.lead_name !== 'Customer' ? conv.lead_name : 'Unknown';
-        const serviceLabel = (conv.service_type || 'general').replace(/_/g, ' ');
+        const leadName = leadNameRaw || 'Unknown';
+        const alertServiceLabel = (conv.service_type || 'general').replace(/_/g, ' ');
         const statusLabel = CallStatus === 'no-answer' ? 'did not answer' : CallStatus === 'busy' ? 'line was busy' : 'call failed';
-        const alertBody = `⚠️ LEAD ALERT — ${client.business_name}\nLead ${statusLabel}.\n\nName: ${leadName}\nPhone: +${conv.lead_phone}\nService: ${serviceLabel}\nSource: ${conv.source || 'unknown'}\n\nFallback SMS sent automatically. Follow up via dashboard:\nhttps://app.contatobtech.com.br`;
+        const alertBody = `⚠️ LEAD ALERT — ${client.business_name}\nLead ${statusLabel}.\n\nName: ${leadName}\nPhone: +${conv.lead_phone}\nService: ${alertServiceLabel}\nSource: ${conv.source || 'unknown'}\n\nFallback SMS sent automatically. Follow up via dashboard:\nhttps://app.contatobtech.com.br`;
 
         const alertPhones = (client.alert_phones || client.owner_phone || '')
           .split(',').map(p => p.trim()).filter(Boolean);
