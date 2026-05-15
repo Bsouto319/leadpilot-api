@@ -216,6 +216,30 @@ async function extractLeadName(message) {
   }
 }
 
+async function analyzeAndUpdate(conversation, latestMessage) {
+  try {
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 120,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: 'You are a CRM analyst for a flooring/construction contractor. Respond with valid JSON only.' },
+        { role: 'user', content: `Lead info:\n- Name: ${conversation.lead_name || 'Unknown'}\n- Service: ${conversation.service_type || 'general'}\n- Stage: ${conversation.stage}\n- Latest message: "${latestMessage}"\n\nRespond ONLY with JSON:\n{"score": <integer 0-100 representing buying intent>, "summary": "<1-2 sentences in English describing this lead's status and intent>"}` },
+      ],
+    });
+    const json = JSON.parse(completion.choices[0].message.content);
+    const score   = Math.max(0, Math.min(100, parseInt(json.score) || 0));
+    const summary = (json.summary || '').slice(0, 300);
+    if (score || summary) {
+      await db.updateConversation(conversation.id, { score, summary });
+    }
+  } catch (err) {
+    logger.warn('webhook', `analyzeAndUpdate failed for conv=${conversation.id}: ${err.message}`);
+  }
+}
+
 // Twilio inbound SMS
 router.post('/sms', webhookRateLimit, twilioSvc.twilioSignatureMiddleware, (req, res) => {
   // Respond immediately so Twilio doesn't timeout
@@ -314,6 +338,7 @@ async function processSms(body) {
   if (existingConv) {
     // Log incoming message to history
     db.appendMessage(existingConv.id, 'lead', message).catch(() => {});
+    analyzeAndUpdate(existingConv, message).catch(() => {});
 
     if (existingConv.stage === 'handoff') {
       logger.info('webhook', `lead ${leadPhone} already in human handoff, skipping AI`);
@@ -485,6 +510,7 @@ async function processSms(body) {
 
   // Log first message to history
   db.appendMessage(conversation.id, 'lead', message).catch(() => {});
+  analyzeAndUpdate(conversation, message).catch(() => {});
 
   logger.info('webhook', `lead processed id=${conversation.id} phone=${leadPhone}`);
 }
