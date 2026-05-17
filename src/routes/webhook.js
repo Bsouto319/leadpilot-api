@@ -1143,11 +1143,10 @@ async function processVoiceIntake(req, res) {
   // ── STEP: date ────────────────────────────────────────────────────────────
   if (step === 'date') {
     db.appendMessage(id, 'lead', `[Date]: ${speech}`).catch(() => {});
-    // Responde imediatamente para evitar silêncio — GPT parse acontece no próximo turn
     const encodedSpeech = encodeURIComponent(speech);
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Say voice="alice" language="en-US">Got it! Just a moment...</Say>
+  ${el(client, 'waiting_moment', `Got it! Just a moment...`)}
   <Redirect method="POST">${BASE}/webhook/voice-parse-date?convId=${id}&amp;speech=${encodedSpeech}</Redirect>
 </Response>`);
   }
@@ -1246,12 +1245,12 @@ async function resumeWithAI(req, res, callSid) {
   }
 
   const id = conv.id;
-  const greeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate. So, what project are you looking to get done?`;
+  const fallbackGreeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate. So, what project are you looking to get done?`;
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
   <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=service" method="POST">
-    <Say voice="alice" language="en-US">${greeting}</Say>
+    ${el(client, 'fallback_ai_takeover', fallbackGreeting)}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=service&amp;noInput=1</Redirect>
 </Response>`);

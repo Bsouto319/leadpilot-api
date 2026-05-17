@@ -237,6 +237,15 @@ function invalidateClientCacheById(clientId) {
   }
 }
 
+async function getClientsWithElevenLabs() {
+  const { data } = await supabase
+    .from('clients')
+    .select('id, business_name, elevenlabs_voice_id')
+    .eq('active', true)
+    .not('elevenlabs_greeting_url', 'is', null);
+  return data || [];
+}
+
 async function getErrors() {
   const { data, error } = await supabase
     .from('system_errors')
@@ -580,6 +589,7 @@ module.exports = {
   appendMessage,
   getMessages,
   supabaseClient: () => supabase,
+  getClientsWithElevenLabs,
   invalidateClientCacheById,
   cacheConvByCallSid,
   patchConvCache,

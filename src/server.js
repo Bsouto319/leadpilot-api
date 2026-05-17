@@ -120,6 +120,18 @@ app.listen(PORT, () => {
   startCronJobs();
   // Pre-warm client cache so first inbound call has zero DB latency
   db.preWarmClientCache().catch(err => logger.warn('server', `cache pre-warm failed: ${err.message}`));
+  // Regenerate ElevenLabs phrases after every deploy (/tmp is wiped on restart)
+  db.getClientsWithElevenLabs()
+    .then(async (clients) => {
+      if (!clients.length) return;
+      for (const client of clients) {
+        const voiceId = client.elevenlabs_voice_id || 'hope';
+        await elevenlabsSvc.generateAllClientPhrases(client.id, client.business_name, voiceId)
+          .catch(err => logger.warn('server', `ElevenLabs regen [${client.business_name}]: ${err.message}`));
+        logger.info('server', `ElevenLabs phrases ready: ${client.business_name} (voice=${voiceId})`);
+      }
+    })
+    .catch(err => logger.warn('server', `ElevenLabs startup regen failed: ${err.message}`));
 });
 
 process.on('unhandledRejection', (reason) => {

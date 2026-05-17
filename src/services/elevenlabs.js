@@ -67,6 +67,14 @@ function getClientPhrases(businessName) {
     date_retry:
       `I didn't quite get that. Could you say a specific day and time? For example, next Monday at 2 P M, or this Friday morning.`,
 
+    // Transition: date captured, parsing async
+    waiting_moment:
+      `Got it! Just a moment, I'm checking the schedule.`,
+
+    // Fallback when browser didn't answer — AI takes over mid-call
+    fallback_ai_takeover:
+      `Thank you for holding! My name is Lexy, the scheduling assistant for ${b}. I'm here to get you set up with a completely FREE in-home estimate. So, what type of project are you looking to get done?`,
+
     // Booking confirmed farewell — generic (date/address go in the SMS confirmation)
     booking_confirmed:
       `Perfect! You're all set. You'll receive a text confirmation right now with all the details. One of our team members will personally reach out to confirm everything — you're in great hands! Thank you so much for choosing ${b}, and have an amazing day!`,
