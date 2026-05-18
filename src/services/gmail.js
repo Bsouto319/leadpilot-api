@@ -140,4 +140,25 @@ async function fetchThumbtackLeads(refreshToken) {
   return leads;
 }
 
-module.exports = { fetchThumbtackLeads };
+// Send an email via Gmail API using a stored OAuth refresh token.
+// Falls back to NOTIFY_GMAIL_REFRESH_TOKEN env var if no token is passed.
+async function sendEmail({ to, subject, body, refreshToken }) {
+  const token = refreshToken || process.env.NOTIFY_GMAIL_REFRESH_TOKEN;
+  if (!token) {
+    logger.warn('gmail', `sendEmail skipped — no Gmail token. Set NOTIFY_GMAIL_REFRESH_TOKEN or pass refreshToken.`);
+    return;
+  }
+  if (!to) {
+    logger.warn('gmail', `sendEmail skipped — no recipient address`);
+    return;
+  }
+  const auth = getAuthClient(token);
+  const gmail = google.gmail({ version: 'v1', auth });
+  const raw = Buffer.from(
+    `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}`
+  ).toString('base64url');
+  await gmail.users.messages.send({ userId: 'me', requestBody: { raw } });
+  logger.info('gmail', `email sent to=${to} subject="${subject}"`);
+}
+
+module.exports = { fetchThumbtackLeads, sendEmail };

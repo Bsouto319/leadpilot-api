@@ -8,6 +8,8 @@ const calendarSvc = require('../services/calendar');
 const { handleError } = require('../middleware/alerting');
 const { processThumbtackLead } = require('../services/thumbtack');
 const elevenlabs = require('../services/elevenlabs');
+const { sendEmail } = require('../services/gmail');
+const { makeNotifyCall } = require('../services/twilio');
 
 // Parser rápido de data por regex — cobre ~90% dos casos sem chamar OpenAI.
 // Retorna ISO string ou null (fallback para GPT).
@@ -496,16 +498,14 @@ async function processSms(body) {
     }
   }
 
-  // 9. Notify owner
-  try {
-    await twilioSvc.sendSms({
-      to: client.owner_phone,
-      from: client.twilio_number,
-      body: `🔔 NOVO LEAD – ${client.business_name}\nNome: ${leadName}\nFone: +${leadPhone}\nServiço: ${serviceType.replace(/_/g, ' ')}\n\nLigação + SMS enviados automaticamente ✅`,
-      credentials: clientCredentials(client),
-    });
-  } catch (err) {
-    await handleError('twilio', err);
+  // 9. Notify owner via email
+  if (client.owner_email) {
+    sendEmail({
+      to: client.owner_email,
+      subject: `🔔 New Lead — ${client.business_name}`,
+      body: `New lead incoming!\n\nName: ${leadName}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\n\nLexy is calling them now. Dashboard:\nhttps://app.contatobtech.com.br`,
+      refreshToken: client.gmail_refresh_token,
+    }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
   }
 
   // Log first message to history
@@ -575,12 +575,22 @@ async function processAddressReply({ client, conversation, message }) {
     });
     db.appendMessage(conversation.id, 'ai', confirmBody).catch(() => {});
 
-    await twilioSvc.sendSms({
-      to: client.owner_phone,
-      from: client.twilio_number,
-      body: `📍 ENDEREÇO CONFIRMADO – ${client.business_name}\nNome: ${conversation.lead_name}\nFone: +${conversation.lead_phone}\nData: ${formatted}\nEndereço: ${address}\n\nVisita confirmada ✅`,
-      credentials: clientCredentials(client),
-    });
+    if (client.owner_email) {
+      sendEmail({
+        to: client.owner_email,
+        subject: `✅ Appointment Confirmed — ${client.business_name}`,
+        body: `Address received — visit is confirmed!\n\nName: ${conversation.lead_name}\nPhone: +${conversation.lead_phone}\nDate: ${formatted}\nAddress: ${address}\n\nDashboard: https://app.contatobtech.com.br`,
+        refreshToken: client.gmail_refresh_token,
+      }).catch(() => {});
+    }
+    if (client.owner_phone) {
+      makeNotifyCall({
+        to: client.owner_phone,
+        from: client.twilio_number,
+        message: `Hey! You have a new confirmed appointment from ${client.business_name}. ${conversation.lead_name || 'A lead'} scheduled for ${formatted} at ${address}. Check your email for details!`,
+        credentials: clientCredentials(client),
+      }).catch(err => logger.warn('webhook', `owner notify call failed: ${err.message}`));
+    }
 
     logger.info('webhook', `address captured for ${conversation.lead_phone}: ${address}`);
   } catch (err) {
@@ -725,13 +735,15 @@ async function processSchedulingReply({ client, conversation, message }) {
     });
     db.appendMessage(conversation.id, 'ai', addressRequestBody).catch(() => {});
 
-    // Notify owner of pending appointment
-    await twilioSvc.sendSms({
-      to: client.owner_phone,
-      from: client.twilio_number,
-      body: `📅 VISITA MARCADA – ${client.business_name}\nNome: ${conversation.lead_name || 'Cliente'}\nFone: +${conversation.lead_phone}\nServiço: ${(conversation.service_type || '').replace(/_/g, ' ')}\nData: ${formatted}\n\nAguardando endereço do cliente...`,
-      credentials: clientCredentials(client),
-    });
+    // Notify owner of pending appointment (awaiting address)
+    if (client.owner_email) {
+      sendEmail({
+        to: client.owner_email,
+        subject: `📅 Appointment Pending Address — ${client.business_name}`,
+        body: `Visit scheduled — waiting for address.\n\nName: ${conversation.lead_name || 'Customer'}\nPhone: +${conversation.lead_phone}\nService: ${(conversation.service_type || '').replace(/_/g, ' ')}\nDate: ${formatted}\n\nWaiting for lead to confirm address...`,
+        refreshToken: client.gmail_refresh_token,
+      }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
+    }
 
     logger.info('webhook', `scheduled lead ${conversation.lead_phone} for ${isoDate}`);
   } catch (err) {
@@ -884,16 +896,23 @@ async function processGather({ speech, conversationId, clientId }) {
     }
   }
 
-  // 5. Notify owner with scheduled time
-  try {
-    await twilioSvc.sendSms({
+  // 5. Notify owner via email + call
+  const scheduledLabel = startDate.toLocaleString('en-US', { timeZone: client.timezone || 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  if (client.owner_email) {
+    sendEmail({
+      to: client.owner_email,
+      subject: `✅ Scheduled via Voice — ${client.business_name}`,
+      body: `Lead scheduled via voice call!\n\nPhone: +${conv.lead_phone}\nService: ${(conv.service_type || '').replace(/_/g, ' ')}\nDate: ${scheduledLabel}\nLead said: "${speech}"\n\nDashboard: https://app.contatobtech.com.br`,
+      refreshToken: client.gmail_refresh_token,
+    }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
+  }
+  if (client.owner_phone) {
+    makeNotifyCall({
       to: client.owner_phone,
       from: client.twilio_number,
-      body: `✅ AGENDADO POR VOZ – ${client.business_name}\nFone: +${conv.lead_phone}\nServiço: ${(conv.service_type || '').replace(/_/g, ' ')}\nData: ${startDate.toLocaleString('pt-BR', { timeZone: client.timezone || 'America/New_York', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}\nCliente disse: "${speech}"`,
+      message: `Hey! Lexy just scheduled a new appointment for ${client.business_name}. The lead is confirmed for ${scheduledLabel}. Check your email for details!`,
       credentials: clientCredentials(client),
-    });
-  } catch (err) {
-    await handleError('twilio', err);
+    }).catch(err => logger.warn('webhook', `owner notify call failed: ${err.message}`));
   }
 }
 
@@ -1198,12 +1217,22 @@ async function processVoiceIntake(req, res) {
       db.appendMessage(id, 'ai', confirmSms).catch(() => {});
       db.appendMessage(id, 'ai', farewell).catch(() => {});
 
-      await twilioSvc.sendSms({
-        to: client.owner_phone,
-        from: client.twilio_number,
-        body: `📞 NOVA VISITA AGENDADA – ${client.business_name}\nFone: +${conv.lead_phone}\nServiço: ${serviceRaw}\nData: ${formatted}\nEndereço: ${address}\n\nVer no dashboard para confirmar ✅`,
-        credentials: clientCredentials(client),
-      }).catch(() => {});
+      if (client.owner_email) {
+        sendEmail({
+          to: client.owner_email,
+          subject: `📞 New Appointment — ${client.business_name}`,
+          body: `Lexy just confirmed a new appointment!\n\nPhone: +${conv.lead_phone}\nService: ${serviceRaw}\nDate: ${formatted}\nAddress: ${address}\n\nDashboard: https://app.contatobtech.com.br`,
+          refreshToken: client.gmail_refresh_token,
+        }).catch(() => {});
+      }
+      if (client.owner_phone) {
+        makeNotifyCall({
+          to: client.owner_phone,
+          from: client.twilio_number,
+          message: `Hey! Lexy just booked a new appointment for ${client.business_name}. ${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`,
+          credentials: clientCredentials(client),
+        }).catch(() => {});
+      }
     })().catch(() => {});
 
     return;

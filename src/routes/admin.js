@@ -311,10 +311,11 @@ router.post('/clients/:id/create-subaccount', async (req, res) => {
 router.patch('/clients/:id', async (req, res) => {
   try {
     const editable = [
-      'active', 'business_name', 'owner_phone', 'timezone',
+      'active', 'business_name', 'owner_phone', 'owner_email', 'timezone',
       'ai_system_prompt', 'google_review_link',
       'twilio_account_sid', 'twilio_auth_token',
       'google_refresh_token', 'google_calendar_id',
+      'gmail_refresh_token',
       'voice_script', 'manual_mode',
     ];
     const allowed = {};

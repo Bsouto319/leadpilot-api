@@ -111,4 +111,18 @@ async function lookupCallerName(phoneNumber) {
   }
 }
 
-module.exports = { makeCall, sendSms, validateSignature, twilioSignatureMiddleware, lookupCallerName };
+// Simple one-way notification call — plays a message and hangs up. No intake flow.
+async function makeNotifyCall({ to, from, message, credentials }) {
+  const client = getClient(credentials);
+  const twiml = `<Response><Say voice="alice" language="en-US">${escapeXml(message)}</Say><Pause length="1"/></Response>`;
+  try {
+    const call = await client.calls.create({ to, from, twiml });
+    logger.info('twilio', `notify_call sid=${call.sid} to=${to}`);
+    return call;
+  } catch (err) {
+    logger.error('twilio', `notify_call failed to=${to} message=${err.message}`);
+    throw err;
+  }
+}
+
+module.exports = { makeCall, makeNotifyCall, sendSms, validateSignature, twilioSignatureMiddleware, lookupCallerName };

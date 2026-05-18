@@ -2,6 +2,7 @@ const logger     = require('../utils/logger');
 const db         = require('./supabase');
 const twilioSvc  = require('./twilio');
 const openaiSvc  = require('./openai');
+const { sendEmail } = require('./gmail');
 const { handleError } = require('../middleware/alerting');
 
 function normalizePhone(raw) {
@@ -116,21 +117,6 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     last_response_at: new Date().toISOString(),
   }).catch(() => {});
 
-  const hi = name !== 'Customer' ? `Hi ${name}!` : 'Hi there!';
-
-  try {
-    const smsBody = `${hi} 🏠 ${client.business_name} here — saw your Thumbtack request and calling you RIGHT NOW!\n\nIf we miss you, reply with your best day & time for a FREE estimate. We have openings this week! 📅\n\nReply STOP to opt out.`;
-    await twilioSvc.sendSms({
-      to: `+${leadPhone}`,
-      from: client.twilio_number,
-      body: smsBody,
-      credentials: clientCredentials(client),
-    });
-    db.appendMessage(conversation.id, 'ai', smsBody).catch(() => {});
-  } catch (err) {
-    await handleError('twilio', err);
-  }
-
   const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
   let convFresh;
   try { convFresh = await db.getConversationById(conversation.id); } catch {}
@@ -157,15 +143,13 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }
   }
 
-  try {
-    await twilioSvc.sendSms({
-      to: client.owner_phone,
-      from: client.twilio_number,
-      body: `🔔 NOVO LEAD THUMBTACK – ${client.business_name}\nNome: ${name}\nFone: +${leadPhone}\nServiço: ${serviceType.replace(/_/g, ' ')}\nPedido: ${message}\n\nLigação + SMS enviados automaticamente ✅`,
-      credentials: clientCredentials(client),
-    });
-  } catch (err) {
-    await handleError('twilio', err);
+  if (client.owner_email) {
+    sendEmail({
+      to: client.owner_email,
+      subject: `🔔 New Thumbtack Lead — ${client.business_name}`,
+      body: `New lead received via Thumbtack!\n\nName: ${name}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\nRequest: ${message}\n\nLexy is calling them now. View on dashboard:\nhttps://app.contatobtech.com.br`,
+      refreshToken: client.gmail_refresh_token,
+    }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
   }
 
   db.appendMessage(conversation.id, 'lead', message).catch(() => {});
