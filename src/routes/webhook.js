@@ -220,23 +220,17 @@ async function extractLeadName(message) {
 
 async function analyzeAndUpdate(conversation, latestMessage) {
   try {
-    const OpenAI = require('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      max_tokens: 120,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: 'You are a CRM analyst for a flooring/construction contractor. Respond with valid JSON only.' },
-        { role: 'user', content: `Lead info:\n- Name: ${conversation.lead_name || 'Unknown'}\n- Service: ${conversation.service_type || 'general'}\n- Stage: ${conversation.stage}\n- Latest message: "${latestMessage}"\n\nRespond ONLY with JSON:\n{"score": <integer 0-100 representing buying intent>, "summary": "<1-2 sentences in English describing this lead's status and intent>"}` },
-      ],
+    const result = await openaiSvc.qualifyLead({
+      name:        conversation.lead_name || 'Unknown',
+      serviceType: conversation.service_type || 'general',
+      serviceNote: latestMessage,
+      businessName: 'contractor',
+      phone:       conversation.lead_phone || '',
     });
-    const json = JSON.parse(completion.choices[0].message.content);
-    const score   = Math.max(0, Math.min(100, parseInt(json.score) || 0));
-    const summary = (json.summary || '').slice(0, 300);
-    if (score || summary) {
-      await db.updateConversation(conversation.id, { score, summary });
-    }
+    const updates = {};
+    if (result.score != null) updates.score   = result.score;
+    if (result.summary)       updates.summary = result.summary;
+    if (Object.keys(updates).length) await db.updateConversation(conversation.id, updates);
   } catch (err) {
     logger.warn('webhook', `analyzeAndUpdate failed for conv=${conversation.id}: ${err.message}`);
   }
@@ -896,13 +890,29 @@ async function processGather({ speech, conversationId, clientId }) {
     }
   }
 
-  // 5. Notify owner via email + call
+  // 5. Notify owner via email + call (with AI score if available)
   const scheduledLabel = startDate.toLocaleString('en-US', { timeZone: client.timezone || 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const tierEmojiV  = conv.score >= 70 ? '🔥' : conv.score >= 40 ? '⚡' : conv.score ? '❄️' : '';
+  const tierVoiceV  = conv.score >= 70 ? 'This is a HIGH quality lead. ' : conv.score >= 40 ? 'This is a warm lead. ' : '';
+
   if (client.owner_email) {
+    const emailBody = [
+      `Lead scheduled via voice call!`,
+      ``,
+      `Phone: +${conv.lead_phone}`,
+      `Name: ${conv.lead_name || 'Unknown'}`,
+      `Service: ${(conv.service_type || '').replace(/_/g, ' ')}`,
+      `Date: ${scheduledLabel}`,
+      `Lead said: "${speech}"`,
+      conv.score != null ? `\n── AI Qualification ──\nScore: ${tierEmojiV} ${conv.score}%` : '',
+      conv.summary ? `Insight: ${conv.summary}` : '',
+      `\nDashboard: https://app.contatobtech.com.br`,
+    ].filter(Boolean).join('\n');
+
     sendEmail({
       to: client.owner_email,
-      subject: `✅ Scheduled via Voice — ${client.business_name}`,
-      body: `Lead scheduled via voice call!\n\nPhone: +${conv.lead_phone}\nService: ${(conv.service_type || '').replace(/_/g, ' ')}\nDate: ${scheduledLabel}\nLead said: "${speech}"\n\nDashboard: https://app.contatobtech.com.br`,
+      subject: `${tierEmojiV} Scheduled via Voice — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
+      body: emailBody,
       refreshToken: client.gmail_refresh_token,
     }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
   }
@@ -910,7 +920,7 @@ async function processGather({ speech, conversationId, clientId }) {
     makeNotifyCall({
       to: client.owner_phone,
       from: client.twilio_number,
-      message: `Hey! Lexy just scheduled a new appointment for ${client.business_name}. The lead is confirmed for ${scheduledLabel}. Check your email for details!`,
+      message: `Hey! Lexy just scheduled a new appointment for ${client.business_name}. ${tierVoiceV}The lead is confirmed for ${scheduledLabel}. Check your email for details!`,
       credentials: clientCredentials(client),
     }).catch(err => logger.warn('webhook', `owner notify call failed: ${err.message}`));
   }
@@ -1217,11 +1227,28 @@ async function processVoiceIntake(req, res) {
       db.appendMessage(id, 'ai', confirmSms).catch(() => {});
       db.appendMessage(id, 'ai', farewell).catch(() => {});
 
+      const tierEmoji   = conv.score >= 70 ? '🔥' : conv.score >= 40 ? '⚡' : conv.score ? '❄️' : '';
+      const scoreLabel  = conv.score != null ? ` — ${conv.score}% score` : '';
+      const tierVoice   = conv.score >= 70 ? 'This is a HIGH quality lead. ' : conv.score >= 40 ? 'This is a warm lead. ' : '';
+
       if (client.owner_email) {
+        const emailBody = [
+          `Lexy just confirmed a new appointment!`,
+          ``,
+          `Name: ${conv.lead_name || 'Unknown'}`,
+          `Phone: +${conv.lead_phone}`,
+          `Service: ${serviceRaw}`,
+          `Date: ${formatted}`,
+          `Address: ${address}`,
+          conv.score != null ? `\n── AI Qualification ──\nScore: ${tierEmoji} ${conv.score}%` : '',
+          conv.summary ? `Insight: ${conv.summary}` : '',
+          `\nDashboard: https://app.contatobtech.com.br`,
+        ].filter(Boolean).join('\n');
+
         sendEmail({
           to: client.owner_email,
-          subject: `📞 New Appointment — ${client.business_name}`,
-          body: `Lexy just confirmed a new appointment!\n\nPhone: +${conv.lead_phone}\nService: ${serviceRaw}\nDate: ${formatted}\nAddress: ${address}\n\nDashboard: https://app.contatobtech.com.br`,
+          subject: `${tierEmoji} Appointment Confirmed${scoreLabel} — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
+          body: emailBody,
           refreshToken: client.gmail_refresh_token,
         }).catch(() => {});
       }
@@ -1229,7 +1256,7 @@ async function processVoiceIntake(req, res) {
         makeNotifyCall({
           to: client.owner_phone,
           from: client.twilio_number,
-          message: `Hey! Lexy just booked a new appointment for ${client.business_name}. ${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`,
+          message: `Hey! Lexy just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`,
           credentials: clientCredentials(client),
         }).catch(() => {});
       }

@@ -2,6 +2,7 @@ const logger     = require('../utils/logger');
 const db         = require('./supabase');
 const twilioSvc  = require('./twilio');
 const openaiSvc  = require('./openai');
+const { makeNotifyCall } = require('./twilio');
 const { sendEmail } = require('./gmail');
 const { handleError } = require('../middleware/alerting');
 
@@ -98,25 +99,39 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     return;
   }
 
-  let voiceScript;
-  try {
-    voiceScript = await openaiSvc.generateVoiceScript({
+  // Run voice script + lead qualification in parallel
+  const [voiceScript, qualification] = await Promise.all([
+    openaiSvc.generateVoiceScript({
       businessName: client.business_name,
       serviceType,
       pricing: client.pricing,
       systemPrompt: client.ai_system_prompt || null,
-    });
-  } catch (err) {
-    await handleError('openai', err);
-    voiceScript = `Hi${name !== 'Customer' ? ` ${name}` : ''}! This is ${client.business_name}. We saw your Thumbtack request and would love to schedule a FREE in-home estimate. Please reply with a day and time that works for you!`;
-  }
+    }).catch(err => {
+      handleError('openai', err).catch(() => {});
+      return `Hi${name !== 'Customer' ? ` ${name}` : ''}! This is ${client.business_name}. We saw your Thumbtack request and would love to schedule a FREE in-home estimate!`;
+    }),
+    openaiSvc.qualifyLead({
+      name,
+      serviceType,
+      serviceNote: message,
+      businessName: client.business_name,
+      phone: leadPhone,
+    }).catch(err => {
+      logger.warn('thumbtack', `qualify failed: ${err.message}`);
+      return { score: null, tier: null, summary: null, jobValue: null, signals: [] };
+    }),
+  ]);
 
+  // Save voice script + AI qualification to DB
   await db.updateConversation(conversation.id, {
     stage: 'ai_responded',
     ai_response: voiceScript,
     last_response_at: new Date().toISOString(),
+    ...(qualification.score != null ? { score: qualification.score } : {}),
+    ...(qualification.summary    ? { summary: qualification.summary } : {}),
   }).catch(() => {});
 
+  // Outbound call to lead (Lexy)
   const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
   let convFresh;
   try { convFresh = await db.getConversationById(conversation.id); } catch {}
@@ -143,17 +158,41 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }
   }
 
+  // Build qualification context for notifications
+  const tierEmoji  = qualification.tier === 'hot' ? '🔥' : qualification.tier === 'warm' ? '⚡' : '❄️';
+  const scoreText  = qualification.score != null ? `${qualification.score}%` : 'N/A';
+  const valueText  = qualification.jobValue ? `~$${qualification.jobValue.toLocaleString()}` : 'TBD';
+  const tierLabel  = qualification.tier ? `${tierEmoji} ${qualification.tier.toUpperCase()}` : '';
+
+  // Notify owner via email (immediate — with AI insight)
   if (client.owner_email) {
+    const emailBody = [
+      `New Thumbtack lead received!`,
+      ``,
+      `Name: ${name}`,
+      `Phone: +${leadPhone}`,
+      `Service: ${serviceType.replace(/_/g, ' ')}`,
+      `Request: ${message}`,
+      ``,
+      `── AI Qualification ──`,
+      `Score: ${scoreText}  |  Tier: ${tierLabel}  |  Est. Job Value: ${valueText}`,
+      qualification.summary ? `Insight: ${qualification.summary}` : '',
+      qualification.signals?.length ? `Signals: ${qualification.signals.join(', ')}` : '',
+      ``,
+      `Lexy is calling them now.`,
+      `Dashboard: https://app.contatobtech.com.br`,
+    ].filter(Boolean).join('\n');
+
     sendEmail({
       to: client.owner_email,
-      subject: `🔔 New Thumbtack Lead — ${client.business_name}`,
-      body: `New lead received via Thumbtack!\n\nName: ${name}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\nRequest: ${message}\n\nLexy is calling them now. View on dashboard:\nhttps://app.contatobtech.com.br`,
+      subject: `${tierLabel} Lead ${scoreText} — ${name} | ${client.business_name}`,
+      body: emailBody,
       refreshToken: client.gmail_refresh_token,
     }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
   }
 
   db.appendMessage(conversation.id, 'lead', message).catch(() => {});
-  logger.info('thumbtack', `lead processed id=${conversation.id} phone=${leadPhone} client=${client.business_name}`);
+  logger.info('thumbtack', `lead processed id=${conversation.id} phone=${leadPhone} score=${qualification.score} tier=${qualification.tier}`);
 }
 
 module.exports = { processThumbtackLead };
