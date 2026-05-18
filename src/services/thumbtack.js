@@ -114,10 +114,10 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       name,
       serviceType,
       serviceNote: message,
-      businessName: client.business_name,
+      businessName: client.business_name || 'the company',
       phone: leadPhone,
     }).catch(err => {
-      logger.warn('thumbtack', `qualify failed: ${err.message}`);
+      logger.warn('thumbtack', `qualify failed: ${err.message} — stack: ${err.stack?.split('\n')[1] || ''}`);
       return { score: null, tier: null, summary: null, jobValue: null, signals: [] };
     }),
   ]);
@@ -129,7 +129,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     last_response_at: new Date().toISOString(),
     ...(qualification.score != null ? { score: qualification.score } : {}),
     ...(qualification.summary    ? { summary: qualification.summary } : {}),
-  }).catch(() => {});
+  }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
 
   // Outbound call to lead (Lexy)
   const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
