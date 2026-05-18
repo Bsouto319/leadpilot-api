@@ -615,4 +615,21 @@ router.get('/elevenlabs-usage', (req, res) => {
   res.json(elevenlabs.getDailyUsage());
 });
 
+// Temporary debug endpoint — test GPT qualification from production server
+router.get('/test-qualify', async (req, res) => {
+  try {
+    const openaiSvc = require('../services/openai');
+    const result = await openaiSvc.qualifyLead({
+      name: 'Test Lead',
+      serviceType: 'tile_install',
+      serviceNote: 'Full bathroom tile renovation, porcelain, start ASAP, budget $10000',
+      businessName: 'Denali Custom Homes',
+      phone: '14085550000',
+    });
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;
