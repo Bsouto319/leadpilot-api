@@ -769,6 +769,20 @@ router.post('/call-status', async (req, res) => {
     handleError('supabase', err).catch(() => {});
   }
 
+  // Move stage from new_lead → ai_responded once any call has been attempted
+  const terminalStatuses = ['completed', 'no-answer', 'busy', 'failed'];
+  if (terminalStatuses.includes(CallStatus)) {
+    try {
+      const convForStage = await db.getConversationByCallSid(CallSid);
+      if (convForStage && convForStage.stage === 'new_lead') {
+        await db.updateConversation(convForStage.id, { stage: 'ai_responded' });
+        logger.info('webhook', `stage new_lead→ai_responded for conv=${convForStage.id} after call ${CallStatus}`);
+      }
+    } catch (err) {
+      logger.warn('webhook', `stage update after call failed: ${err.message}`);
+    }
+  }
+
   // Fallback SMS when outbound call to lead was not answered
   if (Direction === 'outbound-api' && ['no-answer', 'busy', 'failed'].includes(CallStatus)) {
     try {
