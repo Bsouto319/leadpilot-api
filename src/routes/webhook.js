@@ -498,7 +498,6 @@ async function processSms(body) {
       to: client.owner_email,
       subject: `🔔 New Lead — ${client.business_name}`,
       body: `New lead incoming!\n\nName: ${leadName}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\n\nLexy is calling them now. Dashboard:\nhttps://app.contatobtech.com.br`,
-      refreshToken: client.gmail_refresh_token,
     }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
   }
 
@@ -574,7 +573,6 @@ async function processAddressReply({ client, conversation, message }) {
         to: client.owner_email,
         subject: `✅ Appointment Confirmed — ${client.business_name}`,
         body: `Address received — visit is confirmed!\n\nName: ${conversation.lead_name}\nPhone: +${conversation.lead_phone}\nDate: ${formatted}\nAddress: ${address}\n\nDashboard: https://app.contatobtech.com.br`,
-        refreshToken: client.gmail_refresh_token,
       }).catch(() => {});
     }
     if (client.owner_phone) {
@@ -735,7 +733,6 @@ async function processSchedulingReply({ client, conversation, message }) {
         to: client.owner_email,
         subject: `📅 Appointment Pending Address — ${client.business_name}`,
         body: `Visit scheduled — waiting for address.\n\nName: ${conversation.lead_name || 'Customer'}\nPhone: +${conversation.lead_phone}\nService: ${(conversation.service_type || '').replace(/_/g, ' ')}\nDate: ${formatted}\n\nWaiting for lead to confirm address...`,
-        refreshToken: client.gmail_refresh_token,
       }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
     }
 
@@ -927,7 +924,6 @@ async function processGather({ speech, conversationId, clientId }) {
       to: client.owner_email,
       subject: `${tierEmojiV} Scheduled via Voice — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
       body: emailBody,
-      refreshToken: client.gmail_refresh_token,
     }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
   }
   if (client.owner_phone) {
@@ -1263,8 +1259,7 @@ async function processVoiceIntake(req, res) {
           to: client.owner_email,
           subject: `${tierEmoji} Appointment Confirmed${scoreLabel} — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
           body: emailBody,
-          refreshToken: client.gmail_refresh_token,
-        }).catch(() => {});
+          }).catch(() => {});
       }
       if (client.owner_phone) {
         makeNotifyCall({
