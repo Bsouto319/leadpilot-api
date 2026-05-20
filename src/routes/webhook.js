@@ -926,6 +926,14 @@ async function processGather({ speech, conversationId, clientId }) {
       body: emailBody,
     }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
   }
+  if (conv.lead_email) {
+    sendEmail({
+      from: `${client.business_name} <noreply@btechsouto.shop>`,
+      to: conv.lead_email,
+      subject: `✅ Your appointment is confirmed — ${client.business_name}`,
+      body: `Hi ${conv.lead_name || 'there'},\n\nYour appointment with ${client.business_name} has been confirmed!\n\nDate: ${scheduledLabel}\nService: ${(conv.service_type || '').replace(/_/g, ' ')}\n\nIf you need to reschedule or have questions, please give us a call.\n\nThank you,\n${client.business_name}`,
+    }).catch(() => {});
+  }
   if (client.owner_phone) {
     makeNotifyCall({
       to: client.owner_phone,
@@ -1261,6 +1269,14 @@ async function processVoiceIntake(req, res) {
           body: emailBody,
           }).catch(() => {});
       }
+      if (conv.lead_email) {
+        sendEmail({
+          from: `${client.business_name} <noreply@btechsouto.shop>`,
+          to: conv.lead_email,
+          subject: `✅ Appointment Confirmed — ${client.business_name}`,
+          body: `Hi ${conv.lead_name || 'there'},\n\nYour appointment with ${client.business_name} is confirmed!\n\nDate: ${formatted}\nService: ${serviceRaw}\nAddress on file: ${address}\n\nIf you need to reschedule or have any questions, please give us a call.\n\nThank you,\n${client.business_name}`,
+        }).catch(() => {});
+      }
       if (client.owner_phone) {
         makeNotifyCall({
           to: client.owner_phone,
@@ -1375,6 +1391,7 @@ router.post('/thumbtack', express.json(), async (req, res) => {
   // Mapeia payload nativo → formato interno
   const rawPhone  = body.customer?.phone || '';
   const leadName  = body.customer?.name  || 'Customer';
+  const leadEmail = body.customer?.email || null;
   const category  = body.request?.category    || '';
   const desc      = body.request?.description || '';
   const location  = body.request?.location;
@@ -1385,6 +1402,7 @@ router.post('/thumbtack', express.json(), async (req, res) => {
     clientId,
     leadPhone: rawPhone,
     leadName,
+    leadEmail,
     serviceNote: serviceNote || 'Thumbtack lead',
     thumbtackLeadId: body.leadID,
     apiKey: expectedSecret,
