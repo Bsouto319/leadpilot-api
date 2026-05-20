@@ -632,4 +632,21 @@ router.get('/test-qualify', async (req, res) => {
   }
 });
 
+// ── TEST EMAIL ────────────────────────────────────────────────────────────────
+router.post('/test-email', async (req, res) => {
+  const { to, subject, body } = req.body;
+  if (!to) return res.status(400).json({ ok: false, error: 'to is required' });
+  try {
+    const { sendEmail } = require('../services/gmail');
+    await sendEmail({
+      to,
+      subject: subject || '✅ LeadPilot — Teste de Email',
+      body: body || `Email de teste enviado em ${new Date().toISOString()}.\n\nSe chegou aqui, o Resend está funcionando corretamente!`,
+    });
+    res.json({ ok: true, message: `Email enviado para ${to}` });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;
