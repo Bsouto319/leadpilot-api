@@ -632,6 +632,103 @@ router.get('/test-qualify', async (req, res) => {
   }
 });
 
+// ── AUDIO → OUTBOUND CALL ────────────────────────────────────────────────────
+// POST /api/admin/send-audio-call
+// Body (JSON): { audioBase64, audioMimetype, phone, clientId }
+// Flow: Whisper transcription → GPT translate to English → ElevenLabs Hope TTS
+//       → store MP3 → Twilio outbound call with <Play>
+router.post('/send-audio-call', express.json({ limit: '10mb' }), async (req, res) => {
+  const { audioBase64, audioMimetype, phone, clientId } = req.body || {};
+  if (!audioBase64 || !phone || !clientId) {
+    return res.status(400).json({ error: 'audioBase64, phone and clientId are required' });
+  }
+
+  let client;
+  try { client = await db.getClientById(clientId); } catch {}
+  if (!client) return res.status(404).json({ error: 'client not found' });
+
+  const logger     = require('../utils/logger');
+  const fs         = require('fs');
+  const path       = require('path');
+  const OpenAI     = require('openai');
+  const openai     = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const elevenlabs = require('../services/elevenlabs');
+  const BASE       = process.env.BASE_URL || 'https://leads.btechsouto.shop';
+  const AUDIO_DIR  = path.join('/tmp', 'leadpilot-audio');
+
+  try {
+    // 1. Write incoming audio to a temp file for Whisper
+    const mimetype = audioMimetype || 'audio/webm';
+    const ext      = mimetype.split('/')[1]?.split(';')[0] || 'webm';
+    const tmpFile  = path.join(AUDIO_DIR, `inbound-${Date.now()}.${ext}`);
+    fs.mkdirSync(AUDIO_DIR, { recursive: true });
+    fs.writeFileSync(tmpFile, Buffer.from(audioBase64, 'base64'));
+
+    // 2. Transcribe with Whisper
+    let transcription;
+    try {
+      const result = await openai.audio.transcriptions.create({
+        model: 'whisper-1',
+        file:  fs.createReadStream(tmpFile),
+      });
+      transcription = result.text;
+    } finally {
+      try { fs.unlinkSync(tmpFile); } catch {}
+    }
+
+    if (!transcription?.trim()) {
+      return res.status(422).json({ error: 'Could not transcribe audio — was the recording too short?' });
+    }
+    logger.info('admin', `audio-call transcription: "${transcription.slice(0, 120)}"`);
+
+    // 3. Translate to natural English via GPT (handles PT, ES, or already-EN)
+    const translateRes = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 200,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional translator. Translate the following message to clear, natural American English suitable for a phone call. Keep it under 300 characters. Output ONLY the translated text — no quotes, no labels, nothing else.',
+        },
+        { role: 'user', content: transcription },
+      ],
+    });
+    const translatedText = translateRes.choices[0].message.content.trim().slice(0, 300);
+    logger.info('admin', `audio-call translation: "${translatedText}"`);
+
+    // 4. Generate ElevenLabs Hope TTS
+    const msgId  = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const mp3Buf = await elevenlabs.generateMp3(translatedText, 'hope');
+    const mp3Path = path.join(AUDIO_DIR, `vmsg-${msgId}.mp3`);
+    fs.writeFileSync(mp3Path, mp3Buf);
+    logger.info('admin', `audio-call mp3 ready msgId=${msgId} bytes=${mp3Buf.length}`);
+
+    // 5. Make Twilio outbound call with <Play>
+    const audioUrl = `${BASE}/webhook/voice-msg/${msgId}`;
+    const toPhone  = phone.startsWith('+') ? phone : `+${phone}`;
+    const twilio   = require('twilio');
+    const twilioClient = twilio(
+      client.twilio_account_sid || process.env.TWILIO_ACCOUNT_SID,
+      client.twilio_auth_token  || process.env.TWILIO_AUTH_TOKEN,
+    );
+
+    const call = await twilioClient.calls.create({
+      to:   toPhone,
+      from: client.twilio_number,
+      twiml: `<Response><Play>${audioUrl}</Play><Pause length="1"/></Response>`,
+      statusCallback:       `${BASE}/webhook/call-status`,
+      statusCallbackMethod: 'POST',
+    });
+
+    logger.info('admin', `audio-call placed sid=${call.sid} to=${toPhone}`);
+    res.json({ ok: true, callSid: call.sid, msgId, transcription, translation: translatedText, audioUrl });
+  } catch (err) {
+    const logger2 = require('../utils/logger');
+    logger2.error('admin', `send-audio-call error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── TEST EMAIL ────────────────────────────────────────────────────────────────
 router.post('/test-email', async (req, res) => {
   const { to, subject, body } = req.body;

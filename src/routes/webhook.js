@@ -144,6 +144,11 @@ function detectDisinterest(text) {
   return /\b(not\s+interested|no\s+thanks|no\s+thank\s+you|wrong\s+number|remove\s+(me|my\s+number)|don'?t\s+(contact|text|call|message)\s+me|stop\s+contacting|leave\s+me\s+alone|not\s+looking|already\s+(found|hired|have\s+someone)|don'?t\s+need(\s+this)?|nevermind|never\s+mind|i'?m\s+good|changed\s+my\s+mind|cancel(\s+that)?|no\s+longer\s+(need|interested))\b/.test(msg);
 }
 
+function detectRescheduling(text) {
+  const msg = (text || '').toLowerCase();
+  return /\b(reschedule|rescheduling|change\s+(the\s+)?(time|date|appointment|visit|day)|move\s+(the\s+)?(appointment|visit|date|time)|different\s+(time|day|date)|can\s+we\s+(change|move|push|shift)|push\s+it\s+(back|forward|out)|not\s+going\s+to\s+(make|work)|won'?t\s+(make\s+it|be\s+there|work)|can'?t\s+make\s+it|something\s+came\s+up|need\s+to\s+(cancel|change)\s+(the\s+)?(date|time|appointment)|postpone|cancel\s+(and\s+)?reschedule|another\s+(time|day|date)|different\s+(day|time)|(time|date|day)\s+(doesn'?t|won'?t|can'?t)\s+work)\b/.test(msg);
+}
+
 function isLikelyQuestion(text) {
   const msg = (text || '').trim().toLowerCase();
   const hasDate = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|morning|afternoon|evening|\bam\b|\bpm\b|\d{1,2}[\/\-]\d{1,2}|next\s+week|this\s+week|today|tonight)\b/.test(msg);
@@ -181,7 +186,11 @@ function detectServiceType(text) {
   const msg = (text || '').toLowerCase();
   if (/tile|tiling|grout|bullnose|porcelain/.test(msg)) return 'tile_install';
   if (/custom home|new home|build|construction/.test(msg)) return 'custom_home';
+  if (/cabinet|countertop|counter\s*top|kitchen\s+remodel|kitchen\s+renovation/.test(msg)) return 'cabinets_countertops';
   if (/remodel|kitchen|bathroom|bath/.test(msg)) return 'remodel';
+  if (/clean|cleaning|housekeep|maid|janitorial|house\s+clean/.test(msg)) return 'house_cleaning';
+  if (/pool\s+cage|screen\s+(repair|room|enclosure)|lanai|birdcage/.test(msg)) return 'pool_screen';
+  if (/floor|flooring|hardwood|laminate|vinyl|lvp|lvt/.test(msg)) return 'flooring';
   if (/renovat/.test(msg)) return 'renovation';
   if (/repair|fix|replace|replacement/.test(msg)) return 'tile_replacement';
   if (/estimate|quote|price/.test(msg)) return 'free_estimate';
@@ -341,11 +350,32 @@ async function processSms(body) {
       return;
     }
     if (existingConv.stage === 'scheduled') {
-      logger.info('webhook', `lead ${leadPhone} already scheduled, sending reminder instead of new conv`);
       const tz = client.timezone || 'America/New_York';
       const formatted = existingConv.scheduled_at
         ? new Date(existingConv.scheduled_at).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
         : 'your scheduled time';
+
+      if (detectRescheduling(message)) {
+        logger.info('webhook', `lead ${leadPhone} wants to reschedule — resetting to ai_responded`);
+        await db.updateConversation(existingConv.id, {
+          stage: 'ai_responded',
+          scheduled_at: null,
+          lead_address: null,
+          collected_data: { ...(existingConv.collected_data || {}), rescheduled: true, sms_ai_responses: 0 },
+          last_response_at: new Date().toISOString(),
+        });
+        const rescheduleMsg = `No worries at all! 😊 We can find a better time for your ${client.business_name} estimate. What day and time works better for you? 📅`;
+        await twilioSvc.sendSms({
+          to: `+${leadPhone}`,
+          from: client.twilio_number,
+          body: rescheduleMsg,
+          credentials: clientCredentials(client),
+        }).catch(() => {});
+        db.appendMessage(existingConv.id, 'ai', rescheduleMsg).catch(() => {});
+        return;
+      }
+
+      logger.info('webhook', `lead ${leadPhone} already scheduled, sending reminder`);
       const reminder = `Hi ${existingConv.lead_name || 'there'}! 👋 You already have a FREE estimate scheduled with ${client.business_name} on ${formatted}. See you then! Reply STOP to cancel.`;
       await twilioSvc.sendSms({
         to: `+${leadPhone}`,
@@ -1539,6 +1569,19 @@ async function parseVoiceDate(req, res) {
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address&amp;noInput=1</Redirect>
 </Response>`);
 }
+
+// ── VOICE MESSAGE AUDIO PLAYBACK ──────────────────────────────────────────────
+// Public — no auth — called by Twilio <Play> to stream the translated voice message
+router.get('/voice-msg/:msgId', (req, res) => {
+  const msgId = (req.params.msgId || '').replace(/[^a-z0-9\-]/gi, '');
+  if (!msgId) return res.status(400).send('Bad Request');
+  const nodePath = require('path');
+  const nodeFs   = require('fs');
+  const filePath = nodePath.join('/tmp', 'leadpilot-audio', `vmsg-${msgId}.mp3`);
+  if (!nodeFs.existsSync(filePath)) return res.status(404).send('Not Found');
+  res.set('Content-Type', 'audio/mpeg');
+  res.sendFile(filePath);
+});
 
 // ── BROWSER CLICK-TO-CALL (Twilio Voice JS SDK) ───────────────────────────────
 // Called by Twilio when the admin browser initiates an outbound call
