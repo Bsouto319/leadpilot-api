@@ -72,9 +72,8 @@ const cronLimiter = rateLimit({
 // ── BODY PARSING with size limits ────────────────────────────────────────────
 // Twilio sends form-encoded bodies for webhooks
 app.use('/webhook', express.urlencoded({ extended: false, limit: '32kb' }));
-// Audio routes receive base64-encoded audio (can be several MB) — must come BEFORE global 64kb limit
-app.use('/api/admin/audio-call-preview', express.json({ limit: '10mb' }));
-app.use('/api/admin/send-audio-call',    express.json({ limit: '10mb' }));
+// Audio preview: receive raw binary audio blob (no base64, no JSON — avoids proxy limits)
+app.use('/api/admin/audio-call-preview', express.raw({ type: 'audio/*', limit: '8mb' }));
 app.use(express.json({ limit: '64kb' }));
 
 // ── STATIC FILES ──────────────────────────────────────────────────────────────

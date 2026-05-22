@@ -655,13 +655,18 @@ router.get('/test-qualify', async (req, res) => {
 });
 
 // ── AUDIO CALL PREVIEW — step 1: transcribe + translate + TTS ────────────────
-// POST /api/admin/audio-call-preview
-// Body: { audioBase64, audioMimetype, clientId }
+// POST /api/admin/audio-call-preview?clientId=xxx
+// Body: raw audio blob (Content-Type: audio/webm or audio/ogg)
 // Returns: { msgId, transcription, translation }
 router.post('/audio-call-preview', async (req, res) => {
-  const { audioBase64, audioMimetype, clientId } = req.body || {};
-  if (!audioBase64 || !clientId) {
-    return res.status(400).json({ error: 'audioBase64 and clientId are required' });
+  const clientId = req.query.clientId;
+  const audioBuffer = req.body;  // Buffer from express.raw()
+
+  if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length === 0) {
+    return res.status(400).json({ error: 'No audio received' });
+  }
+  if (!clientId) {
+    return res.status(400).json({ error: 'clientId query param required' });
   }
 
   let client;
@@ -677,11 +682,11 @@ router.post('/audio-call-preview', async (req, res) => {
   const AUDIO_DIR  = path.join('/tmp', 'leadpilot-audio');
 
   try {
-    const mimetype = audioMimetype || 'audio/webm';
-    const ext      = mimetype.split('/')[1]?.split(';')[0] || 'webm';
+    const mimetype = (req.get('content-type') || 'audio/webm').split(';')[0].trim();
+    const ext      = mimetype.split('/')[1] || 'webm';
     const tmpFile  = path.join(AUDIO_DIR, `inbound-${Date.now()}.${ext}`);
     fs.mkdirSync(AUDIO_DIR, { recursive: true });
-    fs.writeFileSync(tmpFile, Buffer.from(audioBase64, 'base64'));
+    fs.writeFileSync(tmpFile, audioBuffer);
 
     let transcription;
     try {
