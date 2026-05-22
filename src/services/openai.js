@@ -7,10 +7,28 @@ function getOpenAI() {
   return _openai;
 }
 
+// Starting price hints shown during call for services where we can give a reference.
+// For repairs/remodels, price varies too much — mention FREE estimate only.
+const SERVICE_PRICE_HINTS = {
+  tile_install:         'Tile installation typically starts around $12 per square foot.',
+  flooring:            'Hardwood floors typically start around $5 per square foot, and luxury vinyl from $4.',
+  house_cleaning:      null,
+  pool_screen:         null,
+  cabinets_countertops: null,
+  remodel:             null,
+  renovation:          null,
+  tile_replacement:    null,
+  custom_home:         null,
+  free_estimate:       null,
+  general:             null,
+};
+
 async function generateVoiceScript({ businessName, serviceType, pricing, systemPrompt }) {
-  const pricingText = pricing && pricing.length > 0
-    ? pricing.map(p => `${p.label || p.service_type}: ${p.notes || 'FREE estimate'}`).join(', ')
-    : 'FREE in-home estimate';
+  const pricingHint = SERVICE_PRICE_HINTS[serviceType] || null;
+
+  const pricingLine = pricingHint
+    ? `If the customer asks about price, you may mention: "${pricingHint} Every project is different, so a FREE in-home estimate gives the exact number."`
+    : 'Do NOT mention specific prices — say pricing varies and a FREE estimate gives the exact number.';
 
   const defaultPrompt = `Generate a short, warm voice script for an AI assistant calling a lead on behalf of ${businessName}.
 Rules:
@@ -19,7 +37,7 @@ Rules:
 - Say you are ready to help schedule a FREE estimate or consultation
 - Ask them to reply to the text message with their preferred day and time
 - Max 3 sentences — clear, warm, professional
-- NEVER mention specific prices
+- ${pricingLine}
 Respond ONLY with the script, no quotes or labels.`;
 
   const completion = await getOpenAI().chat.completions.create({

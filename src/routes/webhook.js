@@ -1129,21 +1129,29 @@ async function processVoiceIntake(req, res) {
       collected_data: { ...cd, voice_stage: 'asking_date', service_raw: speech, no_input_count: 0 },
     });
 
-    // Static template — elimina latência GPT entre turnos de voz
-    const serviceLabels = {
-      tile_install: 'tile installation', custom_home: 'custom home building',
-      remodel: 'remodeling', renovation: 'renovation',
-      tile_replacement: 'tile replacement', free_estimate: 'your project',
-      general: 'your project',
+    // Static responses per service — mention pricing where it applies, avoid it where it varies too much
+    const serviceResponses = {
+      tile_install:         `Great, tile installation! Our tile work typically starts around $12 per square foot — but every project is unique, so let's get you a FREE in-home estimate to give you the exact number.`,
+      flooring:            `Nice, flooring! Hardwood typically starts around $5 per square foot and luxury vinyl from $4 — we'll measure everything out during your FREE in-home estimate.`,
+      house_cleaning:      `Perfect, house cleaning! Pricing depends on the size and frequency, so let's set up a FREE walkthrough to give you an exact quote.`,
+      pool_screen:         `Got it, pool screen work! Pricing depends on the size and condition of the enclosure, so a FREE on-site estimate is the best way to get you an accurate number.`,
+      cabinets_countertops:`Awesome, cabinets and countertops! Those vary a lot by material and layout, so let's do a FREE in-home estimate to nail down the details.`,
+      custom_home:         `Excellent — custom home building! That's a big, exciting project. Pricing depends on the build, so let's schedule a FREE consultation to go over everything.`,
+      remodel:             `Great, remodeling! Scope and materials make each project unique, so we'll give you a FREE in-home estimate with an exact number.`,
+      renovation:          `Perfect, renovation! Every renovation is different, so a FREE estimate is the best way to get you accurate pricing.`,
+      tile_replacement:    `Got it, tile repair or replacement! Pricing depends on the area and materials. We'll assess everything during your FREE in-home estimate.`,
+      free_estimate:       `Of course — a free estimate! That's exactly what we offer. Let's get that on the calendar for you.`,
+      general:             `That's right in our wheelhouse! Let's get a FREE in-home estimate scheduled so we can give you an accurate number.`,
     };
-    const serviceLabel = serviceLabels[serviceType] || speech || 'your project';
-    const transition = `Awesome, ${serviceLabel} — that's right in our wheelhouse! What day this week or next works best for your completely FREE in-home estimate?`;
+    const serviceLabel = (serviceType || 'general').replace(/_/g, ' ');
+    const serviceReply = serviceResponses[serviceType] || serviceResponses.general;
+    const transition = `${serviceReply} What day this week or next works best for you?`;
 
     db.appendMessage(id, 'ai', transition).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
   <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=date" method="POST">
-    ${el(client, 'ask_date_suffix', `Perfect! What day this week or next works best for your completely FREE in-home estimate?`)}
+    <Say voice="alice" language="en-US">${transition}</Say>
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=date&amp;noInput=1</Redirect>
 </Response>`);
