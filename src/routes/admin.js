@@ -654,7 +654,126 @@ router.get('/test-qualify', async (req, res) => {
   }
 });
 
-// ── AUDIO → OUTBOUND CALL ────────────────────────────────────────────────────
+// ── AUDIO CALL PREVIEW — step 1: transcribe + translate + TTS ────────────────
+// POST /api/admin/audio-call-preview
+// Body: { audioBase64, audioMimetype, clientId }
+// Returns: { msgId, transcription, translation }
+router.post('/audio-call-preview', async (req, res) => {
+  const { audioBase64, audioMimetype, clientId } = req.body || {};
+  if (!audioBase64 || !clientId) {
+    return res.status(400).json({ error: 'audioBase64 and clientId are required' });
+  }
+
+  let client;
+  try { client = await db.getClientById(clientId); } catch {}
+  if (!client) return res.status(404).json({ error: 'client not found' });
+
+  const logger     = require('../utils/logger');
+  const fs         = require('fs');
+  const path       = require('path');
+  const OpenAI     = require('openai');
+  const openai     = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const elevenlabs = require('../services/elevenlabs');
+  const AUDIO_DIR  = path.join('/tmp', 'leadpilot-audio');
+
+  try {
+    const mimetype = audioMimetype || 'audio/webm';
+    const ext      = mimetype.split('/')[1]?.split(';')[0] || 'webm';
+    const tmpFile  = path.join(AUDIO_DIR, `inbound-${Date.now()}.${ext}`);
+    fs.mkdirSync(AUDIO_DIR, { recursive: true });
+    fs.writeFileSync(tmpFile, Buffer.from(audioBase64, 'base64'));
+
+    let transcription;
+    try {
+      const result = await openai.audio.transcriptions.create({
+        model: 'whisper-1',
+        file:  fs.createReadStream(tmpFile),
+      });
+      transcription = result.text;
+    } finally {
+      try { fs.unlinkSync(tmpFile); } catch {}
+    }
+
+    if (!transcription?.trim()) {
+      return res.status(422).json({ error: 'Não foi possível transcrever — a gravação foi muito curta?' });
+    }
+
+    const translateRes = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 200,
+      messages: [
+        {
+          role: 'system',
+          content: 'Translate the following to clear, natural American English suitable for a phone call. Under 300 characters. Output ONLY the translated text — no quotes, no labels.',
+        },
+        { role: 'user', content: transcription },
+      ],
+    });
+    const translatedText = translateRes.choices[0].message.content.trim().slice(0, 300);
+
+    const msgId   = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const mp3Buf  = await elevenlabs.generateMp3(translatedText, 'hope');
+    const mp3Path = path.join(AUDIO_DIR, `vmsg-${msgId}.mp3`);
+    fs.writeFileSync(mp3Path, mp3Buf);
+
+    logger.info('admin', `audio-preview msgId=${msgId} pt="${transcription.slice(0,60)}" en="${translatedText.slice(0,60)}"`);
+    res.json({ msgId, transcription, translation: translatedText });
+  } catch (err) {
+    require('../utils/logger').error('admin', `audio-preview error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── AUDIO CALL SEND — step 2: place Twilio call with pre-generated MP3 ────────
+// POST /api/admin/audio-call-send
+// Body: { msgId, phone, clientId }
+router.post('/audio-call-send', async (req, res) => {
+  const { msgId, phone, clientId } = req.body || {};
+  if (!msgId || !phone || !clientId) {
+    return res.status(400).json({ error: 'msgId, phone and clientId are required' });
+  }
+
+  let client;
+  try { client = await db.getClientById(clientId); } catch {}
+  if (!client) return res.status(404).json({ error: 'client not found' });
+
+  const logger  = require('../utils/logger');
+  const fs      = require('fs');
+  const path    = require('path');
+  const BASE    = process.env.BASE_URL || 'https://leads.btechsouto.shop';
+  const safeMsgId = (msgId || '').replace(/[^a-z0-9\-]/gi, '');
+  const mp3Path   = path.join('/tmp', 'leadpilot-audio', `vmsg-${safeMsgId}.mp3`);
+
+  if (!fs.existsSync(mp3Path)) {
+    return res.status(404).json({ error: 'Áudio não encontrado — gere um novo preview.' });
+  }
+
+  try {
+    const audioUrl = `${BASE}/webhook/voice-msg/${safeMsgId}`;
+    const toPhone  = phone.startsWith('+') ? phone : `+${phone}`;
+    const twilio   = require('twilio');
+    const twilioClient = twilio(
+      client.twilio_account_sid || process.env.TWILIO_ACCOUNT_SID,
+      client.twilio_auth_token  || process.env.TWILIO_AUTH_TOKEN,
+    );
+
+    const call = await twilioClient.calls.create({
+      to:   toPhone,
+      from: client.twilio_number,
+      twiml: `<Response><Play>${audioUrl}</Play><Pause length="1"/></Response>`,
+      statusCallback:       `${BASE}/webhook/call-status`,
+      statusCallbackMethod: 'POST',
+    });
+
+    logger.info('admin', `audio-call-send sid=${call.sid} to=${toPhone}`);
+    res.json({ ok: true, callSid: call.sid });
+  } catch (err) {
+    logger.error('admin', `audio-call-send error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── AUDIO → OUTBOUND CALL (legacy — kept for compatibility) ──────────────────
 // POST /api/admin/send-audio-call
 // Body (JSON): { audioBase64, audioMimetype, phone, clientId }
 // Flow: Whisper transcription → GPT translate to English → ElevenLabs Hope TTS
