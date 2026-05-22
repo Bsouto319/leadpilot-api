@@ -1091,6 +1091,7 @@ async function processVoiceIntake(req, res) {
       service: `I'm sorry, I didn't quite catch that. What type of project are you looking to get done? For example, tile installation, flooring, or a home renovation?`,
       date:    `I didn't hear a date. What day works best for your free estimate? You can say something like "next Monday" or "this Friday afternoon."`,
       address: `I didn't catch the address. Could you say your street address, city, and state?`,
+      email:   `No worries if you'd rather not — just say "skip" and we'll wrap up!`,
     };
     const repeatTwiml = el(client, repeatPhraseKey[step] || 'no_input_name', repeatFallback[step] || 'Could you repeat that?');
     await updateConv( { collected_data: { ...cd, no_input_count: noInputCount } }).catch(() => {});
@@ -1182,32 +1183,69 @@ async function processVoiceIntake(req, res) {
 
   // ── STEP: address ─────────────────────────────────────────────────────────
   if (step === 'address') {
-    const address    = speech;
+    const address = speech;
+    db.appendMessage(id, 'lead', `[Address]: ${address}`).catch(() => {});
+
+    // Save address immediately, then ask for email before farewell
+    updateConv({
+      lead_address: address,
+      stage: 'awaiting_address',
+      collected_data: { ...cd, voice_stage: 'asking_email', address_raw: address, no_input_count: 0 },
+    }).catch(() => {});
+
+    const askEmail = `Perfect, got it! Last thing before I let you go — what's the best email address to send your confirmation to? You can say it out loud or just say "skip" if you'd prefer not to.`;
+    db.appendMessage(id, 'ai', askEmail).catch(() => {});
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="10" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=email" method="POST">
+    <Say voice="alice" language="en-US">${askEmail}</Say>
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=email&amp;noInput=1</Redirect>
+</Response>`);
+  }
+
+  // ── STEP: email ───────────────────────────────────────────────────────────
+  if (step === 'email') {
     const isoDate    = cd.date_iso || conv.scheduled_at;
     const formatted  = isoDate
       ? new Date(isoDate).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
       : 'your scheduled time';
     const serviceRaw = cd.service_raw || conv.service_type || 'your project';
-    const farewell   = `Perfect! You're all set. You'll receive a text confirmation right now with all the details. One of our team members will personally reach out to confirm everything — you're in great hands! Thank you so much for choosing ${client.business_name}, and have an amazing day!`;
+    const address    = cd.address_raw || conv.lead_address || '';
+    const farewell   = `Perfect! You're all set. One of our team members will personally reach out to confirm everything — you're in great hands! Thank you so much for choosing ${client.business_name}, and have an amazing day!`;
 
-    // Respond immediately so Twilio plays farewell without waiting for DB/SMS
+    // Try to parse email from speech: "john at gmail dot com" → john@gmail.com
+    const skipWords = /\b(skip|no|nope|don't|dont|rather not|no thanks|no email|pass)\b/i;
+    let parsedEmail = null;
+    if (speech && !skipWords.test(speech)) {
+      const raw = speech.toLowerCase()
+        .replace(/\s+at\s+/g, '@')
+        .replace(/\s+dot\s+/g, '.')
+        .replace(/\s/g, '');
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw)) parsedEmail = raw;
+    }
+
+    // Respond immediately with farewell — DB writes async
     res.set('Content-Type', 'text/xml');
     res.send(`<Response>
   ${el(client, 'booking_confirmed', farewell)}
 </Response>`);
 
-    // Async: DB write + SMS confirmations (non-blocking)
     ;(async () => {
-      db.appendMessage(id, 'lead', `[Address]: ${address}`).catch(() => {});
+      if (parsedEmail) {
+        await updateConv({ lead_email: parsedEmail }).catch(() => {});
+        db.appendMessage(id, 'lead', `[Email]: ${parsedEmail}`).catch(() => {});
+        logger.info('webhook', `email captured from voice: ${parsedEmail} for conv=${id}`);
+      }
+
       await updateConv({
-        lead_address: address,
         stage: 'scheduled',
-        collected_data: { ...cd, voice_stage: 'complete', address_raw: address, no_input_count: 0 },
+        collected_data: { ...cd, voice_stage: 'complete', no_input_count: 0 },
         last_response_at: new Date().toISOString(),
       }).catch(() => {});
 
       // Calendar update with address
-      if (client.google_refresh_token && client.google_calendar_id) {
+      if (client.google_refresh_token && client.google_calendar_id && address) {
         calendarSvc.updateEventAddress({
           refreshToken: client.google_refresh_token,
           calendarId: client.google_calendar_id,
@@ -1217,19 +1255,11 @@ async function processVoiceIntake(req, res) {
         }).catch(() => {});
       }
 
-      const confirmSms = `✅ You're all set! Here's your FREE estimate summary:\n📋 ${serviceRaw}\n📅 ${formatted}\n📍 ${address}\n\n${client.business_name} will reach out to personally confirm your appointment — a real team member will contact you soon!\n\n💬 Questions? Just reply here. Reply STOP to opt out.`;
-      await twilioSvc.sendSms({
-        to: `+${conv.lead_phone}`,
-        from: client.twilio_number,
-        body: confirmSms,
-        credentials: clientCredentials(client),
-      }).catch(() => {});
-      db.appendMessage(id, 'ai', confirmSms).catch(() => {});
       db.appendMessage(id, 'ai', farewell).catch(() => {});
 
-      const tierEmoji   = conv.score >= 70 ? '🔥' : conv.score >= 40 ? '⚡' : conv.score ? '❄️' : '';
-      const scoreLabel  = conv.score != null ? ` — ${conv.score}% score` : '';
-      const tierVoice   = conv.score >= 70 ? 'This is a HIGH quality lead. ' : conv.score >= 40 ? 'This is a warm lead. ' : '';
+      const tierEmoji  = conv.score >= 70 ? '🔥' : conv.score >= 40 ? '⚡' : conv.score ? '❄️' : '';
+      const scoreLabel = conv.score != null ? ` — ${conv.score}% score` : '';
+      const tierVoice  = conv.score >= 70 ? 'This is a HIGH quality lead. ' : conv.score >= 40 ? 'This is a warm lead. ' : '';
 
       if (client.owner_email) {
         const emailBody = [
@@ -1237,6 +1267,7 @@ async function processVoiceIntake(req, res) {
           ``,
           `Name: ${conv.lead_name || 'Unknown'}`,
           `Phone: +${conv.lead_phone}`,
+          parsedEmail ? `Email: ${parsedEmail}` : '',
           `Service: ${serviceRaw}`,
           `Date: ${formatted}`,
           `Address: ${address}`,
@@ -1249,16 +1280,18 @@ async function processVoiceIntake(req, res) {
           to: client.owner_email,
           subject: `${tierEmoji} Appointment Confirmed${scoreLabel} — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
           body: emailBody,
-          }).catch(() => {});
-      }
-      if (conv.lead_email) {
-        sendEmail({
-          from: `${client.business_name} <noreply@btechsouto.shop>`,
-          to: conv.lead_email,
-          subject: `✅ Appointment Confirmed — ${client.business_name}`,
-          body: `Hi ${conv.lead_name || 'there'},\n\nYour appointment with ${client.business_name} is confirmed!\n\nDate: ${formatted}\nService: ${serviceRaw}\nAddress on file: ${address}\n\nIf you need to reschedule or have any questions, please give us a call.\n\nThank you,\n${client.business_name}`,
         }).catch(() => {});
       }
+
+      const emailForConfirm = parsedEmail || conv.lead_email;
+      if (emailForConfirm) {
+        sendEmail({
+          to: emailForConfirm,
+          subject: `✅ Appointment Confirmed — ${client.business_name}`,
+          body: `Hi ${conv.lead_name || 'there'},\n\nYour appointment with ${client.business_name} is confirmed!\n\nDate: ${formatted}\nService: ${serviceRaw}\nAddress: ${address}\n\nIf you need to reschedule or have any questions, just give us a call.\n\nThank you,\n${client.business_name}`,
+        }).catch(() => {});
+      }
+
       if (client.owner_phone) {
         makeNotifyCall({
           to: client.owner_phone,
