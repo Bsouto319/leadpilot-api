@@ -336,13 +336,27 @@ async function getAppointmentsDueTomorrow() {
 
   const { data, error } = await supabase
     .from('conversations')
-    .select('*, clients(business_name, twilio_number, timezone)')
+    .select('*, clients(business_name, twilio_number, timezone, owner_email, owner_phone)')
     .eq('stage', 'scheduled')
     .is('reminder_sent_at', null)
     .gte('scheduled_at', start.toISOString())
     .lte('scheduled_at', end.toISOString());
   if (error) throw new Error(error.message);
   return data || [];
+}
+
+async function getScheduledAppointmentsBefore(cutoffIso) {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*, clients(business_name, owner_email, owner_phone, timezone)')
+    .eq('stage', 'scheduled')
+    .lte('scheduled_at', cutoffIso);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function markNoShow(id) {
+  await supabase.from('conversations').update({ stage: 'no_show', updated_at: new Date().toISOString() }).eq('id', id);
 }
 
 async function markReminderSent(id) {
@@ -570,7 +584,9 @@ module.exports = {
   optInLead,
   isOptedOut,
   getAppointmentsDueTomorrow,
+  getScheduledAppointmentsBefore,
   markReminderSent,
+  markNoShow,
   getLeadsPendingFollowup,
   markFollowupSent,
   getCompletedAppointments,
