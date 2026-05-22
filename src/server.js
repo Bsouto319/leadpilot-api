@@ -139,31 +139,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 function startCronJobs() {
-  // Every day at 9am — 24h reminders for tomorrow's appointments
-  cron.schedule('0 9 * * *', async () => {
-    logger.info('cron', 'running reminders job');
-    try {
-      const appointments = await db.getAppointmentsDueTomorrow();
-      for (const conv of appointments) {
-        const client = conv.clients;
-        if (!client) continue;
-        const tz = client.timezone || 'America/New_York';
-        const formatted = new Date(conv.scheduled_at).toLocaleString('en-US', {
-          timeZone: tz, weekday: 'long', month: 'long', day: 'numeric',
-          hour: '2-digit', minute: '2-digit',
-        });
-        const name    = conv.lead_name && conv.lead_name !== 'Customer' ? ` ${conv.lead_name}` : '';
-        const address = conv.lead_address ? `\n📍 ${conv.lead_address}` : '';
-        await twilioSvc.sendSms({
-          to: `+${conv.lead_phone}`, from: client.twilio_number,
-          body: `📅 Reminder, ${name || 'hey'}! Your FREE estimate with ${client.business_name} is TOMORROW — ${formatted}.${address}\n\nWe'll be there! Any questions, just reply here. See you soon! 😊\n\nReply STOP to cancel.`,
-          credentials: client.twilio_account_sid ? { accountSid: client.twilio_account_sid, authToken: client.twilio_auth_token } : null,
-        });
-        await db.markReminderSent(conv.id);
-        logger.info('cron', `reminder sent → ${conv.lead_phone}`);
-      }
-    } catch (err) { handleError('cron-reminders', err).catch(() => {}); }
-  }, { timezone: 'America/New_York' });
+  // Reminder SMS to leads disabled — email-only policy
 
   // Every Monday at 8am — weekly performance report to all clients
   cron.schedule('0 8 * * 1', async () => {

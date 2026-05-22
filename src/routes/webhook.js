@@ -116,17 +116,6 @@ async function handleHumanHandoff({ client, conversation, message }) {
 
   try {
     await twilioSvc.sendSms({
-      to: `+${leadPhone}`,
-      from: client.twilio_number,
-      body: `Absolutely! Connecting you with a real person from ${client.business_name} now 📞 Expect a call within minutes. Thanks for your patience!`,
-      credentials: clientCredentials(client),
-    });
-  } catch (err) {
-    await handleError('twilio', err);
-  }
-
-  try {
-    await twilioSvc.sendSms({
       to: client.owner_phone,
       from: client.twilio_number,
       body: `⚠️ ATENÇÃO – ${client.business_name}\nCliente quer falar com humano!\nNome: ${leadName}\nFone: +${leadPhone}\nMensagem: "${message}"\n\nLigue diretamente para esse cliente agora.`,
@@ -364,26 +353,10 @@ async function processSms(body) {
           collected_data: { ...(existingConv.collected_data || {}), rescheduled: true, sms_ai_responses: 0 },
           last_response_at: new Date().toISOString(),
         });
-        const rescheduleMsg = `No worries at all! 😊 We can find a better time for your ${client.business_name} estimate. What day and time works better for you? 📅`;
-        await twilioSvc.sendSms({
-          to: `+${leadPhone}`,
-          from: client.twilio_number,
-          body: rescheduleMsg,
-          credentials: clientCredentials(client),
-        }).catch(() => {});
-        db.appendMessage(existingConv.id, 'ai', rescheduleMsg).catch(() => {});
         return;
       }
 
-      logger.info('webhook', `lead ${leadPhone} already scheduled, sending reminder`);
-      const reminder = `Hi ${existingConv.lead_name || 'there'}! 👋 You already have a FREE estimate scheduled with ${client.business_name} on ${formatted}. See you then! Reply STOP to cancel.`;
-      await twilioSvc.sendSms({
-        to: `+${leadPhone}`,
-        from: client.twilio_number,
-        body: reminder,
-        credentials: clientCredentials(client),
-      }).catch(() => {});
-      db.appendMessage(existingConv.id, 'ai', reminder).catch(() => {});
+      logger.info('webhook', `lead ${leadPhone} already scheduled, ignoring repeat message`);
       return;
     }
     if (existingConv.stage === 'closed') {
@@ -589,15 +562,6 @@ async function processAddressReply({ client, conversation, message }) {
       }
     }
 
-    const confirmBody = `🎉 You're confirmed!\n\n📋 ${client.business_name} FREE Estimate\n📅 ${formatted}\n📍 ${address}\n\nWe can't wait — see you then! Questions? Just reply here.\nReply STOP to cancel.`;
-    await twilioSvc.sendSms({
-      to: `+${conversation.lead_phone}`,
-      from: client.twilio_number,
-      body: confirmBody,
-      credentials: clientCredentials(client),
-    });
-    db.appendMessage(conversation.id, 'ai', confirmBody).catch(() => {});
-
     if (client.owner_email) {
       sendEmail({
         to: client.owner_email,
@@ -651,12 +615,6 @@ async function processSchedulingReply({ client, conversation, message }) {
   if (isLikelyQuestion(message)) {
     const answer = await answerWithAI({ client, message });
     if (answer) {
-      await twilioSvc.sendSms({
-        to: `+${conversation.lead_phone}`,
-        from: client.twilio_number,
-        body: answer + '\n\nReply STOP to opt out.',
-        credentials: clientCredentials(client),
-      });
       db.appendMessage(conversation.id, 'ai', answer).catch(() => {});
       // Incrementa contador de respostas AI para este lead
       await db.updateConversation(conversation.id, {
@@ -702,16 +660,10 @@ async function processSchedulingReply({ client, conversation, message }) {
         await handleHumanHandoff({ client, conversation, message });
         return;
       }
-      await twilioSvc.sendSms({
-        to: `+${conversation.lead_phone}`,
-        from: client.twilio_number,
-        body: `Hey! 😊 Just need a day and time to lock in your FREE estimate with ${client.business_name}. We're super flexible — something like "Monday at 2pm" or "Friday morning" works great. What do you have? 📅`,
-        credentials: clientCredentials(client),
-      });
       await db.updateConversation(conversation.id, {
         collected_data: { ...cd, sms_ai_responses: clarifyCount },
       }).catch(() => {});
-      logger.info('webhook', `could not parse date from reply: "${message}", asked lead to clarify (${clarifyCount}/${MAX_SMS_AI_RESPONSES})`);
+      logger.info('webhook', `could not parse date from reply: "${message}", no clarify SMS sent (${clarifyCount}/${MAX_SMS_AI_RESPONSES})`);
       return;
     }
 
@@ -746,16 +698,6 @@ async function processSchedulingReply({ client, conversation, message }) {
         await handleError('calendar', err);
       }
     }
-
-    // Ask for address to complete booking
-    const addressRequestBody = `${formatted} is on the books! 🙌\n\nOne last thing — what's the address for the estimate? Just street, city, and state. 📍`;
-    await twilioSvc.sendSms({
-      to: `+${conversation.lead_phone}`,
-      from: client.twilio_number,
-      body: addressRequestBody,
-      credentials: clientCredentials(client),
-    });
-    db.appendMessage(conversation.id, 'ai', addressRequestBody).catch(() => {});
 
     // Notify owner of pending appointment (awaiting address)
     if (client.owner_email) {
@@ -817,17 +759,7 @@ router.post('/call-status', async (req, res) => {
       if (conv && conv.clients) {
         const client = conv.clients;
         const leadNameRaw = conv.lead_name && conv.lead_name !== 'Caller' && conv.lead_name !== 'Customer' ? conv.lead_name : null;
-        const hi = leadNameRaw ? `Hi ${leadNameRaw}!` : 'Hi there!';
-        const serviceLabel = (conv.service_type || 'project').replace(/_/g, ' ');
-        const smsBody = `${hi} 🏠 This is ${client.business_name} — we just tried calling you about your ${serviceLabel} project!\n\nNo worries — this is just our first reach-out. A real person from our team will personally follow up with you very soon 👷\n\nWant to schedule a call at a specific time? Just reply with when works best and we'll call you then. FREE estimate, zero commitment.\n\nReply STOP to opt out.`;
-        await twilioSvc.sendSms({
-          to: `+${conv.lead_phone}`,
-          from: client.twilio_number,
-          body: smsBody,
-          credentials: clientCredentials(client),
-        });
-        db.appendMessage(conv.id, 'ai', smsBody).catch(() => {});
-        logger.info('webhook', `fallback SMS sent to ${conv.lead_phone} after ${CallStatus} outbound call`);
+        logger.info('webhook', `outbound call ${CallStatus} for ${conv.lead_phone} — no fallback SMS (email only policy)`);
 
         // Alert all configured phones when lead does not answer
         const leadName = leadNameRaw || 'Unknown';
