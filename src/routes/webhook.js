@@ -245,16 +245,22 @@ router.post('/sms', webhookRateLimit, twilioSvc.twilioSignatureMiddleware, (req,
 });
 
 async function processSms(body) {
-  const leadPhone   = normalizePhone(body.From);
+  const leadPhone    = normalizePhone(body.From);
   const twilioNumber = (body.To || '').trim();
-  const message     = body.Body || '';
+  const message      = body.Body || '';
+  const numMedia     = parseInt(body.NumMedia || '0');
+  const mediaUrls    = [];
+  for (let i = 0; i < numMedia; i++) {
+    const url = body[`MediaUrl${i}`];
+    if (url) mediaUrls.push(url);
+  }
 
   if (!leadPhone) {
     logger.warn('webhook', 'SMS received with no From number, skipping');
     return;
   }
 
-  logger.info('webhook', `inbound SMS from=${leadPhone} to=${twilioNumber}`);
+  logger.info('webhook', `inbound SMS from=${leadPhone} to=${twilioNumber}${numMedia ? ` media=${numMedia}` : ''}`);
 
   // US Compliance: handle STOP / HELP / START before anything else
   const keyword = detectComplianceKeyword(message);
@@ -330,8 +336,11 @@ async function processSms(body) {
   // 2. Check if lead already exists (scheduling or address reply)
   const existingConv = await db.getExistingConversation(client.id, leadPhone);
   if (existingConv) {
-    // Log incoming message to history
-    db.appendMessage(existingConv.id, 'lead', message).catch(() => {});
+    // Log incoming message + any media to history
+    db.appendMessage(existingConv.id, 'lead', message || '[media]', mediaUrls[0] || null).catch(() => {});
+    for (let i = 1; i < mediaUrls.length; i++) {
+      db.appendMessage(existingConv.id, 'lead', '[media]', mediaUrls[i]).catch(() => {});
+    }
     analyzeAndUpdate(existingConv, message).catch(() => {});
 
     if (existingConv.stage === 'handoff') {
@@ -504,8 +513,11 @@ async function processSms(body) {
     }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
   }
 
-  // Log first message to history
-  db.appendMessage(conversation.id, 'lead', message).catch(() => {});
+  // Log first message + any media to history
+  db.appendMessage(conversation.id, 'lead', message || '[media]', mediaUrls[0] || null).catch(() => {});
+  for (let i = 1; i < mediaUrls.length; i++) {
+    db.appendMessage(conversation.id, 'lead', '[media]', mediaUrls[i]).catch(() => {});
+  }
   analyzeAndUpdate(conversation, message).catch(() => {});
 
   logger.info('webhook', `lead processed id=${conversation.id} phone=${leadPhone}`);

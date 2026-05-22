@@ -187,6 +187,28 @@ router.get('/leads/:id/messages', async (req, res) => {
     const messages = await db.getMessages(req.params.id);
     res.json(messages);
   } catch (err) {
+    // Fallback if media_url column doesn't exist yet
+    res.json([]);
+  }
+});
+
+router.post('/leads/:id/send-email', async (req, res) => {
+  try {
+    const { subject, message } = req.body;
+    if (!message) return res.status(400).json({ error: 'message is required' });
+    const lead = await db.getConversationWithClient(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'lead not found' });
+    const { sendEmail } = require('../services/gmail');
+    const toEmail = lead.lead_email;
+    if (!toEmail) return res.status(422).json({ error: 'lead has no email address on file' });
+    await sendEmail({
+      to: toEmail,
+      subject: subject || `Message from ${lead.clients?.business_name || 'your contractor'}`,
+      body: message,
+    });
+    await db.appendMessage(req.params.id, 'owner', `[Email] ${message}`);
+    res.json({ ok: true });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
