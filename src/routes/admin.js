@@ -792,8 +792,10 @@ router.post('/send-audio-call', express.json({ limit: '10mb' }), async (req, res
   }
 
   let client;
-  try { client = await db.getClientById(clientId); } catch {}
-  if (!client) return res.status(404).json({ error: 'client not found' });
+  try { client = await db.getClientById(clientId); } catch (e) {
+    return res.status(500).json({ error: `Supabase error: ${e.message}`, clientId });
+  }
+  if (!client) return res.status(404).json({ error: 'client not found', clientId });
 
   const logger     = require('../utils/logger');
   const fs         = require('fs');
