@@ -87,13 +87,16 @@ async function getClientById(id) {
 
 // Versão admin: não exige active=true, sem join pricing (mais robusto para features admin)
 async function getClientByIdAdmin(id) {
+  if (!id || typeof id !== 'string' || id.length < 10) {
+    throw new Error(`clientId inválido recebido: "${id}"`);
+  }
   const { data, error } = await supabase
     .from('clients')
     .select('id, business_name, twilio_number, twilio_account_sid, twilio_auth_token, owner_phone, timezone, elevenlabs_greeting_url, elevenlabs_voice_id, active')
     .eq('id', id)
-    .single();
+    .limit(1);
   if (error) throw new Error(`Supabase getClientByIdAdmin: ${error.message}`);
-  return data;
+  return data?.[0] || null;
 }
 
 async function getClientsWithGmailToken() {
