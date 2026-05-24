@@ -85,6 +85,17 @@ async function getClientById(id) {
   return data;
 }
 
+// Versão admin: não exige active=true, sem join pricing (mais robusto para features admin)
+async function getClientByIdAdmin(id) {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, business_name, twilio_number, twilio_account_sid, twilio_auth_token, owner_phone, timezone, elevenlabs_greeting_url, elevenlabs_voice_id, active')
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(`Supabase getClientByIdAdmin: ${error.message}`);
+  return data;
+}
+
 async function getClientsWithGmailToken() {
   const { data, error } = await supabase
     .from('clients')
@@ -565,6 +576,7 @@ module.exports = {
   getClientByTwilioNumber,
   preWarmClientCache,
   getClientById,
+  getClientByIdAdmin,
   getClientsWithGmailToken,
   getExistingConversation,
   checkDuplicate,
