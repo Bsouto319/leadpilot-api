@@ -732,15 +732,17 @@ router.post('/audio-call-preview', async (req, res) => {
 // ── AUDIO CALL SEND — step 2: place Twilio call with pre-generated MP3 ────────
 // POST /api/admin/audio-call-send
 // Body: { msgId, phone, clientId }
-router.post('/audio-call-send', async (req, res) => {
+router.post('/audio-call-send', express.json(), async (req, res) => {
   const { msgId, phone, clientId } = req.body || {};
   if (!msgId || !phone || !clientId) {
-    return res.status(400).json({ error: 'msgId, phone and clientId are required' });
+    return res.status(400).json({ error: 'msgId, phone and clientId are required', received: { msgId: !!msgId, phone: !!phone, clientId: !!clientId } });
   }
 
   let client;
-  try { client = await db.getClientById(clientId); } catch {}
-  if (!client) return res.status(404).json({ error: 'client not found' });
+  try { client = await db.getClientById(clientId); } catch (e) {
+    return res.status(500).json({ error: `Supabase error: ${e.message}` });
+  }
+  if (!client) return res.status(404).json({ error: 'client not found', clientId });
 
   const logger  = require('../utils/logger');
   const fs      = require('fs');
