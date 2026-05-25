@@ -98,8 +98,23 @@ function serveAudio(res, buf, label) {
   res.send(buf);
 }
 
-app.get('/audio/:clientId/:phraseKey', (req, res) => {
-  const buf = elevenlabsSvc.getBuffer(req.params.clientId, req.params.phraseKey);
+app.get('/audio/:clientId/:phraseKey', async (req, res) => {
+  let buf = elevenlabsSvc.getBuffer(req.params.clientId, req.params.phraseKey);
+  if (!buf) {
+    try {
+      const client = await db.getClientByIdAdmin(req.params.clientId);
+      if (client) {
+        buf = await elevenlabsSvc.generateSinglePhrase(
+          req.params.clientId,
+          req.params.phraseKey,
+          client.business_name,
+          client.elevenlabs_voice_id || 'hope'
+        );
+      }
+    } catch (err) {
+      logger.warn('server', `on-demand ElevenLabs regen failed [${req.params.phraseKey}]: ${err.message}`);
+    }
+  }
   serveAudio(res, buf, req.params.phraseKey);
 });
 

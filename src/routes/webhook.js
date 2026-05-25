@@ -925,6 +925,15 @@ async function processGather({ speech, conversationId, clientId }) {
 router.post('/voice', webhookRateLimit, (req, res) => {
   startVoiceIntake(req, res).catch(err => {
     logger.error('webhook', 'voice intake error', err.message);
+    // Log failed call attempt to DB
+    const failedPhone = normalizePhone(req.body?.From);
+    if (failedPhone) {
+      db.saveLead({
+        clientId: 'unknown', leadPhone: failedPhone, leadName: 'Caller',
+        source: 'inbound_call_error', serviceType: 'general',
+        message: `[Call failed: ${err.message.slice(0, 100)}]`,
+      }).catch(() => {});
+    }
     res.set('Content-Type', 'text/xml');
     res.send(`<Response><Say voice="alice" language="en-US">We're sorry, we're experiencing a technical issue. Please try again in a moment. Goodbye!</Say></Response>`);
   });
@@ -964,9 +973,18 @@ async function startVoiceIntake(req, res) {
   }
 
   // Responde IMEDIATAMENTE — usa <Play> (ElevenLabs pré-gerado) se disponível, senão Alice (Twilio)
-  const greetingTwiml = client.elevenlabs_greeting_url
+  // Se o áudio não está em cache (ex: restart Docker), aciona regen em background para próxima ligação
+  const hasGreeting = elevenlabs.hasPhrase(client.id, 'greeting');
+  const greetingTwiml = (client.elevenlabs_greeting_url && hasGreeting)
     ? `<Play>${client.elevenlabs_greeting_url}</Play>`
     : `<Say voice="alice" language="en-US">Hi! Thanks for calling ${client.business_name}. What's your first name?</Say>`;
+
+  if (client.elevenlabs_greeting_url && !hasGreeting) {
+    // Cache vazio (restart) — regenera em background para próxima ligação
+    elevenlabs.generateSinglePhrase(client.id, 'greeting', client.business_name, client.elevenlabs_voice_id || 'hope')
+      .catch(err => logger.warn('webhook', `greeting bg regen failed: ${err.message}`));
+  }
+
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
   <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
@@ -1212,9 +1230,8 @@ async function processVoiceIntake(req, res) {
       : 'your scheduled time';
     const serviceRaw = cd.service_raw || conv.service_type || 'your project';
     const address    = cd.address_raw || conv.lead_address || '';
-    const farewell   = `Perfect! You're all set. One of our team members will personally reach out to confirm everything — you're in great hands! Thank you so much for choosing ${client.business_name}, and have an amazing day!`;
 
-    // Try to parse email from speech: "john at gmail dot com" → john@gmail.com
+    // Parse email before constructing farewell (so farewell can mention it)
     const skipWords = /\b(skip|no|nope|don't|dont|rather not|no thanks|no email|pass)\b/i;
     let parsedEmail = null;
     if (speech && !skipWords.test(speech)) {
@@ -1225,10 +1242,18 @@ async function processVoiceIntake(req, res) {
       if (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw)) parsedEmail = raw;
     }
 
+    const farewell = parsedEmail
+      ? `Perfect! You're all set — I'm sending you a confirmation email right now with all the details. One of our team members will also be in touch to confirm. Thank you so much for choosing ${client.business_name}, and have an amazing day!`
+      : `Perfect! You're all set. One of our team members will personally reach out to confirm everything — you're in great hands! Thank you so much for choosing ${client.business_name}, and have an amazing day!`;
+
     // Respond immediately with farewell — DB writes async
+    // If email was captured, use Alice TTS so the personalized email-mention text plays
+    const farewellTwiml = parsedEmail
+      ? `<Say voice="alice" language="en-US">${farewell}</Say>`
+      : el(client, 'booking_confirmed', farewell);
     res.set('Content-Type', 'text/xml');
     res.send(`<Response>
-  ${el(client, 'booking_confirmed', farewell)}
+  ${farewellTwiml}
 </Response>`);
 
     ;(async () => {
@@ -1459,9 +1484,15 @@ async function startOutboundVoiceIntake(req, res) {
     }).catch(() => {});
   }
 
-  const greetingTwiml = client.elevenlabs_greeting_url
+  const hasGreetingOut = elevenlabs.hasPhrase(client.id, 'greeting');
+  const greetingTwiml = (client.elevenlabs_greeting_url && hasGreetingOut)
     ? `<Play>${client.elevenlabs_greeting_url}</Play>`
     : `<Say voice="alice" language="en-US">Hi! Thanks for answering. This is ${client.business_name}. What's your first name?</Say>`;
+
+  if (client.elevenlabs_greeting_url && !hasGreetingOut) {
+    elevenlabs.generateSinglePhrase(client.id, 'greeting', client.business_name, client.elevenlabs_voice_id || 'hope')
+      .catch(err => logger.warn('webhook', `outbound greeting bg regen failed: ${err.message}`));
+  }
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>

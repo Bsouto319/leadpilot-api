@@ -65,7 +65,7 @@ function getClientPhrases(businessName) {
 
     // Date parse retry — mostly static
     date_retry:
-      `I didn't quite get that. Could you say a specific day and time? For example, next Monday at 2 P M, or this Friday morning.`,
+      `I didn't quite get that. Could you say a specific day and time? For example, next Monday at 2 P M, or this Friday morning. Don't worry — I'll send you a confirmation with all the details at the end.`,
 
     // Transition: date captured, parsing async
     waiting_moment:
@@ -205,6 +205,41 @@ async function generateAllClientPhrases(clientId, businessName, voiceId) {
   return { results, totalCharsGenerated: generated, dailyUsage: getDailyUsage() };
 }
 
+// ── Public: generate a single phrase on-demand (safe to call concurrently) ───
+const _regenInProgress = new Map();
+
+async function generateSinglePhrase(clientId, phraseKey, businessName, voiceId) {
+  const k = cacheKey(clientId, phraseKey);
+  const existing = getBuffer(clientId, phraseKey);
+  if (existing) return existing;
+
+  // Dedup concurrent requests for the same key
+  if (_regenInProgress.has(k)) return await _regenInProgress.get(k);
+
+  const phrases = getClientPhrases(businessName);
+  const text = phrases[phraseKey];
+  if (!text) throw new Error(`Unknown phrase key: ${phraseKey}`);
+
+  logger.info('elevenlabs', `on-demand regen: client=${clientId} phrase=${phraseKey}`);
+  ensureDir();
+
+  const promise = generateMp3(text, voiceId)
+    .then(mp3 => {
+      _cache.set(k, mp3);
+      try { fs.writeFileSync(localPath(clientId, phraseKey), mp3); } catch {}
+      trackUsage(text.length);
+      _regenInProgress.delete(k);
+      return mp3;
+    })
+    .catch(err => {
+      _regenInProgress.delete(k);
+      throw err;
+    });
+
+  _regenInProgress.set(k, promise);
+  return await promise;
+}
+
 // ── Public: single phrase (used by old admin/greeting endpoint) ───────────────
 async function generateAndCacheGreeting(clientId, text, voiceId) {
   logger.info('elevenlabs', `single greeting client=${clientId}`);
@@ -225,6 +260,7 @@ module.exports = {
   getClientPhrases,
   generateMp3,
   generateAllClientPhrases,
+  generateSinglePhrase,
   generateAndCacheGreeting,
   getGreetingBuffer,
   getBuffer,
