@@ -925,15 +925,7 @@ async function processGather({ speech, conversationId, clientId }) {
 router.post('/voice', webhookRateLimit, (req, res) => {
   startVoiceIntake(req, res).catch(err => {
     logger.error('webhook', 'voice intake error', err.message);
-    // Log failed call attempt to DB
-    const failedPhone = normalizePhone(req.body?.From);
-    if (failedPhone) {
-      db.saveLead({
-        clientId: 'unknown', leadPhone: failedPhone, leadName: 'Caller',
-        source: 'inbound_call_error', serviceType: 'general',
-        message: `[Call failed: ${err.message.slice(0, 100)}]`,
-      }).catch(() => {});
-    }
+    handleError('voice', err).catch(() => {});
     res.set('Content-Type', 'text/xml');
     res.send(`<Response><Say voice="alice" language="en-US">We're sorry, we're experiencing a technical issue. Please try again in a moment. Goodbye!</Say></Response>`);
   });
@@ -980,9 +972,9 @@ async function startVoiceIntake(req, res) {
     : `<Say voice="alice" language="en-US">Hi! Thanks for calling ${client.business_name}. What's your first name?</Say>`;
 
   if (client.elevenlabs_greeting_url && !hasGreeting) {
-    // Cache vazio (restart) — regenera em background para próxima ligação
-    elevenlabs.generateSinglePhrase(client.id, 'greeting', client.business_name, client.elevenlabs_voice_id || 'hope')
-      .catch(err => logger.warn('webhook', `greeting bg regen failed: ${err.message}`));
+    // Cache vazio (restart) — regenera TODAS as frases em background para próxima ligação
+    elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope')
+      .catch(err => logger.warn('webhook', `bg regen all phrases failed: ${err.message}`));
   }
 
   res.set('Content-Type', 'text/xml');
@@ -1490,8 +1482,8 @@ async function startOutboundVoiceIntake(req, res) {
     : `<Say voice="alice" language="en-US">Hi! Thanks for answering. This is ${client.business_name}. What's your first name?</Say>`;
 
   if (client.elevenlabs_greeting_url && !hasGreetingOut) {
-    elevenlabs.generateSinglePhrase(client.id, 'greeting', client.business_name, client.elevenlabs_voice_id || 'hope')
-      .catch(err => logger.warn('webhook', `outbound greeting bg regen failed: ${err.message}`));
+    elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope')
+      .catch(err => logger.warn('webhook', `outbound bg regen all phrases failed: ${err.message}`));
   }
 
   res.set('Content-Type', 'text/xml');

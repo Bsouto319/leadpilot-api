@@ -138,16 +138,27 @@ app.listen(PORT, () => {
   // Pre-warm client cache so first inbound call has zero DB latency
   db.preWarmClientCache().catch(err => logger.warn('server', `cache pre-warm failed: ${err.message}`));
   // Regenerate ElevenLabs phrases after every deploy (/tmp is wiped on restart)
-  db.getClientsWithElevenLabs()
-    .then(async (clients) => {
-      if (!clients.length) return;
-      for (const client of clients) {
-        const voiceId = client.elevenlabs_voice_id || 'hope';
-        await elevenlabsSvc.generateAllClientPhrases(client.id, client.business_name, voiceId)
-          .catch(err => logger.warn('server', `ElevenLabs regen [${client.business_name}]: ${err.message}`));
+  // Retries até 3x com backoff se ElevenLabs API falhar (rate limit, timeout, etc.)
+  async function warmupElevenLabs(clients, attempt = 1) {
+    for (const client of clients) {
+      const voiceId = client.elevenlabs_voice_id || 'hope';
+      try {
+        await elevenlabsSvc.generateAllClientPhrases(client.id, client.business_name, voiceId);
         logger.info('server', `ElevenLabs phrases ready: ${client.business_name} (voice=${voiceId})`);
+      } catch (err) {
+        logger.warn('server', `ElevenLabs regen [${client.business_name}] attempt ${attempt}: ${err.message}`);
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 8000 * attempt));
+          await warmupElevenLabs([client], attempt + 1);
+        } else {
+          logger.error('server', `ElevenLabs warmup failed after 3 attempts for ${client.business_name} — on-demand regen will handle per-call`);
+        }
       }
-    })
+    }
+  }
+
+  db.getClientsWithElevenLabs()
+    .then(clients => { if (clients.length) warmupElevenLabs(clients); })
     .catch(err => logger.warn('server', `ElevenLabs startup regen failed: ${err.message}`));
 });
 
