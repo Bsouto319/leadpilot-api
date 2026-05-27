@@ -185,10 +185,10 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     ].filter(Boolean).join('\n');
 
     sendEmail({
+      from: `${client.business_name} <noreply@btechsouto.shop>`,
       to: client.owner_email,
       subject: `${tierLabel} Lead ${scoreText} — ${name} | ${client.business_name}`,
       body: emailBody,
-      refreshToken: client.gmail_refresh_token,
     }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
   }
 

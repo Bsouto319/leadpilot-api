@@ -185,6 +185,7 @@ function startCronJobs() {
         });
         const address = conv.lead_address ? `\nAddress: ${conv.lead_address}` : '';
         await sendEmail({
+          from: `${client.business_name} <noreply@btechsouto.shop>`,
           to: client.owner_email,
           subject: `📅 Tomorrow's Appointment — ${client.business_name}`,
           body: `Reminder: you have a visit scheduled for TOMORROW.\n\nName: ${conv.lead_name || 'Customer'}\nPhone: +${conv.lead_phone}\nDate: ${formatted}${address}\nService: ${(conv.service_type || '').replace(/_/g, ' ')}\n\nDashboard: https://app.contatobtech.com.br`,
@@ -213,6 +214,7 @@ function startCronJobs() {
           hour: '2-digit', minute: '2-digit',
         });
         await sendEmail({
+          from: `${client.business_name} <noreply@btechsouto.shop>`,
           to: client.owner_email,
           subject: `⚠️ No-Show Alert — ${client.business_name}`,
           body: `A scheduled visit appears to have passed without confirmation.\n\nName: ${conv.lead_name || 'Customer'}\nPhone: +${conv.lead_phone}\nScheduled: ${formatted}\nAddress: ${conv.lead_address || 'not provided'}\n\nThe lead has been moved to "no-show" status and will re-enter the AI flow if they reply again.\n\nDashboard: https://app.contatobtech.com.br`,

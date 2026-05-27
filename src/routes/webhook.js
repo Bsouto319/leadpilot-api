@@ -509,6 +509,7 @@ async function processSms(body) {
   // 9. Notify owner via email
   if (client.owner_email) {
     sendEmail({
+      from: `${client.business_name} <noreply@btechsouto.shop>`,
       to: client.owner_email,
       subject: `🔔 New Lead — ${client.business_name}`,
       body: `New lead incoming!\n\nName: ${leadName}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\n\n${client.agent_name || 'Lexy'} is calling them now. Dashboard:\nhttps://app.contatobtech.com.br`,
@@ -578,6 +579,7 @@ async function processAddressReply({ client, conversation, message }) {
 
     if (client.owner_email) {
       sendEmail({
+        from: `${client.business_name} <noreply@btechsouto.shop>`,
         to: client.owner_email,
         subject: `✅ Appointment Confirmed — ${client.business_name}`,
         body: `Address received — visit is confirmed!\n\nName: ${conversation.lead_name}\nPhone: +${conversation.lead_phone}\nDate: ${formatted}\nAddress: ${address}\n\nDashboard: https://app.contatobtech.com.br`,
@@ -716,6 +718,7 @@ async function processSchedulingReply({ client, conversation, message }) {
     // Notify owner of pending appointment (awaiting address)
     if (client.owner_email) {
       sendEmail({
+        from: `${client.business_name} <noreply@btechsouto.shop>`,
         to: client.owner_email,
         subject: `📅 Appointment Pending Address — ${client.business_name}`,
         body: `Visit scheduled — waiting for address.\n\nName: ${conversation.lead_name || 'Customer'}\nPhone: +${conversation.lead_phone}\nService: ${(conversation.service_type || '').replace(/_/g, ' ')}\nDate: ${formatted}\n\nWaiting for lead to confirm address...`,
@@ -897,6 +900,7 @@ async function processGather({ speech, conversationId, clientId }) {
     ].filter(Boolean).join('\n');
 
     sendEmail({
+      from: `${client.business_name} <noreply@btechsouto.shop>`,
       to: client.owner_email,
       subject: `${tierEmojiV} Scheduled via Voice — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
       body: emailBody,
@@ -1295,6 +1299,7 @@ async function processVoiceIntake(req, res) {
         ].filter(Boolean).join('\n');
 
         sendEmail({
+          from: `${client.business_name} <noreply@btechsouto.shop>`,
           to: client.owner_email,
           subject: `${tierEmoji} Appointment Confirmed${scoreLabel} — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
           body: emailBody,
