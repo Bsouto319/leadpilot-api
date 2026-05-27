@@ -38,12 +38,13 @@ function getDailyUsage() { return { ..._dailyUsage, limit: DAILY_CHAR_LIMIT() };
 
 // ── Phrase definitions (static content per client) ────────────────────────────
 // All phrases are standalone ElevenLabs Hope. Dynamic parts (name, date) go in SMS only.
-function getClientPhrases(businessName) {
+function getClientPhrases(businessName, agentName) {
   const b = businessName || 'us';
+  const a = agentName || 'Lexy';
   return {
     // Full greeting — 1 per client
     greeting:
-      `Hi! I'm Lexy, the virtual scheduling assistant for ${b}. I'm here to help you schedule your free estimate. What's your first name?`,
+      `Hi! I'm ${a}, the virtual scheduling assistant for ${b}. I'm here to help you schedule your free estimate. What's your first name?`,
 
     // No-input retries — fully static
     no_input_name:
@@ -73,7 +74,7 @@ function getClientPhrases(businessName) {
 
     // Fallback when browser didn't answer — AI takes over mid-call
     fallback_ai_takeover:
-      `Thank you for holding! My name is Lexy, the scheduling assistant for ${b}. I'm here to get you set up with a completely FREE in-home estimate. So, what type of project are you looking to get done?`,
+      `Thank you for holding! My name is ${a}, the scheduling assistant for ${b}. I'm here to get you set up with a completely FREE in-home estimate. So, what type of project are you looking to get done?`,
 
     // Booking confirmed farewell — generic (date/address go in the SMS confirmation)
     booking_confirmed:
@@ -168,8 +169,8 @@ async function generateMp3(text, voiceId) {
 }
 
 // ── Public: generate and cache ALL phrases for a client ───────────────────────
-async function generateAllClientPhrases(clientId, businessName, voiceId) {
-  const phrases = getClientPhrases(businessName);
+async function generateAllClientPhrases(clientId, businessName, voiceId, agentName) {
+  const phrases = getClientPhrases(businessName, agentName);
   const totalChars = Object.values(phrases).reduce((s, t) => s + t.length, 0);
 
   if (totalChars > MAX_CHARS_PER_BATCH) {
@@ -208,7 +209,7 @@ async function generateAllClientPhrases(clientId, businessName, voiceId) {
 // ── Public: generate a single phrase on-demand (safe to call concurrently) ───
 const _regenInProgress = new Map();
 
-async function generateSinglePhrase(clientId, phraseKey, businessName, voiceId) {
+async function generateSinglePhrase(clientId, phraseKey, businessName, voiceId, agentName) {
   const k = cacheKey(clientId, phraseKey);
   const existing = getBuffer(clientId, phraseKey);
   if (existing) return existing;
@@ -216,7 +217,7 @@ async function generateSinglePhrase(clientId, phraseKey, businessName, voiceId) 
   // Dedup concurrent requests for the same key
   if (_regenInProgress.has(k)) return await _regenInProgress.get(k);
 
-  const phrases = getClientPhrases(businessName);
+  const phrases = getClientPhrases(businessName, agentName);
   const text = phrases[phraseKey];
   if (!text) throw new Error(`Unknown phrase key: ${phraseKey}`);
 

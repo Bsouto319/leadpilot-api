@@ -108,7 +108,8 @@ app.get('/audio/:clientId/:phraseKey', async (req, res) => {
           req.params.clientId,
           req.params.phraseKey,
           client.business_name,
-          client.elevenlabs_voice_id || 'hope'
+          client.elevenlabs_voice_id || 'hope',
+          client.agent_name
         );
       }
     } catch (err) {
@@ -143,8 +144,8 @@ app.listen(PORT, () => {
     for (const client of clients) {
       const voiceId = client.elevenlabs_voice_id || 'hope';
       try {
-        await elevenlabsSvc.generateAllClientPhrases(client.id, client.business_name, voiceId);
-        logger.info('server', `ElevenLabs phrases ready: ${client.business_name} (voice=${voiceId})`);
+        await elevenlabsSvc.generateAllClientPhrases(client.id, client.business_name, voiceId, client.agent_name);
+        logger.info('server', `ElevenLabs phrases ready: ${client.business_name} (voice=${voiceId} agent=${client.agent_name || 'Lexy'})`);
       } catch (err) {
         logger.warn('server', `ElevenLabs regen [${client.business_name}] attempt ${attempt}: ${err.message}`);
         if (attempt < 3) {

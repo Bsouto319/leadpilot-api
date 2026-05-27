@@ -511,7 +511,7 @@ async function processSms(body) {
     sendEmail({
       to: client.owner_email,
       subject: `🔔 New Lead — ${client.business_name}`,
-      body: `New lead incoming!\n\nName: ${leadName}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\n\nLexy is calling them now. Dashboard:\nhttps://app.contatobtech.com.br`,
+      body: `New lead incoming!\n\nName: ${leadName}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\n\n${client.agent_name || 'Lexy'} is calling them now. Dashboard:\nhttps://app.contatobtech.com.br`,
     }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
   }
 
@@ -974,7 +974,7 @@ async function startVoiceIntake(req, res) {
 
   // Warmup cache in background if cold (so /audio serves from memory on next call)
   if (client.elevenlabs_greeting_url && !elevenlabs.hasPhrase(client.id, 'greeting')) {
-    elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope')
+    elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope', client.agent_name)
       .catch(err => logger.warn('webhook', `bg regen all phrases failed: ${err.message}`));
   }
 
@@ -1359,7 +1359,8 @@ async function resumeWithAI(req, res, callSid) {
   }
 
   const id = conv.id;
-  const fallbackGreeting = `Thank you for calling ${client.business_name}! My name is Lexy, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate. So, what project are you looking to get done?`;
+  const agentName = client.agent_name || 'Lexy';
+  const fallbackGreeting = `Thank you for calling ${client.business_name}! My name is ${agentName}, your scheduling assistant. I'm here to get you set up with a completely FREE, no-obligation in-home estimate. So, what project are you looking to get done?`;
 
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
@@ -1483,7 +1484,7 @@ async function startOutboundVoiceIntake(req, res) {
 
   // Warmup cache in background if cold
   if (client.elevenlabs_greeting_url && !elevenlabs.hasPhrase(client.id, 'greeting')) {
-    elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope')
+    elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope', client.agent_name)
       .catch(err => logger.warn('webhook', `outbound bg regen all phrases failed: ${err.message}`));
   }
 
