@@ -54,12 +54,14 @@ function fastParseDate(speech, tz) {
   return null; // GPT fallback para casos complexos
 }
 
-// Helper: returns <Play> if ElevenLabs phrase cached, otherwise <Say alice> fallback.
+// Helper: returns <Play> ElevenLabs if configured, otherwise <Say alice> fallback.
+// The /audio endpoint handles on-demand generation if phrase not yet cached.
 function el(client, phraseKey, fallbackText) {
   const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
-  const hasEl = client.elevenlabs_greeting_url && elevenlabs.hasPhrase(client.id, phraseKey);
-  if (!hasEl) return `<Say voice="alice" language="en-US">${fallbackText}</Say>`;
-  return `<Play>${elevenlabs.phraseUrl(BASE, client.id, phraseKey)}</Play>`;
+  if (client.elevenlabs_greeting_url) {
+    return `<Play>${elevenlabs.phraseUrl(BASE, client.id, phraseKey)}</Play>`;
+  }
+  return `<Say voice="alice" language="en-US">${fallbackText}</Say>`;
 }
 
 // Simple in-memory rate limiter: max 10 requests per IP per minute
@@ -966,13 +968,12 @@ async function startVoiceIntake(req, res) {
 
   // Responde IMEDIATAMENTE — usa <Play> (ElevenLabs pré-gerado) se disponível, senão Alice (Twilio)
   // Se o áudio não está em cache (ex: restart Docker), aciona regen em background para próxima ligação
-  const hasGreeting = elevenlabs.hasPhrase(client.id, 'greeting');
-  const greetingTwiml = (client.elevenlabs_greeting_url && hasGreeting)
+  const greetingTwiml = client.elevenlabs_greeting_url
     ? `<Play>${client.elevenlabs_greeting_url}</Play>`
     : `<Say voice="alice" language="en-US">Hi! Thanks for calling ${client.business_name}. What's your first name?</Say>`;
 
-  if (client.elevenlabs_greeting_url && !hasGreeting) {
-    // Cache vazio (restart) — regenera TODAS as frases em background para próxima ligação
+  // Warmup cache in background if cold (so /audio serves from memory on next call)
+  if (client.elevenlabs_greeting_url && !elevenlabs.hasPhrase(client.id, 'greeting')) {
     elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope')
       .catch(err => logger.warn('webhook', `bg regen all phrases failed: ${err.message}`));
   }
@@ -1476,12 +1477,12 @@ async function startOutboundVoiceIntake(req, res) {
     }).catch(() => {});
   }
 
-  const hasGreetingOut = elevenlabs.hasPhrase(client.id, 'greeting');
-  const greetingTwiml = (client.elevenlabs_greeting_url && hasGreetingOut)
+  const greetingTwimlOut = client.elevenlabs_greeting_url
     ? `<Play>${client.elevenlabs_greeting_url}</Play>`
     : `<Say voice="alice" language="en-US">Hi! Thanks for answering. This is ${client.business_name}. What's your first name?</Say>`;
 
-  if (client.elevenlabs_greeting_url && !hasGreetingOut) {
+  // Warmup cache in background if cold
+  if (client.elevenlabs_greeting_url && !elevenlabs.hasPhrase(client.id, 'greeting')) {
     elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope')
       .catch(err => logger.warn('webhook', `outbound bg regen all phrases failed: ${err.message}`));
   }
@@ -1489,7 +1490,7 @@ async function startOutboundVoiceIntake(req, res) {
   res.set('Content-Type', 'text/xml');
   res.send(`<Response>
   <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name" method="POST">
-    ${greetingTwiml}
+    ${greetingTwimlOut}
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?callSid=${callSid}&amp;step=name&amp;noInput=1</Redirect>
 </Response>`);
