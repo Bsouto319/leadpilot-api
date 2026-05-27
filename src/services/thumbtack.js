@@ -180,7 +180,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       qualification.summary ? `Insight: ${qualification.summary}` : '',
       qualification.signals?.length ? `Signals: ${qualification.signals.join(', ')}` : '',
       ``,
-      `Lexy is calling them now.`,
+      `${client.agent_name || 'Lexy'} is calling them now.`,
       `Dashboard: https://app.contatobtech.com.br`,
     ].filter(Boolean).join('\n');
 
