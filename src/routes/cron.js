@@ -113,6 +113,7 @@ router.post('/reviews', async (req, res) => {
 });
 
 // POST /cron/noshows — re-engage leads that missed their appointment
+// NOTE: stage is NOT changed to 'no_show' — team moves manually
 router.post('/noshows', async (req, res) => {
   res.json({ ok: true, job: 'noshows' });
   try {
@@ -127,7 +128,6 @@ router.post('/noshows', async (req, res) => {
         from: client.twilio_number,
         body: `Hi${name}! We missed you today. No worries — ${client.business_name} would love to reschedule your FREE estimate.\n\nWhat day works for you? 📅\n\nReply STOP to opt out.`,
       });
-      await db.updateConversation(conv.id, { stage: 'no_show' });
       logger.info('cron', `no-show re-engagement sent to ${conv.lead_phone}`);
     }
   } catch (err) {
