@@ -196,32 +196,7 @@ function startCronJobs() {
     } catch (err) { handleError('cron-reminders', err).catch(() => {}); }
   }, { timezone: 'America/New_York' });
 
-  // Every day at 6pm — detect no-shows (appointments that passed and lead never replied)
-  cron.schedule('0 18 * * *', async () => {
-    logger.info('cron', 'running no-show detection job');
-    try {
-      // Any conversation still 'scheduled' with scheduled_at > 2h ago is a potential no-show
-      const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-      const overdue = await db.getScheduledAppointmentsBefore(cutoff);
-      for (const conv of overdue) {
-        const client = conv.clients;
-        await db.markNoShow(conv.id);
-        logger.info('cron', `no-show marked for conv=${conv.id} lead=${conv.lead_phone}`);
-        if (!client?.owner_email) continue;
-        const tz = client.timezone || 'America/New_York';
-        const formatted = new Date(conv.scheduled_at).toLocaleString('en-US', {
-          timeZone: tz, weekday: 'long', month: 'long', day: 'numeric',
-          hour: '2-digit', minute: '2-digit',
-        });
-        await sendEmail({
-          from: `${client.business_name} <noreply@btechsouto.shop>`,
-          to: client.owner_email,
-          subject: `⚠️ No-Show Alert — ${client.business_name}`,
-          body: `A scheduled visit appears to have passed without confirmation.\n\nName: ${conv.lead_name || 'Customer'}\nPhone: +${conv.lead_phone}\nScheduled: ${formatted}\nAddress: ${conv.lead_address || 'not provided'}\n\nThe lead has been moved to "no-show" status and will re-enter the AI flow if they reply again.\n\n${client.business_name}`,
-        });
-      }
-    } catch (err) { handleError('cron-noshow', err).catch(() => {}); }
-  }, { timezone: 'America/New_York' });
+  // No-show auto-detection DISABLED — leads stay in 'scheduled' until manually moved by the owner.
 
   // Every Monday at 8am — weekly performance report to all clients
   cron.schedule('0 8 * * 1', async () => {
