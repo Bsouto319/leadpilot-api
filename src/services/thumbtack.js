@@ -192,6 +192,29 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
   }
 
+  // Notify owner + office via call (owner_phone and office_phone)
+  const agentName  = client.agent_name || 'Lexy';
+  const sourceLabel = source === 'website' ? 'website' : 'Thumbtack';
+  const tierVoice  = qualification.tier === 'hot' ? 'This is a HIGH quality lead. ' : qualification.tier === 'warm' ? 'This is a warm lead. ' : '';
+  const notifyMsg  = `Hey! ${agentName} just received a new ${sourceLabel} lead for ${client.business_name}. ${tierVoice}${name} is requesting ${serviceType.replace(/_/g, ' ')}. We are calling them right now! Check your email for full details.`;
+
+  if (client.owner_phone) {
+    makeNotifyCall({
+      to: `+${client.owner_phone}`,
+      from: client.twilio_number,
+      message: notifyMsg,
+      credentials: clientCredentials(client),
+    }).catch(err => logger.warn('thumbtack', `owner notify call failed: ${err.message}`));
+  }
+  if (client.office_phone) {
+    makeNotifyCall({
+      to: `+${client.office_phone}`,
+      from: client.twilio_number,
+      message: notifyMsg,
+      credentials: clientCredentials(client),
+    }).catch(err => logger.warn('thumbtack', `office notify call failed: ${err.message}`));
+  }
+
   db.appendMessage(conversation.id, 'lead', message).catch(() => {});
   logger.info('thumbtack', `lead processed id=${conversation.id} phone=${leadPhone} score=${qualification.score} tier=${qualification.tier}`);
 }
