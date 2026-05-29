@@ -28,7 +28,7 @@ function clientCredentials(client) {
   return null;
 }
 
-async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, serviceNote, apiKey, thumbtackLeadId, leadEmail = null }) {
+async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, serviceNote, apiKey, thumbtackLeadId, leadEmail = null, source = 'thumbtack' }) {
   const expectedKey = process.env.THUMBTACK_WEBHOOK_SECRET;
   if (expectedKey && apiKey !== undefined && apiKey !== expectedKey) {
     logger.warn('thumbtack', 'invalid apiKey');
@@ -89,7 +89,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       clientId: client.id,
       leadPhone,
       leadName: name,
-      source: 'thumbtack',
+      source,
       serviceType,
       message,
       thumbtackLeadId: thumbtackLeadId || null,
@@ -168,7 +168,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
   // Notify owner via email (immediate — with AI insight)
   if (client.owner_email) {
     const emailBody = [
-      `New Thumbtack lead received!`,
+      `New ${source === 'website' ? 'website' : 'Thumbtack'} lead received!`,
       ``,
       `Name: ${name}`,
       `Phone: +${leadPhone}`,

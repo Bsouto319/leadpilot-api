@@ -1635,6 +1635,54 @@ router.post('/thumbtack', express.json(), async (req, res) => {
   }).catch(err => handleError('thumbtack', err));
 });
 
+// ── CF7 WEBSITE WEBHOOK ────────────────────────────────────────────────────────
+// WordPress Contact Form 7 + plugin "CF7 to Webhook" by Moranet
+// Campos: your-name, your-email, your-phone, your-date, your-subject
+// URL de configuração: /webhook/cf7?clientId=XXX&secret=lp-thumbtack-2026-secure
+router.post('/cf7', express.urlencoded({ extended: true }), express.json(), async (req, res) => {
+  res.sendStatus(200); // CF7 plugin espera 200 imediatamente
+
+  const { clientId, secret } = req.query;
+  const expectedSecret = process.env.THUMBTACK_WEBHOOK_SECRET;
+  if (expectedSecret && secret !== expectedSecret) {
+    logger.warn('cf7', `invalid secret from ${req.ip}`);
+    return;
+  }
+  if (!clientId) {
+    logger.warn('cf7', 'missing clientId in URL — set /webhook/cf7?clientId=XXX&secret=YYY');
+    return;
+  }
+
+  const body = req.body;
+  logger.info('cf7', `website lead received clientId=${clientId} fields=${JSON.stringify(body)}`);
+
+  const leadName  = body['your-name']    || 'Customer';
+  const leadEmail = body['your-email']   || null;
+  const rawPhone  = body['your-phone']   || '';
+  const visitDate = body['your-date']    || '';
+  const bestTime  = body['your-subject'] || '';
+
+  if (!rawPhone) {
+    logger.warn('cf7', 'missing your-phone field — ignoring');
+    return;
+  }
+
+  const serviceNote = [
+    visitDate && `Preferred visit date: ${visitDate}`,
+    bestTime  && `Best time: ${bestTime}`,
+  ].filter(Boolean).join(' | ') || 'Website contact form';
+
+  processThumbtackLead({
+    clientId,
+    leadPhone: rawPhone,
+    leadName,
+    leadEmail,
+    serviceNote,
+    source: 'website',
+    apiKey: expectedSecret,
+  }).catch(err => handleError('cf7', err));
+});
+
 // ── OUTBOUND CALL INTAKE — chamada feita pelo sistema, lead atende ────────────
 // Lead recebeu ligação outbound (via SMS ou Thumbtack) e atendeu.
 // Usa o mesmo fluxo de voz inteligente que o inbound, evitando o TwiML estático.
