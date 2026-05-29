@@ -1254,7 +1254,7 @@ async function processVoiceIntake(req, res) {
       collected_data: { ...cd, voice_stage: 'asking_email', no_input_count: 0 },
     }).catch(() => {});
 
-    const askEmail = `Perfect! One last thing — what's the best email address for your appointment confirmation? Say it slowly, for example: "john at gmail dot com". Or say "skip" if you'd prefer not to.`;
+    const askEmail = `Perfect! And lastly — could I get your email address? We'll send you a quick form with details about your project and keep everything on file for you. Just say it slowly, like: "john at gmail dot com".`;
     db.appendMessage(id, 'ai', askEmail).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
@@ -1276,8 +1276,9 @@ async function processVoiceIntake(req, res) {
 
     // GPT-powered email parser — handles phone dictation patterns
     const skipWords = /\b(skip|no|nope|don't|dont|rather not|no thanks|no email|pass|none)\b/i;
+    const isSkip = speech && skipWords.test(speech);
     let parsedEmail = null;
-    if (speech && !skipWords.test(speech)) {
+    if (speech && !isSkip) {
       try {
         const OpenAI = require('openai');
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -1318,7 +1319,23 @@ async function processVoiceIntake(req, res) {
 </Response>`);
     }
 
-    // Email skipped or unparseable — farewell without email, send follow-up SMS
+    // Email not understood — retry once before giving up
+    if (!isSkip && !cd.email_retry) {
+      const reAskEmail = `I'm sorry, I didn't quite catch that. Could you say your email one more time, nice and slowly? For example: "john at gmail dot com".`;
+      db.appendMessage(id, 'ai', reAskEmail).catch(() => {});
+      await updateConv({
+        collected_data: { ...cd, email_retry: 1, no_input_count: 0 },
+      }).catch(() => {});
+      res.set('Content-Type', 'text/xml');
+      return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="14" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=email" method="POST">
+    <Say voice="alice" language="en-US">${reAskEmail}</Say>
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=email&amp;noInput=1</Redirect>
+</Response>`);
+    }
+
+    // Email explicitly skipped or 2nd attempt also failed — farewell
     const farewellNoEmail = `No problem! You're all set. One of our team members will personally reach out to confirm everything. Thank you so much for choosing ${client.business_name}, and have an amazing day!`;
     db.appendMessage(id, 'ai', farewellNoEmail).catch(() => {});
     res.set('Content-Type', 'text/xml');
