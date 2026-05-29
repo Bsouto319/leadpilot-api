@@ -918,7 +918,7 @@ async function processGather({ speech, conversationId, clientId }) {
     makeNotifyCall({
       to: client.owner_phone,
       from: client.twilio_number,
-      message: `Hey! Lexy just scheduled a new appointment for ${client.business_name}. ${tierVoiceV}The lead is confirmed for ${scheduledLabel}. Check your email for details!`,
+      message: `Hey! ${client.agent_name || 'Lexy'} just scheduled a new appointment for ${client.business_name}. ${tierVoiceV}The lead is confirmed for ${scheduledLabel}. Check your email for details!`,
       credentials: clientCredentials(client),
     }).catch(err => logger.warn('webhook', `owner notify call failed: ${err.message}`));
   }
@@ -1198,21 +1198,67 @@ async function processVoiceIntake(req, res) {
 
   // ── STEP: address ─────────────────────────────────────────────────────────
   if (step === 'address') {
-    const address = speech;
+    const address = speech.trim();
     db.appendMessage(id, 'lead', `[Address]: ${address}`).catch(() => {});
 
-    // Save address immediately, then ask for email before farewell
-    updateConv({
-      lead_address: address,
-      stage: 'awaiting_address',
-      collected_data: { ...cd, voice_stage: 'asking_email', address_raw: address, no_input_count: 0 },
+    // Save to collected_data only — wait for confirmation before committing lead_address
+    await updateConv({
+      collected_data: { ...cd, voice_stage: 'confirming_address', address_raw: address, no_input_count: 0 },
     }).catch(() => {});
 
-    const askEmail = `Perfect, got it! Last thing before I let you go — what's the best email address to send your confirmation to? You can say it out loud or just say "skip" if you'd prefer not to.`;
+    const confirmAddress = `I have your address as: ${address}. Is that correct? Please say yes or no.`;
+    db.appendMessage(id, 'ai', confirmAddress).catch(() => {});
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address_confirm" method="POST">
+    <Say voice="alice" language="en-US">${confirmAddress}</Say>
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address_confirm&amp;noInput=1</Redirect>
+</Response>`);
+  }
+
+  // ── STEP: address_confirm ─────────────────────────────────────────────────
+  if (step === 'address_confirm') {
+    const address = cd.address_raw || '';
+    const isYes = /\b(yes|yeah|correct|right|that'?s right|that'?s correct|yep|yup|affirmative|sure|ok|okay|perfect|exactly|correct)\b/i.test(speech);
+    const isNo  = /\b(no|nope|wrong|incorrect|not right|not correct|different|change|redo|actually)\b/i.test(speech);
+
+    if (isNo) {
+      const reAsk = `No problem! Let me get that again — please say your full address, including street number, city, and state.`;
+      db.appendMessage(id, 'ai', reAsk).catch(() => {});
+      res.set('Content-Type', 'text/xml');
+      return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="12" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address" method="POST">
+    <Say voice="alice" language="en-US">${reAsk}</Say>
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address&amp;noInput=1</Redirect>
+</Response>`);
+    }
+
+    if (!isYes) {
+      // Unclear — re-ask confirmation
+      const reConfirm = `I'm sorry, I didn't catch that. Is this address correct: ${address}? Please say yes or no.`;
+      res.set('Content-Type', 'text/xml');
+      return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=address_confirm" method="POST">
+    <Say voice="alice" language="en-US">${reConfirm}</Say>
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=address_confirm&amp;noInput=1</Redirect>
+</Response>`);
+    }
+
+    // Confirmed — save address and move to email step
+    await updateConv({
+      lead_address: address,
+      stage: 'awaiting_address',
+      collected_data: { ...cd, voice_stage: 'asking_email', no_input_count: 0 },
+    }).catch(() => {});
+
+    const askEmail = `Perfect! One last thing — what's the best email address for your appointment confirmation? Say it slowly, for example: "john at gmail dot com". Or say "skip" if you'd prefer not to.`;
     db.appendMessage(id, 'ai', askEmail).catch(() => {});
     res.set('Content-Type', 'text/xml');
     return res.send(`<Response>
-  <Gather input="speech" speechTimeout="auto" timeout="10" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=email" method="POST">
+  <Gather input="speech" speechTimeout="auto" timeout="12" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=email" method="POST">
     <Say voice="alice" language="en-US">${askEmail}</Say>
   </Gather>
   <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=email&amp;noInput=1</Redirect>
@@ -1228,45 +1274,65 @@ async function processVoiceIntake(req, res) {
     const serviceRaw = cd.service_raw || conv.service_type || 'your project';
     const address    = cd.address_raw || conv.lead_address || '';
 
-    // Parse email before constructing farewell (so farewell can mention it)
-    const skipWords = /\b(skip|no|nope|don't|dont|rather not|no thanks|no email|pass)\b/i;
+    // GPT-powered email parser — handles phone dictation patterns
+    const skipWords = /\b(skip|no|nope|don't|dont|rather not|no thanks|no email|pass|none)\b/i;
     let parsedEmail = null;
     if (speech && !skipWords.test(speech)) {
-      const raw = speech.toLowerCase()
-        .replace(/\s+at\s+/g, '@')
-        .replace(/\s+dot\s+/g, '.')
-        .replace(/\s/g, '');
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw)) parsedEmail = raw;
+      try {
+        const OpenAI = require('openai');
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const emailRes = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          max_tokens: 60,
+          messages: [
+            { role: 'system', content: 'The user dictated an email address over the phone. Convert the spoken text to a valid email format. Rules: "at" or "at sign" → @, "dot" → ., "underscore" or "underline" → _, "dash" or "hyphen" → -, remove spaces between characters. Common domains: gmail.com, yahoo.com, hotmail.com, outlook.com, icloud.com. If you cannot parse a valid email, respond with exactly: NONE' },
+            { role: 'user', content: speech },
+          ],
+        });
+        const raw = emailRes.choices[0].message.content.trim().toLowerCase();
+        if (raw !== 'none' && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw)) parsedEmail = raw;
+      } catch {
+        // Regex fallback
+        const raw = speech.toLowerCase()
+          .replace(/\bat\s+sign\b|\bat\b/g, '@').replace(/\bdot\b/g, '.')
+          .replace(/\bunderscore\b|\bunderline\b/g, '_').replace(/\bdash\b|\bhyphen\b/g, '-')
+          .replace(/\s/g, '');
+        if (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw)) parsedEmail = raw;
+      }
     }
 
-    const farewell = parsedEmail
-      ? `Perfect! You're all set — I'm sending you a confirmation email right now with all the details. One of our team members will also be in touch to confirm. Thank you so much for choosing ${client.business_name}, and have an amazing day!`
-      : `Perfect! You're all set. One of our team members will personally reach out to confirm everything — you're in great hands! Thank you so much for choosing ${client.business_name}, and have an amazing day!`;
+    if (parsedEmail) {
+      // Read email back for confirmation before saving
+      const spokenEmail = parsedEmail.replace('@', ' at ').replace(/\./g, ' dot ');
+      const confirmEmail = `I have your email as: ${spokenEmail}. Is that correct? Say yes or no.`;
+      db.appendMessage(id, 'ai', confirmEmail).catch(() => {});
+      await updateConv({
+        collected_data: { ...cd, email_raw: parsedEmail, voice_stage: 'confirming_email', no_input_count: 0 },
+      }).catch(() => {});
+      res.set('Content-Type', 'text/xml');
+      return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="8" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=email_confirm" method="POST">
+    <Say voice="alice" language="en-US">${confirmEmail}</Say>
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=email_confirm&amp;noInput=1</Redirect>
+</Response>`);
+    }
 
-    // Respond immediately with farewell — DB writes async
-    // If email was captured, use Alice TTS so the personalized email-mention text plays
-    const farewellTwiml = parsedEmail
-      ? `<Say voice="alice" language="en-US">${farewell}</Say>`
-      : el(client, 'booking_confirmed', farewell);
+    // Email skipped or unparseable — farewell without email, send follow-up SMS
+    const farewellNoEmail = `No problem! You're all set. One of our team members will personally reach out to confirm everything. Thank you so much for choosing ${client.business_name}, and have an amazing day!`;
+    db.appendMessage(id, 'ai', farewellNoEmail).catch(() => {});
     res.set('Content-Type', 'text/xml');
     res.send(`<Response>
-  ${farewellTwiml}
+  ${el(client, 'booking_confirmed', farewellNoEmail)}
 </Response>`);
 
     ;(async () => {
-      if (parsedEmail) {
-        await updateConv({ lead_email: parsedEmail }).catch(() => {});
-        db.appendMessage(id, 'lead', `[Email]: ${parsedEmail}`).catch(() => {});
-        logger.info('webhook', `email captured from voice: ${parsedEmail} for conv=${id}`);
-      }
-
       await updateConv({
         stage: 'scheduled',
         collected_data: { ...cd, voice_stage: 'complete', no_input_count: 0 },
         last_response_at: new Date().toISOString(),
       }).catch(() => {});
 
-      // Calendar update with address
       if (client.google_refresh_token && client.google_calendar_id && address) {
         calendarSvc.updateEventAddress({
           refreshToken: client.google_refresh_token,
@@ -1277,27 +1343,25 @@ async function processVoiceIntake(req, res) {
         }).catch(() => {});
       }
 
-      db.appendMessage(id, 'ai', farewell).catch(() => {});
-
       const tierEmoji  = conv.score >= 70 ? '🔥' : conv.score >= 40 ? '⚡' : conv.score ? '❄️' : '';
       const scoreLabel = conv.score != null ? ` — ${conv.score}% score` : '';
       const tierVoice  = conv.score >= 70 ? 'This is a HIGH quality lead. ' : conv.score >= 40 ? 'This is a warm lead. ' : '';
+      const agentName  = client.agent_name || 'Lexy';
 
       if (client.owner_email) {
         const emailBody = [
-          `Lexy just confirmed a new appointment!`,
+          `${agentName} just confirmed a new appointment!`,
           ``,
           `Name: ${conv.lead_name || 'Unknown'}`,
           `Phone: +${conv.lead_phone}`,
-          parsedEmail ? `Email: ${parsedEmail}` : '',
           `Service: ${serviceRaw}`,
           `Date: ${formatted}`,
           `Address: ${address}`,
+          `⚠️ Email not captured — follow up via SMS or dashboard.`,
           conv.score != null ? `\n── AI Qualification ──\nScore: ${tierEmoji} ${conv.score}%` : '',
           conv.summary ? `Insight: ${conv.summary}` : '',
           `\nDashboard: https://app.contatobtech.com.br`,
         ].filter(Boolean).join('\n');
-
         sendEmail({
           from: `${client.business_name} <noreply@btechsouto.shop>`,
           to: client.owner_email,
@@ -1306,10 +1370,116 @@ async function processVoiceIntake(req, res) {
         }).catch(() => {});
       }
 
-      const emailForConfirm = parsedEmail || conv.lead_email;
-      if (emailForConfirm) {
+      if (client.owner_phone) {
+        makeNotifyCall({
+          to: client.owner_phone,
+          from: client.twilio_number,
+          message: `Hey! ${agentName} just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`,
+          credentials: clientCredentials(client),
+        }).catch(() => {});
+      }
+
+      // Follow-up SMS to collect email since it wasn't captured during the call
+      await twilioSvc.sendSms({
+        to: `+${conv.lead_phone}`,
+        from: client.twilio_number,
+        body: `Hi ${conv.lead_name || 'there'}! Your appointment with ${client.business_name} is confirmed for ${formatted}. We'd love to send you a written confirmation — could you reply with your email address? Thanks! Reply STOP to opt out.`,
+        credentials: clientCredentials(client),
+      }).catch(() => {});
+    })().catch(() => {});
+
+    return;
+  }
+
+  // ── STEP: email_confirm ───────────────────────────────────────────────────
+  if (step === 'email_confirm') {
+    const isoDate    = cd.date_iso || conv.scheduled_at;
+    const formatted  = isoDate
+      ? new Date(isoDate).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'your scheduled time';
+    const serviceRaw = cd.service_raw || conv.service_type || 'your project';
+    const address    = cd.address_raw || conv.lead_address || '';
+    const emailRaw   = cd.email_raw;
+
+    const isYes = /\b(yes|yeah|correct|right|that'?s right|yep|yup|sure|ok|okay|perfect|exactly)\b/i.test(speech);
+    const isNo  = /\b(no|nope|wrong|incorrect|not right|different|change)\b/i.test(speech);
+
+    if (!isYes) {
+      // Re-ask email — go back to email step
+      const reAsk = isNo
+        ? `No problem — let me try again. Please say your email address slowly. For example: "john at gmail dot com".`
+        : `I'm sorry, I didn't catch that. Is the email correct? Say yes or no, or say "skip" to continue without it.`;
+      db.appendMessage(id, 'ai', reAsk).catch(() => {});
+      res.set('Content-Type', 'text/xml');
+      return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="12" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=email" method="POST">
+    <Say voice="alice" language="en-US">${reAsk}</Say>
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=email&amp;noInput=1</Redirect>
+</Response>`);
+    }
+
+    // Email confirmed — farewell
+    const farewell = `Perfect! You're all set — I'm sending a confirmation to ${emailRaw}. One of our team members will also be in touch to confirm. Thank you so much for choosing ${client.business_name}, and have an amazing day!`;
+    db.appendMessage(id, 'ai', farewell).catch(() => {});
+    res.set('Content-Type', 'text/xml');
+    res.send(`<Response>
+  <Say voice="alice" language="en-US">${farewell}</Say>
+</Response>`);
+
+    ;(async () => {
+      if (emailRaw) {
+        await updateConv({ lead_email: emailRaw }).catch(() => {});
+        db.appendMessage(id, 'lead', `[Email]: ${emailRaw}`).catch(() => {});
+        logger.info('webhook', `email confirmed from voice: ${emailRaw} for conv=${id}`);
+      }
+
+      await updateConv({
+        stage: 'scheduled',
+        collected_data: { ...cd, voice_stage: 'complete', no_input_count: 0 },
+        last_response_at: new Date().toISOString(),
+      }).catch(() => {});
+
+      if (client.google_refresh_token && client.google_calendar_id && address) {
+        calendarSvc.updateEventAddress({
+          refreshToken: client.google_refresh_token,
+          calendarId: client.google_calendar_id,
+          leadPhone: conv.lead_phone,
+          address,
+          scheduledAt: isoDate,
+        }).catch(() => {});
+      }
+
+      const tierEmoji  = conv.score >= 70 ? '🔥' : conv.score >= 40 ? '⚡' : conv.score ? '❄️' : '';
+      const scoreLabel = conv.score != null ? ` — ${conv.score}% score` : '';
+      const tierVoice  = conv.score >= 70 ? 'This is a HIGH quality lead. ' : conv.score >= 40 ? 'This is a warm lead. ' : '';
+      const agentName  = client.agent_name || 'Lexy';
+
+      if (client.owner_email) {
+        const emailBody = [
+          `${agentName} just confirmed a new appointment!`,
+          ``,
+          `Name: ${conv.lead_name || 'Unknown'}`,
+          `Phone: +${conv.lead_phone}`,
+          emailRaw ? `Email: ${emailRaw}` : '',
+          `Service: ${serviceRaw}`,
+          `Date: ${formatted}`,
+          `Address: ${address}`,
+          conv.score != null ? `\n── AI Qualification ──\nScore: ${tierEmoji} ${conv.score}%` : '',
+          conv.summary ? `Insight: ${conv.summary}` : '',
+          `\nDashboard: https://app.contatobtech.com.br`,
+        ].filter(Boolean).join('\n');
         sendEmail({
-          to: emailForConfirm,
+          from: `${client.business_name} <noreply@btechsouto.shop>`,
+          to: client.owner_email,
+          subject: `${tierEmoji} Appointment Confirmed${scoreLabel} — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
+          body: emailBody,
+        }).catch(() => {});
+      }
+
+      if (emailRaw) {
+        sendEmail({
+          to: emailRaw,
           subject: `✅ Appointment Confirmed — ${client.business_name}`,
           body: `Hi ${conv.lead_name || 'there'},\n\nYour appointment with ${client.business_name} is confirmed!\n\nDate: ${formatted}\nService: ${serviceRaw}\nAddress: ${address}\n\nIf you need to reschedule or have any questions, just give us a call.\n\nThank you,\n${client.business_name}`,
         }).catch(() => {});
@@ -1319,7 +1489,7 @@ async function processVoiceIntake(req, res) {
         makeNotifyCall({
           to: client.owner_phone,
           from: client.twilio_number,
-          message: `Hey! Lexy just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`,
+          message: `Hey! ${agentName} just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`,
           credentials: clientCredentials(client),
         }).catch(() => {});
       }
