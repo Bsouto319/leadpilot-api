@@ -129,6 +129,36 @@ app.use('/webhook', webhookRoutes);
 app.use('/api/admin', adminLimiter, adminRoutes);
 app.use('/api/cron',  cronLimiter,  cronRoutes);
 
+// ── CF7 COMPAT — handles old /api/webhook/cf7 path (no clientId in URL)
+// Identifies client by CF7 form ID (_wpcf7 field sent automatically in every submission)
+const CF7_FORM_MAP = {
+  '53': '5221cab9-a741-4ddc-a752-2359826fba95', // CP Cabinets
+};
+app.post('/api/webhook/cf7', express.urlencoded({ extended: true }), express.json(), async (req, res) => {
+  res.sendStatus(200);
+  const body     = req.body;
+  const formId   = String(body._wpcf7 || '');
+  const clientId = CF7_FORM_MAP[formId] || body.clientId;
+  logger.info('cf7-compat', `form=${formId} clientId=${clientId} fields=${JSON.stringify(body)}`);
+  if (!clientId) { logger.warn('cf7-compat', `unknown form ID ${formId}`); return; }
+
+  const leadName  = body['your-name']    || body['name']    || 'Customer';
+  const leadEmail = body['your-email']   || body['email']   || null;
+  const rawPhone  = body['your-phone']   || body['phone']   || body['tel'] || '';
+  const visitDate = body['your-date']    || body['date']    || '';
+  const bestTime  = body['your-subject'] || body['subject'] || body['time'] || '';
+
+  if (!rawPhone) { logger.warn('cf7-compat', `form ${formId}: missing phone — keys: ${Object.keys(body).join(', ')}`); return; }
+
+  const serviceNote = [
+    visitDate && `Preferred visit date: ${visitDate}`,
+    bestTime  && `Best time: ${bestTime}`,
+  ].filter(Boolean).join(' | ') || 'Website contact form';
+
+  processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, leadEmail, serviceNote, source: 'website' })
+    .catch(err => logger.warn('cf7-compat', err.message));
+});
+
 app.get('/', (req, res) => res.redirect('/dashboard'));
 
 app.use(errorHandler);
