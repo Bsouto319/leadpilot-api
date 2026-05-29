@@ -181,7 +181,11 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       qualification.signals?.length ? `Signals: ${qualification.signals.join(', ')}` : '',
       ``,
       `${client.agent_name || 'Lexy'} is calling them now.`,
+      ``,
       `Dashboard: https://app.contatobtech.com.br`,
+      client.website_url ? `Website: ${client.website_url}` : '',
+      ``,
+      client.business_name,
     ].filter(Boolean).join('\n');
 
     sendEmail({

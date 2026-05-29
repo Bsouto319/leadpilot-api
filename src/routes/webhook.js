@@ -1374,10 +1374,14 @@ async function processVoiceIntake(req, res) {
           `Service: ${serviceRaw}`,
           `Date: ${formatted}`,
           `Address: ${address}`,
-          `⚠️ Email not captured — follow up via SMS or dashboard.`,
+          `⚠️ Email not captured — follow up via dashboard.`,
           conv.score != null ? `\n── AI Qualification ──\nScore: ${tierEmoji} ${conv.score}%` : '',
           conv.summary ? `Insight: ${conv.summary}` : '',
-          `\nDashboard: https://app.contatobtech.com.br`,
+          ``,
+          `Dashboard: https://app.contatobtech.com.br`,
+          client.website_url ? `Website: ${client.website_url}` : '',
+          ``,
+          client.business_name,
         ].filter(Boolean).join('\n');
         sendEmail({
           from: `${client.business_name} <noreply@btechsouto.shop>`,
@@ -1387,13 +1391,12 @@ async function processVoiceIntake(req, res) {
         }).catch(() => {});
       }
 
+      const notifyMsg = `Hey! ${agentName} just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`;
       if (client.owner_phone) {
-        makeNotifyCall({
-          to: client.owner_phone,
-          from: client.twilio_number,
-          message: `Hey! ${agentName} just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`,
-          credentials: clientCredentials(client),
-        }).catch(() => {});
+        makeNotifyCall({ to: client.owner_phone, from: client.twilio_number, message: notifyMsg, credentials: clientCredentials(client) }).catch(() => {});
+      }
+      if (client.office_phone) {
+        makeNotifyCall({ to: client.office_phone, from: client.twilio_number, message: notifyMsg, credentials: clientCredentials(client) }).catch(() => {});
       }
 
       // Follow-up SMS to collect email since it wasn't captured during the call
@@ -1484,7 +1487,11 @@ async function processVoiceIntake(req, res) {
           `Address: ${address}`,
           conv.score != null ? `\n── AI Qualification ──\nScore: ${tierEmoji} ${conv.score}%` : '',
           conv.summary ? `Insight: ${conv.summary}` : '',
-          `\nDashboard: https://app.contatobtech.com.br`,
+          ``,
+          `Dashboard: https://app.contatobtech.com.br`,
+          client.website_url ? `Website: ${client.website_url}` : '',
+          ``,
+          client.business_name,
         ].filter(Boolean).join('\n');
         sendEmail({
           from: `${client.business_name} <noreply@btechsouto.shop>`,
@@ -1498,17 +1505,16 @@ async function processVoiceIntake(req, res) {
         sendEmail({
           to: emailRaw,
           subject: `✅ Appointment Confirmed — ${client.business_name}`,
-          body: `Hi ${conv.lead_name || 'there'},\n\nYour appointment with ${client.business_name} is confirmed!\n\nDate: ${formatted}\nService: ${serviceRaw}\nAddress: ${address}\n\nIf you need to reschedule or have any questions, just give us a call.\n\nThank you,\n${client.business_name}`,
+          body: `Hi ${conv.lead_name || 'there'},\n\nYour appointment with ${client.business_name} is confirmed!\n\nDate: ${formatted}\nService: ${serviceRaw}\nAddress: ${address}\n\nIf you need to reschedule or have any questions, just give us a call.\n\nThank you,\n${client.business_name}${client.website_url ? '\n' + client.website_url : ''}`,
         }).catch(() => {});
       }
 
+      const notifyMsg2 = `Hey! ${agentName} just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`;
       if (client.owner_phone) {
-        makeNotifyCall({
-          to: client.owner_phone,
-          from: client.twilio_number,
-          message: `Hey! ${agentName} just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`,
-          credentials: clientCredentials(client),
-        }).catch(() => {});
+        makeNotifyCall({ to: client.owner_phone, from: client.twilio_number, message: notifyMsg2, credentials: clientCredentials(client) }).catch(() => {});
+      }
+      if (client.office_phone) {
+        makeNotifyCall({ to: client.office_phone, from: client.twilio_number, message: notifyMsg2, credentials: clientCredentials(client) }).catch(() => {});
       }
     })().catch(() => {});
 
