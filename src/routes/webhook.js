@@ -512,7 +512,7 @@ async function processSms(body) {
       from: `${client.business_name} <noreply@btechsouto.shop>`,
       to: client.owner_email,
       subject: `🔔 New Lead — ${client.business_name}`,
-      body: `New lead incoming!\n\nName: ${leadName}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\n\n${client.agent_name || 'Lexy'} is calling them now. Dashboard:\nhttps://app.contatobtech.com.br`,
+      body: `New lead incoming!\n\nName: ${leadName}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\n\n${client.agent_name || 'Lexy'} is calling them now.${client.website_url ? '\n' + client.website_url : ''}\n\n${client.business_name}`,
     }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
   }
 
@@ -582,7 +582,7 @@ async function processAddressReply({ client, conversation, message }) {
         from: `${client.business_name} <noreply@btechsouto.shop>`,
         to: client.owner_email,
         subject: `✅ Appointment Confirmed — ${client.business_name}`,
-        body: `Address received — visit is confirmed!\n\nName: ${conversation.lead_name}\nPhone: +${conversation.lead_phone}\nDate: ${formatted}\nAddress: ${address}\n\nDashboard: https://app.contatobtech.com.br`,
+        body: `Address received — visit is confirmed!\n\nName: ${conversation.lead_name}\nPhone: +${conversation.lead_phone}\nDate: ${formatted}\nAddress: ${address}`,
       }).catch(() => {});
     }
     if (client.owner_phone) {
@@ -782,7 +782,7 @@ router.post('/call-status', async (req, res) => {
         const leadName = leadNameRaw || 'Unknown';
         const alertServiceLabel = (conv.service_type || 'general').replace(/_/g, ' ');
         const statusLabel = CallStatus === 'no-answer' ? 'did not answer' : CallStatus === 'busy' ? 'line was busy' : 'call failed';
-        const alertBody = `⚠️ LEAD ALERT — ${client.business_name}\nLead ${statusLabel}.\n\nName: ${leadName}\nPhone: +${conv.lead_phone}\nService: ${alertServiceLabel}\nSource: ${conv.source || 'unknown'}\n\nFallback SMS sent automatically. Follow up via dashboard:\nhttps://app.contatobtech.com.br`;
+        const alertBody = `⚠️ LEAD ALERT — ${client.business_name}\nLead ${statusLabel}.\n\nName: ${leadName}\nPhone: +${conv.lead_phone}\nService: ${alertServiceLabel}\nSource: ${conv.source || 'unknown'}\n\nFallback SMS sent automatically.`;
 
         const alertPhones = (client.alert_phones || client.owner_phone || '')
           .split(',').map(p => p.trim()).filter(Boolean);
@@ -896,7 +896,6 @@ async function processGather({ speech, conversationId, clientId }) {
       `Lead said: "${speech}"`,
       conv.score != null ? `\n── AI Qualification ──\nScore: ${tierEmojiV} ${conv.score}%` : '',
       conv.summary ? `Insight: ${conv.summary}` : '',
-      `\nDashboard: https://app.contatobtech.com.br`,
     ].filter(Boolean).join('\n');
 
     sendEmail({
@@ -1378,7 +1377,6 @@ async function processVoiceIntake(req, res) {
           conv.score != null ? `\n── AI Qualification ──\nScore: ${tierEmoji} ${conv.score}%` : '',
           conv.summary ? `Insight: ${conv.summary}` : '',
           ``,
-          `Dashboard: https://app.contatobtech.com.br`,
           client.website_url ? `Website: ${client.website_url}` : '',
           ``,
           client.business_name,
@@ -1488,7 +1486,6 @@ async function processVoiceIntake(req, res) {
           conv.score != null ? `\n── AI Qualification ──\nScore: ${tierEmoji} ${conv.score}%` : '',
           conv.summary ? `Insight: ${conv.summary}` : '',
           ``,
-          `Dashboard: https://app.contatobtech.com.br`,
           client.website_url ? `Website: ${client.website_url}` : '',
           ``,
           client.business_name,

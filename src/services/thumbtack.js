@@ -182,7 +182,6 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       ``,
       `${client.agent_name || 'Lexy'} is calling them now.`,
       ``,
-      `Dashboard: https://app.contatobtech.com.br`,
       client.website_url ? `Website: ${client.website_url}` : '',
       ``,
       client.business_name,
