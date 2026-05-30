@@ -575,6 +575,27 @@ async function getMessages(conversationId) {
   return data || [];
 }
 
+// Returns leads that need follow-up email at a specific step
+// step 1 = immediate (count=0, call failed), step 2 = day 2, step 3 = day 5
+async function getLeadsForEmailFollowUp(step) {
+  const minHours = step === 2 ? 48 : step === 3 ? 72 : 0;
+  const expectedCount = step - 1;
+  const cutoff = new Date(Date.now() - minHours * 3600 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*, clients(*)')
+    .eq('follow_up_count', expectedCount)
+    .in('stage', ['ai_responded', 'new_lead'])
+    .not('lead_email', 'is', null)
+    .neq('lead_email', '')
+    .lt('last_follow_up_at', cutoff)
+    .gt('created_at', new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString()); // max 8 days old
+
+  if (error) throw new Error(`getLeadsForEmailFollowUp: ${error.message}`);
+  return data || [];
+}
+
 module.exports = {
   getClientByTwilioNumber,
   preWarmClientCache,
@@ -625,6 +646,7 @@ module.exports = {
   supabaseClient: () => supabase,
   getClientsWithElevenLabs,
   invalidateClientCacheById,
+  getLeadsForEmailFollowUp,
   cacheConvByCallSid,
   patchConvCache,
   getConvFromCallSidCache,

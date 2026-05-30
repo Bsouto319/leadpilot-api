@@ -273,5 +273,12 @@ function startCronJobs() {
     } catch (err) { handleError('cron-thumbtack', err).catch(() => {}); }
   });
 
-  logger.info('server', 'cron jobs scheduled: appt-reminder-email@9am, no-show-check@6pm, weekly-report@mon8am, thumbtack-poll@every10min');
+  // Follow-up emails: Day 2 (48h) and Day 5 (120h) for leads that didn't answer Alice
+  const { runFollowUpCron } = require('./services/followup');
+  cron.schedule('0 */12 * * *', async () => {
+    try { await runFollowUpCron(2); } catch (err) { handleError('cron-followup-2', err).catch(() => {}); }
+    try { await runFollowUpCron(3); } catch (err) { handleError('cron-followup-3', err).catch(() => {}); }
+  });
+
+  logger.info('server', 'cron jobs scheduled: appt-reminder-email@9am, weekly-report@mon8am, thumbtack-poll@every10min, followup-emails@every12h');
 }

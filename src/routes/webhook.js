@@ -769,14 +769,20 @@ router.post('/call-status', async (req, res) => {
     }
   }
 
-  // Fallback SMS when outbound call to lead was not answered
+  // Follow-up email + alert when outbound call to lead was not answered
   if (Direction === 'outbound-api' && ['no-answer', 'busy', 'failed'].includes(CallStatus)) {
     try {
       const conv = await db.getConversationByCallSid(CallSid);
       if (conv && conv.clients) {
         const client = conv.clients;
         const leadNameRaw = conv.lead_name && conv.lead_name !== 'Caller' && conv.lead_name !== 'Customer' ? conv.lead_name : null;
-        logger.info('webhook', `outbound call ${CallStatus} for ${conv.lead_phone} — no fallback SMS (email only policy)`);
+        logger.info('webhook', `outbound call ${CallStatus} for ${conv.lead_phone} — sending follow-up email if available`);
+
+        // Immediate follow-up email with catalog
+        if (conv.lead_email && conv.follow_up_count === 0) {
+          const { sendImmediateFollowUp } = require('../services/followup');
+          sendImmediateFollowUp(conv).catch(err => logger.warn('webhook', `follow-up email failed: ${err.message}`));
+        }
 
         // Alert all configured phones when lead does not answer
         const leadName = leadNameRaw || 'Unknown';

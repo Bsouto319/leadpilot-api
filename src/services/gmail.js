@@ -141,7 +141,7 @@ async function fetchThumbtackLeads(refreshToken) {
 }
 
 // Send an email via Resend (replaces Gmail OAuth — never expires).
-async function sendEmail({ to, subject, body, from }) {
+async function sendEmail({ to, subject, body, html, from }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     logger.warn('gmail', 'sendEmail skipped — RESEND_API_KEY not set');
@@ -157,7 +157,7 @@ async function sendEmail({ to, subject, body, from }) {
     from: from || 'LeadPilot <noreply@btechsouto.shop>',
     to,
     subject,
-    text: body,
+    ...(html ? { html, text: body || '' } : { text: body }),
   });
   if (error) throw new Error(error.message);
   logger.info('gmail', `email sent via Resend to=${to} subject="${subject}"`);

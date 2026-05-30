@@ -69,7 +69,10 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
 
   let isDuplicate;
   try {
-    isDuplicate = await db.checkDuplicate(client.id, leadPhone, 60);
+    // Website leads: 7-day dedup window (lead may return after seeing email catalog)
+    // Other sources: 60-min window
+    const dedupMinutes = source === 'website' ? 60 * 24 * 7 : 60;
+    isDuplicate = await db.checkDuplicate(client.id, leadPhone, dedupMinutes);
   } catch (err) {
     await handleError('supabase', err);
     return;
