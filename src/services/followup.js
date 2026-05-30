@@ -201,4 +201,216 @@ async function runFollowUpCron(step) {
   }
 }
 
-module.exports = { sendImmediateFollowUp, runFollowUpCron };
+// ── APPOINTMENT REMINDER — lead email (24h before) ───────────────────────────
+
+function buildLeadReminderEmail({ leadName, businessName, scheduledAt, address, timezone, scheduleUrl }) {
+  const firstName = (leadName || 'there').split(' ')[0];
+  const formatted = new Date(scheduledAt).toLocaleString('en-US', {
+    timeZone: timezone || 'America/New_York',
+    weekday: 'long', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  return {
+    subject: `Reminder: Your Showroom Visit Tomorrow — ${businessName}`,
+    html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>${businessName}</h1>
+    <p>Irmo, South Carolina</p>
+  </div>
+  <div class="hero">
+    <h2>See you tomorrow, ${firstName}!</h2>
+    <p>Your showroom visit is confirmed for tomorrow.</p>
+  </div>
+  <div class="body">
+    <p>Hi ${firstName},</p>
+    <p>Just a friendly reminder that you have a showroom visit scheduled for <strong>tomorrow</strong>. We're looking forward to showing you our premium cabinet collections in person!</p>
+
+    <div class="info">
+      <p>
+        📅 <strong>${formatted}</strong><br>
+        📍 <strong>1085 Lake Murray Blvd, Suite E, Irmo, SC 29063</strong><br>
+        📞 <strong>(803) 373-8191</strong><br>
+        🕐 Please arrive on time — visits are by appointment only
+      </p>
+    </div>
+
+    <p>During your visit you'll be able to see and touch our full collections: <strong>Shaker</strong>, <strong>Slim Shaker</strong>, and <strong>European Frameless</strong> — all in plywood construction. We also have quartz countertop samples and vinyl flooring on display.</p>
+
+    <p style="color:#888;font-size:13px;">Need to reschedule? Call us at (803) 373-8191 or reply to this email and we'll find a time that works for you.</p>
+  </div>
+  <div class="footer">
+    <p>© 2026 ${businessName}</p>
+    <p><a href="https://cpcabinets.com">cpcabinets.com</a></p>
+  </div>
+</div>
+</body></html>`,
+  };
+}
+
+async function sendAppointmentReminderToLead(conv) {
+  if (!conv.lead_email || !conv.scheduled_at) return;
+  const client = conv.clients || conv.client;
+  if (!client) return;
+
+  const { subject, html } = buildLeadReminderEmail({
+    leadName: conv.lead_name,
+    businessName: client.business_name,
+    scheduledAt: conv.scheduled_at,
+    address: conv.lead_address,
+    timezone: client.timezone,
+  });
+
+  await sendEmail({
+    from: `${client.business_name} <noreply@btechsouto.shop>`,
+    to: conv.lead_email,
+    subject,
+    html,
+  });
+
+  logger.info('followup', `appointment reminder sent to lead ${conv.lead_email} conv=${conv.id}`);
+}
+
+// ── APPOINTMENT REMINDER — staff email (24h and 2h before) ───────────────────
+
+function buildStaffReminderEmail({ leadName, leadPhone, leadEmail, serviceType, scheduledAt, address, notes, timezone, businessName, isUrgent }) {
+  const formatted = new Date(scheduledAt).toLocaleString('en-US', {
+    timeZone: timezone || 'America/New_York',
+    weekday: 'long', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+  const label = isUrgent ? 'Visit in ~2 Hours' : "Tomorrow's Visit";
+  const urgentBanner = isUrgent
+    ? `<div style="background:#c9a84c;color:#fff;text-align:center;padding:12px;font-weight:700;font-size:15px;">⏰ VISIT IN APPROXIMATELY 2 HOURS</div>`
+    : '';
+
+  return {
+    subject: `${isUrgent ? '⏰ 2h Alert' : '📅 Tomorrow'} — ${leadName || 'Customer'} | ${businessName}`,
+    html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
+<body>
+<div class="wrap">
+  ${urgentBanner}
+  <div class="header">
+    <h1>${businessName}</h1>
+    <p>${label}</p>
+  </div>
+  <div class="body">
+    <div class="info">
+      <p>
+        👤 <strong>Name:</strong> ${leadName || 'Customer'}<br>
+        📞 <strong>Phone:</strong> +${leadPhone}<br>
+        ${leadEmail ? `📧 <strong>Email:</strong> ${leadEmail}<br>` : ''}
+        🛠️ <strong>Service:</strong> ${(serviceType || 'general').replace(/_/g, ' ')}<br>
+        📅 <strong>Scheduled:</strong> ${formatted}<br>
+        ${address ? `📍 <strong>Address:</strong> ${address}<br>` : ''}
+        ${notes ? `📝 <strong>Notes:</strong> ${notes}` : ''}
+      </p>
+    </div>
+    <p style="color:#888;font-size:13px;">This is an automated reminder from LeadPilot.</p>
+  </div>
+  <div class="footer">
+    <p>© 2026 ${businessName} — Powered by LeadPilot</p>
+  </div>
+</div>
+</body></html>`,
+  };
+}
+
+async function sendAppointmentReminderToStaff(conv, { isUrgent = false } = {}) {
+  const client = conv.clients || conv.client;
+  if (!client) return;
+
+  const { subject, html } = buildStaffReminderEmail({
+    leadName: conv.lead_name,
+    leadPhone: conv.lead_phone,
+    leadEmail: conv.lead_email,
+    serviceType: conv.service_type,
+    scheduledAt: conv.scheduled_at,
+    address: conv.lead_address,
+    notes: conv.notes,
+    timezone: client.timezone,
+    businessName: client.business_name,
+    isUrgent,
+  });
+
+  const recipients = [client.owner_email, client.secondary_email].filter(Boolean);
+  for (const to of recipients) {
+    await sendEmail({
+      from: `${client.business_name} <noreply@btechsouto.shop>`,
+      to,
+      subject,
+      html,
+    }).catch(err => logger.warn('followup', `staff reminder failed ${to}: ${err.message}`));
+  }
+
+  logger.info('followup', `appointment ${isUrgent ? '2h' : '24h'} reminder sent to staff conv=${conv.id}`);
+}
+
+// ── GOOGLE REVIEW EMAIL ────────────────────────────────────────────────────────
+
+async function sendGoogleReviewEmail(conv) {
+  if (!conv.lead_email) return;
+  const client = conv.clients || conv.client;
+  if (!client || !client.google_review_link) return;
+
+  const firstName = (conv.lead_name || 'there').split(' ')[0];
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>${client.business_name}</h1>
+    <p>Irmo, South Carolina</p>
+  </div>
+  <div class="hero">
+    <h2>Thank you for visiting us, ${firstName}!</h2>
+    <p>We hope you loved what you saw.</p>
+  </div>
+  <div class="body">
+    <p>Hi ${firstName},</p>
+    <p>It was a pleasure having you at our showroom. We hope our cabinet collections inspired your next project!</p>
+    <p>If you enjoyed your visit, we'd love a quick Google review — it takes less than 2 minutes and means the world to our small business:</p>
+
+    <div class="cta-block">
+      <a href="${client.google_review_link}" class="cta">⭐ Leave a Google Review</a>
+    </div>
+
+    <div class="divider"></div>
+
+    <p>Have questions about pricing, lead times, or installation? We're here to help:</p>
+    <div class="info">
+      <p>
+        📞 <strong>(803) 373-8191</strong><br>
+        📍 <strong>1085 Lake Murray Blvd, Suite E, Irmo, SC 29063</strong><br>
+        🕐 Mon–Fri, 9AM–4PM
+      </p>
+    </div>
+
+    <p style="color:#888;font-size:13px;">You're receiving this because you recently visited our showroom. This is a one-time message.</p>
+  </div>
+  <div class="footer">
+    <p>© 2026 ${client.business_name}</p>
+    <p><a href="https://cpcabinets.com">cpcabinets.com</a></p>
+  </div>
+</div>
+</body></html>`;
+
+  await sendEmail({
+    from: `${client.business_name} <noreply@btechsouto.shop>`,
+    to: conv.lead_email,
+    subject: `Thank you for visiting ${client.business_name}! ⭐`,
+    html,
+  });
+
+  logger.info('followup', `google review email sent to ${conv.lead_email} conv=${conv.id}`);
+}
+
+module.exports = {
+  sendImmediateFollowUp,
+  runFollowUpCron,
+  sendAppointmentReminderToLead,
+  sendAppointmentReminderToStaff,
+  sendGoogleReviewEmail,
+};

@@ -2,6 +2,7 @@ const express = require('express');
 const crypto  = require('crypto');
 const router  = express.Router();
 const db      = require('../services/supabase');
+const logger  = require('../utils/logger');
 
 function timingSafeEqual(a, b) {
   try {
@@ -177,6 +178,23 @@ router.patch('/leads/:id', async (req, res) => {
     if (req.body.service_type !== undefined) allowed.service_type = req.body.service_type;
     await db.updateConversation(req.params.id, allowed);
     res.json({ ok: true });
+
+    // Google Review email when stage moves to 'visited'
+    if (req.body.stage === 'visited') {
+      try {
+        const conv = await db.getConversationWithClient(req.params.id);
+        if (conv && conv.lead_email && !conv.review_sent_at) {
+          const client = conv.clients || conv.client;
+          if (client?.google_review_link) {
+            const { sendGoogleReviewEmail } = require('../services/followup');
+            await sendGoogleReviewEmail({ ...conv, clients: client });
+            await db.markReviewSent(conv.id);
+          }
+        }
+      } catch (err) {
+        logger.warn('admin', `google review email failed conv=${req.params.id}: ${err.message}`);
+      }
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -333,7 +351,7 @@ router.post('/clients/:id/create-subaccount', async (req, res) => {
 router.patch('/clients/:id', async (req, res) => {
   try {
     const editable = [
-      'active', 'business_name', 'owner_phone', 'owner_email', 'timezone',
+      'active', 'business_name', 'owner_phone', 'owner_email', 'secondary_email', 'timezone',
       'ai_system_prompt', 'google_review_link',
       'twilio_account_sid', 'twilio_auth_token',
       'google_refresh_token', 'google_calendar_id',

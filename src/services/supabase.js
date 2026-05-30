@@ -350,7 +350,7 @@ async function getAppointmentsDueTomorrow() {
 
   const { data, error } = await supabase
     .from('conversations')
-    .select('*, clients(business_name, twilio_number, timezone, owner_email, owner_phone)')
+    .select('*, clients(business_name, twilio_number, timezone, owner_email, owner_phone, secondary_email, google_review_link)')
     .eq('stage', 'scheduled')
     .is('reminder_sent_at', null)
     .gte('scheduled_at', start.toISOString())
@@ -596,6 +596,46 @@ async function getLeadsForEmailFollowUp(step) {
   return data || [];
 }
 
+async function getAppointmentsIn2Hours() {
+  const from = new Date(Date.now() + 60 * 60 * 1000);   // 1h from now
+  const to   = new Date(Date.now() + 3 * 60 * 60 * 1000); // 3h from now
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*, clients(business_name, twilio_number, timezone, owner_email, secondary_email, google_review_link)')
+    .eq('stage', 'scheduled')
+    .is('reminder_2h_sent_at', null)
+    .gte('scheduled_at', from.toISOString())
+    .lte('scheduled_at', to.toISOString());
+  if (error) throw new Error(`getAppointmentsIn2Hours: ${error.message}`);
+  return data || [];
+}
+
+async function markReminder2hSent(id) {
+  await supabase.from('conversations').update({ reminder_2h_sent_at: new Date().toISOString() }).eq('id', id);
+}
+
+async function getLeadsForCallRetry() {
+  const now = new Date().toISOString();
+  const activeStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*, clients(*)')
+    .not('next_call_retry_at', 'is', null)
+    .lte('next_call_retry_at', now)
+    .lt('call_retry_count', 2)
+    .not('call_status', 'in', `(${activeStatuses.join(',')})`)
+    .in('stage', ['new_lead', 'ai_responded']);
+  if (error) throw new Error(`getLeadsForCallRetry: ${error.message}`);
+  return data || [];
+}
+
+async function markCallRetryScheduled(id, nextRetryAt, retryCount) {
+  await supabase.from('conversations').update({
+    next_call_retry_at: nextRetryAt,
+    call_retry_count: retryCount,
+  }).eq('id', id);
+}
+
 module.exports = {
   getClientByTwilioNumber,
   preWarmClientCache,
@@ -647,6 +687,10 @@ module.exports = {
   getClientsWithElevenLabs,
   invalidateClientCacheById,
   getLeadsForEmailFollowUp,
+  getAppointmentsIn2Hours,
+  markReminder2hSent,
+  getLeadsForCallRetry,
+  markCallRetryScheduled,
   cacheConvByCallSid,
   patchConvCache,
   getConvFromCallSidCache,

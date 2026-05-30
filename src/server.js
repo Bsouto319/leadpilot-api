@@ -84,6 +84,8 @@ app.get('/call', (req, res) => res.sendFile(path.join(__dirname, '..', 'public',
 app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'privacy.html')));
 app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'terms.html')));
 app.get('/schedule/cp-cabinets', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'schedule-cp.html')));
+app.get('/privacy/cp-cabinets', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'privacy-cp-cabinets.html')));
+app.get('/terms/cp-cabinets',   (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'terms-cp-cabinets.html')));
 
 // ── AUDIO — serve pre-generated ElevenLabs MP3s (public — Twilio fetches these)
 // Routes:  GET /audio/:clientId/:phraseKey   (all phrases)
@@ -203,31 +205,76 @@ process.on('unhandledRejection', (reason) => {
 function startCronJobs() {
   const { sendEmail } = require('./services/gmail');
 
-  // Every day at 9am — email owner about appointments scheduled for tomorrow
+  const { sendAppointmentReminderToLead, sendAppointmentReminderToStaff } = require('./services/followup');
+
+  // Every day at 9am — 24h reminder to lead + staff for tomorrow's appointments
   cron.schedule('0 9 * * *', async () => {
     logger.info('cron', 'running appointment-reminder email job');
     try {
       const appointments = await db.getAppointmentsDueTomorrow();
       for (const conv of appointments) {
         const client = conv.clients;
-        if (!client?.owner_email) continue;
-        const tz = client.timezone || 'America/New_York';
-        const formatted = new Date(conv.scheduled_at).toLocaleString('en-US', {
-          timeZone: tz, weekday: 'long', month: 'long', day: 'numeric',
-          hour: '2-digit', minute: '2-digit',
-        });
-        const address = conv.lead_address ? `\nAddress: ${conv.lead_address}` : '';
-        await sendEmail({
-          from: `${client.business_name} <noreply@btechsouto.shop>`,
-          to: client.owner_email,
-          subject: `📅 Tomorrow's Appointment — ${client.business_name}`,
-          body: `Reminder: you have a visit scheduled for TOMORROW.\n\nName: ${conv.lead_name || 'Customer'}\nPhone: +${conv.lead_phone}\nDate: ${formatted}${address}\nService: ${(conv.service_type || '').replace(/_/g, ' ')}\n\n${client.business_name}`,
-        });
+        if (!client) continue;
+        // Email to lead (if they have email)
+        if (conv.lead_email) {
+          await sendAppointmentReminderToLead(conv).catch(err =>
+            logger.warn('cron', `lead reminder failed conv=${conv.id}: ${err.message}`)
+          );
+        }
+        // Email to Eveline + Sarah
+        await sendAppointmentReminderToStaff(conv, { isUrgent: false }).catch(err =>
+          logger.warn('cron', `staff reminder failed conv=${conv.id}: ${err.message}`)
+        );
         await db.markReminderSent(conv.id);
-        logger.info('cron', `appointment reminder email → ${client.owner_email} for lead ${conv.lead_phone}`);
+        logger.info('cron', `24h reminder sent for conv=${conv.id} lead=${conv.lead_phone}`);
       }
     } catch (err) { handleError('cron-reminders', err).catch(() => {}); }
   }, { timezone: 'America/New_York' });
+
+  // Every 30 min — 2h-before reminder to staff only
+  cron.schedule('*/30 * * * *', async () => {
+    try {
+      const upcoming = await db.getAppointmentsIn2Hours();
+      for (const conv of upcoming) {
+        await sendAppointmentReminderToStaff(conv, { isUrgent: true }).catch(err =>
+          logger.warn('cron', `2h staff reminder failed conv=${conv.id}: ${err.message}`)
+        );
+        await db.markReminder2hSent(conv.id);
+        logger.info('cron', `2h reminder sent for conv=${conv.id} lead=${conv.lead_phone}`);
+      }
+    } catch (err) { handleError('cron-2h-reminders', err).catch(() => {}); }
+  });
+
+  // Every 30 min — retry outbound call for leads that didn't answer
+  cron.schedule('*/30 * * * *', async () => {
+    try {
+      const leads = await db.getLeadsForCallRetry();
+      for (const conv of leads) {
+        const client = conv.clients;
+        if (!client || !conv.lead_phone) continue;
+        const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
+        try {
+          const call = await twilioSvc.makeCall({
+            to: `+${conv.lead_phone}`,
+            from: client.twilio_number,
+            voiceScript: conv.ai_response || `Hi! This is ${client.business_name}. We tried reaching you earlier about your request. Please give us a call back at your earliest convenience!`,
+            statusCallbackUrl: `${BASE}/webhook/call-status`,
+            intakeUrl: `${BASE}/webhook/voice-outbound-intake?conversationId=${conv.id}&clientId=${client.id}`,
+            credentials: client.twilio_account_sid ? { accountSid: client.twilio_account_sid, authToken: client.twilio_auth_token } : null,
+          });
+          await db.updateConversation(conv.id, {
+            call_sid: call.sid,
+            call_status: call.status,
+            call_attempted_at: new Date().toISOString(),
+            next_call_retry_at: null,
+          });
+          logger.info('cron', `retry call placed conv=${conv.id} retry=${conv.call_retry_count} sid=${call.sid}`);
+        } catch (err) {
+          logger.warn('cron', `retry call failed conv=${conv.id}: ${err.message}`);
+        }
+      }
+    } catch (err) { handleError('cron-call-retry', err).catch(() => {}); }
+  });
 
   // No-show auto-detection DISABLED — leads stay in 'scheduled' until manually moved by the owner.
 
@@ -280,5 +327,5 @@ function startCronJobs() {
     try { await runFollowUpCron(3); } catch (err) { handleError('cron-followup-3', err).catch(() => {}); }
   });
 
-  logger.info('server', 'cron jobs scheduled: appt-reminder-email@9am, weekly-report@mon8am, thumbtack-poll@every10min, followup-emails@every12h');
+  logger.info('server', 'cron jobs scheduled: appt-reminder@9am, 2h-reminder@every30min, call-retry@every30min, weekly-report@mon8am, thumbtack-poll@every10min, followup-emails@every12h');
 }

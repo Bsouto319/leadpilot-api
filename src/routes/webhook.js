@@ -784,6 +784,16 @@ router.post('/call-status', async (req, res) => {
           sendImmediateFollowUp(conv).catch(err => logger.warn('webhook', `follow-up email failed: ${err.message}`));
         }
 
+        // Schedule retry call — retry 1 in 2h, retry 2 in 24h
+        const retryCount = conv.call_retry_count || 0;
+        if (retryCount < 2) {
+          const delayMs = retryCount === 0 ? 2 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+          const nextRetryAt = new Date(Date.now() + delayMs).toISOString();
+          db.markCallRetryScheduled(conv.id, nextRetryAt, retryCount + 1)
+            .catch(err => logger.warn('webhook', `markCallRetryScheduled failed: ${err.message}`));
+          logger.info('webhook', `retry ${retryCount + 1} scheduled at ${nextRetryAt} for conv=${conv.id}`);
+        }
+
         // Alert all configured phones when lead does not answer
         const leadName = leadNameRaw || 'Unknown';
         const alertServiceLabel = (conv.service_type || 'general').replace(/_/g, ' ');
