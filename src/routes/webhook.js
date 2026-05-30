@@ -1672,11 +1672,11 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   logger.info('cf7', `website lead received clientId=${clientId} fields=${JSON.stringify(body)}`);
 
   // Support both CF7 default field names (your-*) and custom names (name, phone, etc.)
-  const leadName  = body['your-name']    || body['name']      || body['full-name']  || body['full_name']  || 'Customer';
-  const leadEmail = body['your-email']   || body['email']     || null;
-  const rawPhone  = body['your-phone']   || body['phone']     || body['tel']        || body['tel-1']      || body['telephone'] || body['phone-number'] || '';
-  const visitDate = body['your-date']    || body['date']      || body['visit-date'] || body['visit_date'] || '';
-  const bestTime  = body['your-subject'] || body['subject']   || body['time']       || body['best-time']  || body['message']   || body['your-message'] || '';
+  const leadName  = body['your-name']    || body['name']      || body['full-name']        || body['full_name']  || 'Customer';
+  const leadEmail = body['your-email']   || body['your-e-mail'] || body['email']           || null;
+  const rawPhone  = body['your-phone']   || body['your-phone-number'] || body['phone']     || body['tel'] || body['tel-1'] || body['telephone'] || body['phone-number'] || '';
+  const visitDate = body['your-date']    || body['date']      || body['date-of-visit']     || body['visit-date'] || body['visit_date'] || '';
+  const bestTime  = body['your-subject'] || body['your-best-time'] || body['your-best-time-to-contact-you'] || body['subject'] || body['time'] || body['best-time'] || body['message'] || body['your-message'] || '';
 
   if (!rawPhone) {
     logger.warn('cf7', `missing phone field — body keys: ${Object.keys(body).join(', ')}`);
