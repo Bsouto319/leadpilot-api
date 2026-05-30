@@ -4,232 +4,493 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Schedule a Visit — CP Cabinets & Quartz</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f8f7f4;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #f5f3ef;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      color: #1a1a2e;
     }
+
+    /* ── HEADER ── */
     header {
-      width: 100%;
-      background: #1a1a2e;
-      padding: 20px 24px;
+      background: #12122a;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 68px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid rgba(201,168,76,0.2);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #c9a84c, #e8c96a);
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 14px;
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #12122a;
+      letter-spacing: -1px;
+      font-family: 'Playfair Display', serif;
+      flex-shrink: 0;
     }
-    header .logo-text {
-      color: #fff;
-      font-size: 1.25rem;
+    .logo-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.1rem;
       font-weight: 700;
-      letter-spacing: 0.04em;
+      color: #fff;
+      line-height: 1.2;
     }
-    header .logo-sub {
+    .logo-tagline {
+      font-size: 0.68rem;
       color: #c9a84c;
-      font-size: 0.8rem;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
+      font-weight: 500;
     }
-    .hero {
-      width: 100%;
-      background: linear-gradient(135deg, #1a1a2e 0%, #2d2d4e 100%);
-      padding: 40px 24px 48px;
-      text-align: center;
-      color: #fff;
-    }
-    .hero h1 {
-      font-size: clamp(1.5rem, 4vw, 2.2rem);
-      font-weight: 700;
-      margin-bottom: 10px;
-    }
-    .hero p {
+    .header-phone {
+      font-size: 0.85rem;
       color: #c9a84c;
-      font-size: 1rem;
-      max-width: 480px;
-      margin: 0 auto;
+      font-weight: 600;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
-    .card {
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: 0 4px 32px rgba(0,0,0,0.10);
-      padding: 36px 32px;
-      width: 100%;
-      max-width: 520px;
-      margin: -28px auto 40px;
+    .header-phone:hover { color: #e8c96a; }
+
+    /* ── HERO ── */
+    .hero {
+      background: linear-gradient(160deg, #12122a 0%, #1e1e40 50%, #12122a 100%);
+      padding: 64px 24px 80px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 60% 50%, rgba(201,168,76,0.08) 0%, transparent 70%);
+    }
+    .hero-eyebrow {
+      display: inline-block;
+      background: rgba(201,168,76,0.15);
+      border: 1px solid rgba(201,168,76,0.3);
+      color: #c9a84c;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 100px;
+      margin-bottom: 20px;
       position: relative;
     }
-    .card h2 {
-      font-size: 1.1rem;
-      color: #1a1a2e;
-      margin-bottom: 24px;
+    .hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
       font-weight: 700;
+      color: #fff;
+      line-height: 1.2;
+      margin-bottom: 14px;
+      position: relative;
     }
-    .field { margin-bottom: 18px; }
+    .hero p {
+      color: rgba(255,255,255,0.6);
+      font-size: 1rem;
+      max-width: 460px;
+      margin: 0 auto;
+      line-height: 1.6;
+      position: relative;
+    }
+
+    /* ── BADGES ── */
+    .badges {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 28px;
+      position: relative;
+    }
+    .badge {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.7);
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 5px 12px;
+      border-radius: 100px;
+    }
+
+    /* ── MAIN LAYOUT ── */
+    .main {
+      max-width: 1020px;
+      margin: -40px auto 0;
+      padding: 0 16px 60px;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 720px) {
+      .main { grid-template-columns: 1fr; margin-top: -28px; }
+      .sidebar { order: 2; }
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 4px 40px rgba(0,0,0,0.10);
+      padding: 36px 32px;
+      position: relative;
+    }
+    @media (max-width: 480px) { .card { padding: 28px 20px; } }
+
+    .card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.3rem;
+      color: #12122a;
+      margin-bottom: 6px;
+    }
+    .card-sub {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 28px;
+    }
+
+    .field { margin-bottom: 16px; }
     label {
       display: block;
-      font-size: 0.82rem;
+      font-size: 0.75rem;
       font-weight: 600;
       color: #555;
       margin-bottom: 6px;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
     }
     input, select {
       width: 100%;
       padding: 12px 14px;
-      border: 1.5px solid #e0ddd8;
+      border: 1.5px solid #e8e5df;
       border-radius: 10px;
-      font-size: 0.97rem;
+      font-size: 0.95rem;
+      font-family: 'Inter', sans-serif;
       color: #1a1a2e;
       background: #fafaf8;
-      transition: border 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
       outline: none;
     }
-    input:focus, select:focus { border-color: #c9a84c; }
-    input[type=tel]::placeholder { color: #bbb; }
+    input:focus, select:focus {
+      border-color: #c9a84c;
+      box-shadow: 0 0 0 3px rgba(201,168,76,0.12);
+      background: #fff;
+    }
+    input::placeholder { color: #bbb; }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 420px) { .row2 { grid-template-columns: 1fr; } }
+
+    .consent {
+      font-size: 0.75rem;
+      color: #999;
+      line-height: 1.5;
+      margin: 14px 0 18px;
+      padding: 10px 12px;
+      background: #fafaf8;
+      border-radius: 8px;
+      border: 1px solid #f0ece5;
+    }
+    .consent a { color: #c9a84c; text-decoration: none; }
+
     .btn {
       width: 100%;
-      padding: 14px;
-      background: linear-gradient(135deg, #c9a84c, #b8922e);
+      padding: 15px;
+      background: linear-gradient(135deg, #c9a84c 0%, #b8922e 100%);
       color: #fff;
       font-size: 1rem;
       font-weight: 700;
+      font-family: 'Inter', sans-serif;
       border: none;
       border-radius: 12px;
       cursor: pointer;
-      letter-spacing: 0.03em;
-      margin-top: 8px;
-      transition: opacity 0.2s, transform 0.1s;
+      letter-spacing: 0.02em;
+      transition: opacity 0.2s, transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(201,168,76,0.35);
     }
-    .btn:hover { opacity: 0.92; }
+    .btn:hover { opacity: 0.92; box-shadow: 0 6px 28px rgba(201,168,76,0.45); }
     .btn:active { transform: scale(0.99); }
-    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .success {
-      display: none;
-      text-align: center;
-      padding: 32px 16px;
-    }
-    .success .icon { font-size: 3rem; margin-bottom: 12px; }
-    .success h3 { font-size: 1.3rem; color: #1a1a2e; margin-bottom: 8px; }
-    .success p { color: #666; font-size: 0.95rem; }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+
     .error-msg {
       display: none;
-      background: #fff0f0;
+      background: #fff4f4;
       border: 1px solid #fcc;
       border-radius: 8px;
       padding: 10px 14px;
       color: #c00;
-      font-size: 0.88rem;
+      font-size: 0.85rem;
       margin-bottom: 14px;
     }
-    .info-strip {
-      width: 100%;
-      max-width: 520px;
-      margin: 0 auto 40px;
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      justify-content: center;
-      padding: 0 16px;
-    }
-    .info-item {
-      background: #fff;
-      border-radius: 12px;
-      padding: 16px 20px;
-      flex: 1;
-      min-width: 140px;
+
+    /* ── SUCCESS ── */
+    .success {
+      display: none;
       text-align: center;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      padding: 20px 12px 8px;
     }
-    .info-item .i-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
-    .info-item .i-val { font-size: 0.92rem; color: #1a1a2e; font-weight: 600; }
+    .success-icon {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #c9a84c, #e8c96a);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      margin: 0 auto 16px;
+    }
+    .success h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem;
+      color: #12122a;
+      margin-bottom: 8px;
+    }
+    .success p { color: #666; font-size: 0.92rem; line-height: 1.6; }
+
+    /* ── SIDEBAR ── */
+    .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+    .info-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+      padding: 22px 20px;
+    }
+    .info-card-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #c9a84c;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 14px;
+    }
+    .info-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .info-row:last-child { margin-bottom: 0; }
+    .info-icon {
+      width: 32px;
+      height: 32px;
+      background: rgba(201,168,76,0.1);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+    }
+    .info-label { font-size: 0.72rem; color: #aaa; font-weight: 500; margin-bottom: 1px; }
+    .info-val { font-size: 0.88rem; color: #1a1a2e; font-weight: 600; line-height: 1.35; }
+
+    .why-list { list-style: none; }
+    .why-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.87rem;
+      color: #444;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .why-list li:last-child { margin-bottom: 0; }
+    .why-check {
+      width: 18px;
+      height: 18px;
+      background: linear-gradient(135deg, #c9a84c, #b8922e);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 0.65rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ── FOOTER ── */
     footer {
+      background: #12122a;
       text-align: center;
       padding: 24px 16px;
-      color: #aaa;
-      font-size: 0.8rem;
+      color: rgba(255,255,255,0.3);
+      font-size: 0.78rem;
     }
-    @media (max-width: 560px) {
-      .card { margin: -20px 16px 32px; padding: 28px 20px; }
-    }
+    footer a { color: rgba(201,168,76,0.6); text-decoration: none; }
+    footer a:hover { color: #c9a84c; }
   </style>
 </head>
 <body>
 
+<!-- HEADER -->
 <header>
-  <div>
-    <div class="logo-text">CP Cabinets &amp; Quartz</div>
-    <div class="logo-sub">Irmo, South Carolina</div>
+  <div class="logo">
+    <div class="logo-icon">CP</div>
+    <div>
+      <div class="logo-name">CP Cabinets &amp; Quartz</div>
+      <div class="logo-tagline">Irmo, South Carolina</div>
+    </div>
   </div>
+  <a class="header-phone" href="tel:+18033738191">📞 (803) 373-8191</a>
 </header>
 
+<!-- HERO -->
 <div class="hero">
-  <h1>Schedule Your Showroom Visit</h1>
-  <p>Explore our premium all-plywood kitchen cabinets in person. Appointments available Mon–Fri, 9AM–4PM.</p>
-</div>
-
-<div class="card">
-  <h2>📅 Book Your Free Consultation</h2>
-
-  <div class="error-msg" id="errorMsg">Please fill in all required fields.</div>
-
-  <form id="scheduleForm">
-    <div class="field">
-      <label>Your Name *</label>
-      <input type="text" name="your-name" placeholder="John Smith" required />
-    </div>
-    <div class="field">
-      <label>Phone Number *</label>
-      <input type="tel" name="your-phone" placeholder="(803) 555-0100" required />
-    </div>
-    <div class="field">
-      <label>Email Address</label>
-      <input type="email" name="your-email" placeholder="john@example.com" />
-    </div>
-    <div class="field">
-      <label>Preferred Visit Date</label>
-      <input type="date" name="your-date" />
-    </div>
-    <div class="field">
-      <label>Best Time to Contact</label>
-      <select name="your-subject">
-        <option value="">— Select a time —</option>
-        <option>Morning (9AM–12PM)</option>
-        <option>Afternoon (12PM–4PM)</option>
-        <option>Any time</option>
-      </select>
-    </div>
-    <button type="submit" class="btn" id="submitBtn">Request My Visit →</button>
-  </form>
-
-  <div class="success" id="successMsg">
-    <div class="icon">✅</div>
-    <h3>We'll be in touch shortly!</h3>
-    <p>Thank you! Our team will call you to confirm your showroom visit at <strong>1085 Lake Murray Blvd, Irmo, SC</strong>.</p>
+  <div class="hero-eyebrow">Free Showroom Visit</div>
+  <h1>See Our Cabinets<br/>In Person</h1>
+  <p>Explore premium all-plywood kitchen and bathroom cabinets at our Irmo showroom. No pressure, just quality.</p>
+  <div class="badges">
+    <span class="badge">✦ All-Plywood Construction</span>
+    <span class="badge">✦ TSCA VI &amp; KCMA Certified</span>
+    <span class="badge">✦ Custom Quartz Countertops</span>
   </div>
 </div>
 
-<div class="info-strip">
-  <div class="info-item">
-    <div class="i-label">📍 Location</div>
-    <div class="i-val">1085 Lake Murray Blvd, Suite E, Irmo SC</div>
+<!-- MAIN -->
+<div class="main">
+
+  <!-- FORM CARD -->
+  <div class="card">
+    <div class="card-title">Book Your Free Consultation</div>
+    <div class="card-sub">Fill out the form and our team will call you to confirm.</div>
+
+    <div class="error-msg" id="errorMsg">Something went wrong. Please call us at (803) 373-8191.</div>
+
+    <form id="scheduleForm">
+      <div class="field">
+        <label>Full Name *</label>
+        <input type="text" name="your-name" placeholder="John Smith" required autocomplete="name" />
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Phone Number *</label>
+          <input type="tel" name="your-phone" placeholder="(803) 555-0100" required autocomplete="tel" />
+        </div>
+        <div class="field">
+          <label>Email Address</label>
+          <input type="email" name="your-email" placeholder="john@email.com" autocomplete="email" />
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Preferred Date</label>
+          <input type="date" name="your-date" />
+        </div>
+        <div class="field">
+          <label>Best Time</label>
+          <select name="your-subject">
+            <option value="">— Any time —</option>
+            <option>Morning (9AM–12PM)</option>
+            <option>Afternoon (12PM–4PM)</option>
+            <option>Any time works</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Project Type</label>
+        <select name="your-project">
+          <option value="">— What are you looking for? —</option>
+          <option>Kitchen Cabinets</option>
+          <option>Bathroom Cabinets</option>
+          <option>Quartz Countertops</option>
+          <option>Full Kitchen Remodel</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="consent">
+        By submitting, you consent to receive calls and emails from CP Cabinets &amp; Quartz regarding your request.
+        Message and data rates may apply. Reply STOP to opt out.
+        <a href="https://leads.btechsouto.shop/privacy/cp-cabinets" target="_blank">Privacy Policy</a> ·
+        <a href="https://leads.btechsouto.shop/terms/cp-cabinets" target="_blank">Terms</a>
+      </div>
+      <button type="submit" class="btn" id="submitBtn">Request My Visit →</button>
+    </form>
+
+    <div class="success" id="successMsg">
+      <div class="success-icon">✓</div>
+      <h3>We'll call you shortly!</h3>
+      <p>Thank you! Our team will reach out to confirm your showroom visit at<br/><strong>1085 Lake Murray Blvd, Suite E, Irmo SC</strong>.</p>
+    </div>
   </div>
-  <div class="info-item">
-    <div class="i-label">📞 Phone</div>
-    <div class="i-val">(803) 373-8191</div>
-  </div>
-  <div class="info-item">
-    <div class="i-label">🕐 Hours</div>
-    <div class="i-val">Mon–Fri 9AM–4PM</div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="info-card">
+      <div class="info-card-title">Visit Us</div>
+      <div class="info-row">
+        <div class="info-icon">📍</div>
+        <div>
+          <div class="info-label">Address</div>
+          <div class="info-val">1085 Lake Murray Blvd, Suite E<br/>Irmo, SC 29063</div>
+        </div>
+      </div>
+      <div class="info-row">
+        <div class="info-icon">📞</div>
+        <div>
+          <div class="info-label">Phone</div>
+          <div class="info-val"><a href="tel:+18033738191" style="color:#1a1a2e;text-decoration:none">(803) 373-8191</a></div>
+        </div>
+      </div>
+      <div class="info-row">
+        <div class="info-icon">🕐</div>
+        <div>
+          <div class="info-label">Showroom Hours</div>
+          <div class="info-val">Mon – Fri: 9AM – 4PM</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <div class="info-card-title">Why Visit Our Showroom</div>
+      <ul class="why-list">
+        <li><div class="why-check">✓</div> See and touch real cabinet samples before deciding</li>
+        <li><div class="why-check">✓</div> Get a free personalized quote on the spot</li>
+        <li><div class="why-check">✓</div> All-plywood construction — built to last a lifetime</li>
+        <li><div class="why-check">✓</div> Wide selection of door styles, finishes &amp; quartz slabs</li>
+        <li><div class="why-check">✓</div> No obligation, no pressure — just honest advice</li>
+      </ul>
+    </div>
+
   </div>
 </div>
 
-<footer>© 2026 CP Cabinets &amp; Quartz · All-Plywood Construction · TSCA VI &amp; KCMA Certified</footer>
+<!-- FOOTER -->
+<footer>
+  © 2026 CP Cabinets &amp; Quartz · Irmo, SC ·
+  <a href="https://leads.btechsouto.shop/privacy/cp-cabinets">Privacy Policy</a> ·
+  <a href="https://leads.btechsouto.shop/terms/cp-cabinets">Terms of Service</a>
+</footer>
 
 <script>
   const WEBHOOK = 'https://leads.btechsouto.shop/webhook/cf7?clientId=5221cab9-a741-4ddc-a752-2359826fba95';
@@ -259,13 +520,11 @@
         throw new Error('Server error');
       }
     } catch {
-      err.textContent = 'Something went wrong. Please call us at (803) 373-8191.';
       err.style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'Request My Visit →';
     }
   });
 </script>
-
 </body>
 </html>
