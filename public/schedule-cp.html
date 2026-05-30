@@ -11,14 +11,14 @@
 
     body {
       font-family: 'Inter', -apple-system, sans-serif;
-      background: #f5f3ef;
+      background: #f8f8f8;
       min-height: 100vh;
-      color: #1a1a2e;
+      color: #1c1c1c;
     }
 
     /* ── HEADER ── */
     header {
-      background: #12122a;
+      background: #fff;
       padding: 0 24px;
       display: flex;
       align-items: center;
@@ -27,7 +27,8 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      border-bottom: 1px solid rgba(201,168,76,0.2);
+      border-bottom: 2px solid #f0f0f0;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
     }
     .logo {
       display: flex;
@@ -37,14 +38,14 @@
     .logo-icon {
       width: 38px;
       height: 38px;
-      background: linear-gradient(135deg, #c9a84c, #e8c96a);
+      background: linear-gradient(135deg, #e8621a, #f97316);
       border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 1.1rem;
       font-weight: 900;
-      color: #12122a;
+      color: #fff;
       letter-spacing: -1px;
       font-family: 'Playfair Display', serif;
       flex-shrink: 0;
@@ -53,31 +54,32 @@
       font-family: 'Playfair Display', serif;
       font-size: 1.1rem;
       font-weight: 700;
-      color: #fff;
+      color: #1c1c1c;
       line-height: 1.2;
     }
     .logo-tagline {
       font-size: 0.68rem;
-      color: #c9a84c;
+      color: #e8621a;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      font-weight: 500;
+      font-weight: 600;
     }
     .header-phone {
       font-size: 0.85rem;
-      color: #c9a84c;
-      font-weight: 600;
+      color: #e8621a;
+      font-weight: 700;
       text-decoration: none;
       display: flex;
       align-items: center;
       gap: 6px;
     }
-    .header-phone:hover { color: #e8c96a; }
+    .header-phone:hover { color: #c95210; }
 
     /* ── HERO ── */
     .hero {
-      background: linear-gradient(160deg, #12122a 0%, #1e1e40 50%, #12122a 100%);
-      padding: 64px 24px 80px;
+      background: linear-gradient(135deg, #fff7f3 0%, #fff 60%, #fff7f3 100%);
+      border-bottom: 1px solid #ffe8da;
+      padding: 56px 24px 72px;
       text-align: center;
       position: relative;
       overflow: hidden;
@@ -86,13 +88,13 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(ellipse at 60% 50%, rgba(201,168,76,0.08) 0%, transparent 70%);
+      background: radial-gradient(ellipse at 50% 0%, rgba(232,98,26,0.06) 0%, transparent 65%);
     }
     .hero-eyebrow {
       display: inline-block;
-      background: rgba(201,168,76,0.15);
-      border: 1px solid rgba(201,168,76,0.3);
-      color: #c9a84c;
+      background: rgba(232,98,26,0.1);
+      border: 1px solid rgba(232,98,26,0.25);
+      color: #e8621a;
       font-size: 0.72rem;
       font-weight: 700;
       letter-spacing: 0.12em;
@@ -106,13 +108,13 @@
       font-family: 'Playfair Display', serif;
       font-size: clamp(1.8rem, 5vw, 2.8rem);
       font-weight: 700;
-      color: #fff;
+      color: #1c1c1c;
       line-height: 1.2;
       margin-bottom: 14px;
       position: relative;
     }
     .hero p {
-      color: rgba(255,255,255,0.6);
+      color: #666;
       font-size: 1rem;
       max-width: 460px;
       margin: 0 auto;
@@ -130,13 +132,14 @@
       position: relative;
     }
     .badge {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.12);
-      color: rgba(255,255,255,0.7);
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      color: #555;
       font-size: 0.75rem;
       font-weight: 500;
       padding: 5px 12px;
       border-radius: 100px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     }
 
     /* ── MAIN LAYOUT ── */
@@ -199,8 +202,8 @@
       outline: none;
     }
     input:focus, select:focus {
-      border-color: #c9a84c;
-      box-shadow: 0 0 0 3px rgba(201,168,76,0.12);
+      border-color: #e8621a;
+      box-shadow: 0 0 0 3px rgba(232,98,26,0.10);
       background: #fff;
     }
     input::placeholder { color: #bbb; }
@@ -223,7 +226,7 @@
     .btn {
       width: 100%;
       padding: 15px;
-      background: linear-gradient(135deg, #c9a84c 0%, #b8922e 100%);
+      background: linear-gradient(135deg, #e8621a 0%, #d45510 100%);
       color: #fff;
       font-size: 1rem;
       font-weight: 700;
@@ -233,9 +236,9 @@
       cursor: pointer;
       letter-spacing: 0.02em;
       transition: opacity 0.2s, transform 0.1s, box-shadow 0.2s;
-      box-shadow: 0 4px 20px rgba(201,168,76,0.35);
+      box-shadow: 0 4px 20px rgba(232,98,26,0.35);
     }
-    .btn:hover { opacity: 0.92; box-shadow: 0 6px 28px rgba(201,168,76,0.45); }
+    .btn:hover { opacity: 0.92; box-shadow: 0 6px 28px rgba(232,98,26,0.45); }
     .btn:active { transform: scale(0.99); }
     .btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
 
@@ -259,7 +262,7 @@
     .success-icon {
       width: 64px;
       height: 64px;
-      background: linear-gradient(135deg, #c9a84c, #e8c96a);
+      background: linear-gradient(135deg, #e8621a, #f97316);
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -287,7 +290,7 @@
     .info-card-title {
       font-size: 0.7rem;
       font-weight: 700;
-      color: #c9a84c;
+      color: #e8621a;
       text-transform: uppercase;
       letter-spacing: 0.1em;
       margin-bottom: 14px;
@@ -302,7 +305,7 @@
     .info-icon {
       width: 32px;
       height: 32px;
-      background: rgba(201,168,76,0.1);
+      background: rgba(232,98,26,0.08);
       border-radius: 8px;
       display: flex;
       align-items: center;
@@ -327,7 +330,7 @@
     .why-check {
       width: 18px;
       height: 18px;
-      background: linear-gradient(135deg, #c9a84c, #b8922e);
+      background: linear-gradient(135deg, #e8621a, #d45510);
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -340,14 +343,14 @@
 
     /* ── FOOTER ── */
     footer {
-      background: #12122a;
+      background: #1c1c1c;
       text-align: center;
       padding: 24px 16px;
-      color: rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.35);
       font-size: 0.78rem;
     }
-    footer a { color: rgba(201,168,76,0.6); text-decoration: none; }
-    footer a:hover { color: #c9a84c; }
+    footer a { color: rgba(232,98,26,0.7); text-decoration: none; }
+    footer a:hover { color: #e8621a; }
   </style>
 </head>
 <body>
@@ -459,7 +462,7 @@
         <div class="info-icon">📞</div>
         <div>
           <div class="info-label">Phone</div>
-          <div class="info-val"><a href="tel:+18033738191" style="color:#1a1a2e;text-decoration:none">(803) 373-8191</a></div>
+          <div class="info-val"><a href="tel:+18033738191" style="color:#e8621a;text-decoration:none;font-weight:700">(803) 373-8191</a></div>
         </div>
       </div>
       <div class="info-row">
