@@ -35,6 +35,8 @@ app.use(helmet({
 // ── CORS — only allow Vercel dashboard + same-origin ─────────────────────────
 const ALLOWED_ORIGINS = [
   'https://leadpilot-dashboard-mu.vercel.app',
+  'https://cpcabinets.com',
+  'https://www.cpcabinets.com',
   process.env.DASHBOARD_URL,
 ].filter(Boolean);
 
@@ -81,6 +83,7 @@ app.use('/dashboard', express.static(path.join(__dirname, '..', 'public', 'dashb
 app.get('/call', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'call.html')));
 app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'privacy.html')));
 app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'terms.html')));
+app.get('/schedule/cp-cabinets', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'schedule-cp.html')));
 
 // ── AUDIO — serve pre-generated ElevenLabs MP3s (public — Twilio fetches these)
 // Routes:  GET /audio/:clientId/:phraseKey   (all phrases)

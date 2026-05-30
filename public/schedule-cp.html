@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schedule a Visit — CP Cabinets & Quartz</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f7f4;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      width: 100%;
+      background: #1a1a2e;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+    header .logo-text {
+      color: #fff;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    header .logo-sub {
+      color: #c9a84c;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .hero {
+      width: 100%;
+      background: linear-gradient(135deg, #1a1a2e 0%, #2d2d4e 100%);
+      padding: 40px 24px 48px;
+      text-align: center;
+      color: #fff;
+    }
+    .hero h1 {
+      font-size: clamp(1.5rem, 4vw, 2.2rem);
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .hero p {
+      color: #c9a84c;
+      font-size: 1rem;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 520px;
+      margin: -28px auto 40px;
+      position: relative;
+    }
+    .card h2 {
+      font-size: 1.1rem;
+      color: #1a1a2e;
+      margin-bottom: 24px;
+      font-weight: 700;
+    }
+    .field { margin-bottom: 18px; }
+    label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    input, select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #e0ddd8;
+      border-radius: 10px;
+      font-size: 0.97rem;
+      color: #1a1a2e;
+      background: #fafaf8;
+      transition: border 0.2s;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: #c9a84c; }
+    input[type=tel]::placeholder { color: #bbb; }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #c9a84c, #b8922e);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      margin-top: 8px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:hover { opacity: 0.92; }
+    .btn:active { transform: scale(0.99); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .success {
+      display: none;
+      text-align: center;
+      padding: 32px 16px;
+    }
+    .success .icon { font-size: 3rem; margin-bottom: 12px; }
+    .success h3 { font-size: 1.3rem; color: #1a1a2e; margin-bottom: 8px; }
+    .success p { color: #666; font-size: 0.95rem; }
+    .error-msg {
+      display: none;
+      background: #fff0f0;
+      border: 1px solid #fcc;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #c00;
+      font-size: 0.88rem;
+      margin-bottom: 14px;
+    }
+    .info-strip {
+      width: 100%;
+      max-width: 520px;
+      margin: 0 auto 40px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 0 16px;
+    }
+    .info-item {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px 20px;
+      flex: 1;
+      min-width: 140px;
+      text-align: center;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .info-item .i-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .info-item .i-val { font-size: 0.92rem; color: #1a1a2e; font-weight: 600; }
+    footer {
+      text-align: center;
+      padding: 24px 16px;
+      color: #aaa;
+      font-size: 0.8rem;
+    }
+    @media (max-width: 560px) {
+      .card { margin: -20px 16px 32px; padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo-text">CP Cabinets &amp; Quartz</div>
+    <div class="logo-sub">Irmo, South Carolina</div>
+  </div>
+</header>
+
+<div class="hero">
+  <h1>Schedule Your Showroom Visit</h1>
+  <p>Explore our premium all-plywood kitchen cabinets in person. Appointments available Mon–Fri, 9AM–4PM.</p>
+</div>
+
+<div class="card">
+  <h2>📅 Book Your Free Consultation</h2>
+
+  <div class="error-msg" id="errorMsg">Please fill in all required fields.</div>
+
+  <form id="scheduleForm">
+    <div class="field">
+      <label>Your Name *</label>
+      <input type="text" name="your-name" placeholder="John Smith" required />
+    </div>
+    <div class="field">
+      <label>Phone Number *</label>
+      <input type="tel" name="your-phone" placeholder="(803) 555-0100" required />
+    </div>
+    <div class="field">
+      <label>Email Address</label>
+      <input type="email" name="your-email" placeholder="john@example.com" />
+    </div>
+    <div class="field">
+      <label>Preferred Visit Date</label>
+      <input type="date" name="your-date" />
+    </div>
+    <div class="field">
+      <label>Best Time to Contact</label>
+      <select name="your-subject">
+        <option value="">— Select a time —</option>
+        <option>Morning (9AM–12PM)</option>
+        <option>Afternoon (12PM–4PM)</option>
+        <option>Any time</option>
+      </select>
+    </div>
+    <button type="submit" class="btn" id="submitBtn">Request My Visit →</button>
+  </form>
+
+  <div class="success" id="successMsg">
+    <div class="icon">✅</div>
+    <h3>We'll be in touch shortly!</h3>
+    <p>Thank you! Our team will call you to confirm your showroom visit at <strong>1085 Lake Murray Blvd, Irmo, SC</strong>.</p>
+  </div>
+</div>
+
+<div class="info-strip">
+  <div class="info-item">
+    <div class="i-label">📍 Location</div>
+    <div class="i-val">1085 Lake Murray Blvd, Suite E, Irmo SC</div>
+  </div>
+  <div class="info-item">
+    <div class="i-label">📞 Phone</div>
+    <div class="i-val">(803) 373-8191</div>
+  </div>
+  <div class="info-item">
+    <div class="i-label">🕐 Hours</div>
+    <div class="i-val">Mon–Fri 9AM–4PM</div>
+  </div>
+</div>
+
+<footer>© 2026 CP Cabinets &amp; Quartz · All-Plywood Construction · TSCA VI &amp; KCMA Certified</footer>
+
+<script>
+  const WEBHOOK = 'https://leads.btechsouto.shop/webhook/cf7?clientId=5221cab9-a741-4ddc-a752-2359826fba95';
+
+  document.getElementById('scheduleForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    const err = document.getElementById('errorMsg');
+    err.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    const form = e.target;
+    const data = new URLSearchParams();
+    new FormData(form).forEach((v, k) => data.append(k, v));
+
+    try {
+      const res = await fetch(WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: data.toString(),
+      });
+      if (res.ok) {
+        form.style.display = 'none';
+        document.getElementById('successMsg').style.display = 'block';
+      } else {
+        throw new Error('Server error');
+      }
+    } catch {
+      err.textContent = 'Something went wrong. Please call us at (803) 373-8191.';
+      err.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Request My Visit →';
+    }
+  });
+</script>
+
+</body>
+</html>
