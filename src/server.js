@@ -80,6 +80,8 @@ app.use(express.json({ limit: '64kb' }));
 
 // ── STATIC FILES ──────────────────────────────────────────────────────────────
 app.use('/dashboard', express.static(path.join(__dirname, '..', 'public', 'dashboard')));
+// Dashboard assets também em /assets/ — Vite gera paths absolutos sem o prefixo /dashboard
+app.use('/assets', express.static(path.join(__dirname, '..', 'public', 'dashboard', 'assets')));
 app.get('/call', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'call.html')));
 app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'privacy.html')));
 app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'terms.html')));
