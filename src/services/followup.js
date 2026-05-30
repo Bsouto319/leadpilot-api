@@ -130,6 +130,77 @@ function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, st
   };
 }
 
+// ── CONFIRMATION EMAIL (sent immediately when lead is captured, before call) ──
+
+function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleUrl, websiteUrl }) {
+  const firstName = (leadName || 'there').split(' ')[0];
+  const serviceLabel = (serviceType || 'general').replace(/_/g, ' ');
+
+  return {
+    subject: `We received your request — ${businessName} will call you shortly!`,
+    html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>${businessName}</h1>
+    <p>Irmo, South Carolina</p>
+  </div>
+  <div class="hero">
+    <h2>Hi ${firstName}, we got your request!</h2>
+    <p>Our team will call you in the next few minutes.</p>
+  </div>
+  <div class="body">
+    <p>Thank you for reaching out about <strong>${serviceLabel}</strong>. We're excited to help!</p>
+    <p>Our scheduling assistant <strong>Alice</strong> will give you a call shortly to discuss your project and schedule a FREE showroom visit.</p>
+
+    <div class="info">
+      <p>
+        📍 <strong>1085 Lake Murray Blvd, Suite E, Irmo, SC 29063</strong><br>
+        📞 <strong>(803) 373-8191</strong><br>
+        🕐 Mon–Fri, 9AM–4PM (by appointment)<br>
+        ✅ TSCA VI &amp; KCMA Certified
+      </p>
+    </div>
+
+    <p>Prefer to schedule online? Pick a time that works for you:</p>
+    <div class="cta-block">
+      <a href="${scheduleUrl}" class="cta">📅 Schedule My Free Visit</a>
+    </div>
+
+    <p style="color:#888;font-size:13px;">If you have any questions in the meantime, call us directly at (803) 373-8191.</p>
+  </div>
+  <div class="footer">
+    <p>© 2026 ${businessName}</p>
+    ${websiteUrl ? `<p><a href="${websiteUrl}">${websiteUrl}</a></p>` : ''}
+  </div>
+</div>
+</body></html>`,
+  };
+}
+
+async function sendLeadConfirmationEmail(conv) {
+  if (!conv.lead_email) return;
+  const client = conv.clients || conv.client;
+  if (!client) return;
+
+  const { subject, html } = buildConfirmationEmail({
+    leadName: conv.lead_name,
+    businessName: client.business_name,
+    serviceType: conv.service_type,
+    scheduleUrl: `${BASE_URL}/schedule/cp-cabinets`,
+    websiteUrl: client.website_url,
+  });
+
+  await sendEmail({
+    from: `${client.business_name} <noreply@btechsouto.shop>`,
+    to: conv.lead_email,
+    subject,
+    html,
+  });
+
+  logger.info('followup', `confirmation email sent to ${conv.lead_email} conv=${conv.id}`);
+}
+
 // ── SEND IMMEDIATE FOLLOW-UP (step 1 — called from call-status webhook) ───────
 
 async function sendImmediateFollowUp(conv) {
@@ -408,6 +479,7 @@ async function sendGoogleReviewEmail(conv) {
 }
 
 module.exports = {
+  sendLeadConfirmationEmail,
   sendImmediateFollowUp,
   runFollowUpCron,
   sendAppointmentReminderToLead,

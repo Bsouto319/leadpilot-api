@@ -200,6 +200,19 @@ router.patch('/leads/:id', async (req, res) => {
   }
 });
 
+router.post('/leads/:id/send-catalog', async (req, res) => {
+  try {
+    const conv = await db.getConversationWithClient(req.params.id);
+    if (!conv) return res.status(404).json({ error: 'Lead not found' });
+    if (!conv.lead_email) return res.status(400).json({ error: 'Lead has no email address' });
+    const { sendImmediateFollowUp } = require('../services/followup');
+    await sendImmediateFollowUp({ ...conv, follow_up_count: 0 });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/leads/:id/messages', async (req, res) => {
   try {
     const messages = await db.getMessages(req.params.id);

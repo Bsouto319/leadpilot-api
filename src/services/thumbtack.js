@@ -103,6 +103,13 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     return;
   }
 
+  // Confirmation email to lead immediately after capture (before call)
+  if (leadEmail) {
+    const { sendLeadConfirmationEmail } = require('./followup');
+    sendLeadConfirmationEmail({ ...conversation, lead_email: leadEmail, clients: client })
+      .catch(err => logger.warn('thumbtack', `confirmation email failed: ${err.message}`));
+  }
+
   // Run voice script + lead qualification in parallel
   const [voiceScript, qualification] = await Promise.all([
     openaiSvc.generateVoiceScript({
