@@ -1679,7 +1679,6 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     leadEmail,
     serviceNote,
     source: 'website',
-    apiKey: expectedSecret,
   }).catch(err => handleError('cf7', err));
 });
 
