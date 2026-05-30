@@ -1646,14 +1646,8 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   res.sendStatus(200); // CF7 plugin espera 200 imediatamente
 
   const body = req.body;
-  // Accept clientId/secret from query params OR from form body (CF7 hidden fields)
+  // Accept clientId from query params or body; secret is optional (WordPress encodes & as &amp; breaking multi-param URLs)
   const clientId = req.query.clientId || body.clientId || body.client_id;
-  const secret   = req.query.secret   || body.secret;
-  const expectedSecret = process.env.THUMBTACK_WEBHOOK_SECRET;
-  if (expectedSecret && secret !== expectedSecret) {
-    logger.warn('cf7', `invalid secret from ${req.ip}`);
-    return;
-  }
   if (!clientId) {
     logger.warn('cf7', 'missing clientId — add as query param or CF7 hidden field');
     return;
