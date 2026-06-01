@@ -35,35 +35,40 @@
     /* ─── HEADER ─────────────────────────────────── */
     header {
       background: var(--white);
-      padding: 0 28px;
+      padding: 0;
       display: flex;
-      align-items: center;
+      align-items: stretch;
       justify-content: space-between;
-      height: 70px;
+      height: 72px;
       position: sticky;
       top: 0;
       z-index: 200;
       border-bottom: 1px solid var(--border);
       box-shadow: 0 2px 16px rgba(0,0,0,0.06);
-      gap: 12px;
+      overflow: hidden;
     }
 
     .logo {
       display: flex;
       align-items: center;
       text-decoration: none;
-      flex-shrink: 0;
+      flex: 1;
+      min-width: 0;
+      height: 100%;
     }
 
     .logo-img-wrap {
       display: flex;
       align-items: center;
-      height: 48px;
+      width: 100%;
+      height: 100%;
     }
 
     .logo-img-wrap img {
-      height: 42px;
-      width: auto;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: left center;
       display: block;
     }
 
@@ -71,6 +76,8 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      padding: 0 16px;
+      flex-shrink: 0;
     }
 
     .btn-back-site {
@@ -112,15 +119,10 @@
     .header-phone:hover { background: var(--orange); color: #fff; }
 
     @media (max-width: 560px) {
-      header { padding: 0 14px; }
+      .header-right { padding: 0 10px; gap: 6px; }
       .header-phone .ph-label { display: none; }
       .btn-back-site .back-label { display: none; }
       .btn-back-site { padding: 7px 10px; }
-    }
-
-    @media (max-width: 360px) {
-      .logo-img-wrap { padding: 5px 8px; height: 42px; }
-      .logo-img-wrap img { height: 30px; }
     }
 
     /* ─── HERO ───────────────────────────────────── */
