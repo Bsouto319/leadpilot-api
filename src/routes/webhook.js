@@ -1661,9 +1661,16 @@ router.post('/thumbtack', express.json(), async (req, res) => {
 router.post('/cf7', express.urlencoded({ extended: true }), express.json(), async (req, res) => {
   res.sendStatus(200); // CF7 plugin espera 200 imediatamente
 
-  const body = req.body;
+  const rawBody = req.body;
+  // Normalize CF7 plugin "fields[your-name]" bracket format → flat object
+  const body = {};
+  for (const [k, v] of Object.entries(rawBody)) {
+    const m = k.match(/^fields\[(.+)\]$/);
+    body[m ? m[1] : k] = v;
+  }
+
   // Accept clientId from query params or body; secret is optional (WordPress encodes & as &amp; breaking multi-param URLs)
-  const clientId = req.query.clientId || body.clientId || body.client_id;
+  const clientId = req.query.clientId || body.clientId || body.client_id || rawBody.clientId;
   if (!clientId) {
     logger.warn('cf7', 'missing clientId — add as query param or CF7 hidden field');
     return;
