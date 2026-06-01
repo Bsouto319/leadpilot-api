@@ -76,6 +76,20 @@ const cronLimiter = rateLimit({
 app.use('/webhook', express.urlencoded({ extended: false, limit: '32kb' }));
 // Audio preview: raw binary blob — type '*/*' catches audio/webm;codecs=opus and any variant
 app.use('/api/admin/audio-call-preview', express.raw({ type: '*/*', limit: '5mb' }));
+// CF7 routes: read body as raw text first so we can handle both JSON and URL-encoded
+// regardless of Content-Type (CF7 plugin sometimes sends URL-encoded with application/json header)
+app.use(['/webhook/cf7', '/api/webhook/cf7'], express.text({ type: '*/*', limit: '32kb' }), (req, res, next) => {
+  if (typeof req.body === 'string' && req.body.length > 0) {
+    const raw = req.body;
+    try {
+      req.body = JSON.parse(raw);
+    } catch {
+      req.body = require('querystring').parse(raw);
+    }
+    req._body = true;
+  }
+  next();
+});
 app.use(express.json({ limit: '64kb' }));
 
 // ── STATIC FILES ──────────────────────────────────────────────────────────────
@@ -151,7 +165,7 @@ app.post('/api/webhook/cf7', express.urlencoded({ extended: true }), express.jso
 
   const leadName  = body['your-name']    || body['name']    || 'Customer';
   const leadEmail = body['your-email']   || body['email']   || null;
-  const rawPhone  = body['your-phone']   || body['phone']   || body['tel'] || '';
+  const rawPhone  = body['your-phone']   || body['your-phone-number'] || body['phone'] || body['tel'] || '';
   const visitDate = body['your-date']    || body['date']    || '';
   const bestTime  = body['your-subject'] || body['subject'] || body['time'] || '';
 

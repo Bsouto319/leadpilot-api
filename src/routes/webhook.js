@@ -1672,11 +1672,18 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   logger.info('cf7', `website lead received clientId=${clientId} fields=${JSON.stringify(body)}`);
 
   // Support both CF7 default field names (your-*) and custom names (name, phone, etc.)
-  const leadName  = body['your-name']    || body['name']      || body['full-name']        || body['full_name']  || 'Customer';
-  const leadEmail = body['your-email']   || body['your-e-mail'] || body['email']           || null;
-  const rawPhone  = body['your-phone']   || body['your-phone-number'] || body['phone']     || body['tel'] || body['tel-1'] || body['telephone'] || body['phone-number'] || '';
-  const visitDate = body['your-date']    || body['date']      || body['date-of-visit']     || body['visit-date'] || body['visit_date'] || '';
-  const bestTime  = body['your-subject'] || body['your-best-time'] || body['your-best-time-to-contact-you'] || body['subject'] || body['time'] || body['best-time'] || body['message'] || body['your-message'] || '';
+  const getField = (obj, ...keys) => { for (const k of keys) { const v = String(obj[k] || '').trim(); if (v) return v; } return ''; };
+  const leadName  = getField(body, 'your-name', 'name', 'full-name', 'full_name') || 'Customer';
+  const leadEmail = getField(body, 'your-email', 'your-e-mail', 'email') || null;
+  // Scan all body keys for phone — handles any CF7 field naming variant
+  const rawPhone = (() => {
+    const explicit = getField(body, 'your-phone', 'your-phone-number', 'phone', 'tel', 'tel-1', 'telephone', 'phone-number');
+    if (explicit) return explicit;
+    const key = Object.keys(body).find(k => /phone/i.test(k));
+    return key ? String(body[key] || '').trim() : '';
+  })();
+  const visitDate = getField(body, 'your-date', 'date', 'date-of-visit', 'visit-date', 'visit_date');
+  const bestTime  = getField(body, 'your-subject', 'your-best-time', 'your-best-time-to-contact-you', 'subject', 'time', 'best-time', 'message', 'your-message');
 
   if (!rawPhone) {
     logger.warn('cf7', `missing phone field — body keys: ${Object.keys(body).join(', ')}`);
