@@ -28,7 +28,7 @@ function clientCredentials(client) {
   return null;
 }
 
-async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, serviceNote, apiKey, thumbtackLeadId, leadEmail = null, source = 'thumbtack' }) {
+async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, serviceNote, apiKey, thumbtackLeadId, leadEmail = null, source = 'thumbtack', scheduledAt = null }) {
   const expectedKey = process.env.THUMBTACK_WEBHOOK_SECRET;
   if (expectedKey && apiKey !== undefined && apiKey !== expectedKey) {
     logger.warn('thumbtack', 'invalid apiKey');
@@ -97,6 +97,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       message,
       thumbtackLeadId: thumbtackLeadId || null,
       leadEmail,
+      scheduledAt,
     });
   } catch (err) {
     await handleError('supabase', err);

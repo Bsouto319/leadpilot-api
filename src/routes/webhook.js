@@ -1702,6 +1702,17 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     bestTime  && `Best time: ${bestTime}`,
   ].filter(Boolean).join(' | ') || 'Website contact form';
 
+  // Convert visitDate + bestTime into scheduledAt ISO so lead lands in app agenda
+  let scheduledAt = null;
+  if (visitDate) {
+    const hourMap = { morning: 10, afternoon: 14, evening: 17, 'late morning': 11, 'early afternoon': 13 };
+    const hour = hourMap[(bestTime || '').toLowerCase()] ?? 10;
+    try {
+      const d = new Date(`${visitDate}T${String(hour).padStart(2,'0')}:00:00`);
+      if (!isNaN(d)) scheduledAt = d.toISOString();
+    } catch { /* invalid date, skip */ }
+  }
+
   processThumbtackLead({
     clientId,
     leadPhone: rawPhone,
@@ -1709,6 +1720,7 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     leadEmail,
     serviceNote,
     source: 'website',
+    scheduledAt,
   }).catch(err => handleError('cf7', err));
 });
 

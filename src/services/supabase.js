@@ -132,18 +132,19 @@ async function checkDuplicate(clientId, leadPhone, minutes = 60) {
   return data;
 }
 
-async function saveLead({ clientId, leadPhone, leadName = 'Customer', source, serviceType, message, thumbtackLeadId = null, leadEmail = null }) {
+async function saveLead({ clientId, leadPhone, leadName = 'Customer', source, serviceType, message, thumbtackLeadId = null, leadEmail = null, scheduledAt = null }) {
   const row = {
     client_id: clientId,
     lead_name: leadName,
     lead_phone: leadPhone,
     source,
-    stage: 'new_lead',
+    stage: scheduledAt ? 'scheduled' : 'new_lead',
     service_type: serviceType,
     email_body: message,
   };
   if (thumbtackLeadId) row.thumbtack_lead_id = thumbtackLeadId;
   if (leadEmail) row.lead_email = leadEmail;
+  if (scheduledAt) row.scheduled_at = scheduledAt;
   const { data, error } = await supabase
     .from('conversations')
     .insert(row)
