@@ -134,14 +134,77 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }),
   ]);
 
+  // Build qualification context (used in all notification paths below)
+  const tierEmoji   = qualification.tier === 'hot' ? '🔥' : qualification.tier === 'warm' ? '⚡' : '❄️';
+  const scoreText   = qualification.score != null ? `${qualification.score}%` : 'N/A';
+  const valueText   = qualification.jobValue ? `~$${qualification.jobValue.toLocaleString()}` : 'TBD';
+  const tierLabel   = qualification.tier ? `${tierEmoji} ${qualification.tier.toUpperCase()}` : '';
+  const agentName   = client.agent_name || 'Lexy';
+  const sourceLabel = source === 'website' ? 'website' : 'Thumbtack';
+
   // Website leads with a scheduled date: keep stage=scheduled, skip outbound call
+  // but still send all owner/staff notifications
   if (scheduledAt && source === 'website') {
     await db.updateConversation(conversation.id, {
       ai_response: voiceScript,
       ...(qualification.score != null ? { score: qualification.score } : {}),
       ...(qualification.summary    ? { summary: qualification.summary } : {}),
     }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
-    logger.info('thumbtack', `website lead with scheduled date — skipping outbound call conv=${conversation.id}`);
+
+    const visitFormatted = new Date(scheduledAt).toLocaleString('en-US', {
+      timeZone: 'America/New_York', weekday: 'short', month: 'short',
+      day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+
+    if (client.owner_email) {
+      const emailBody = [
+        `New website lead — showroom visit scheduled!`,
+        ``,
+        `Name: ${name}`,
+        `Phone: +${leadPhone}`,
+        leadEmail ? `Email: ${leadEmail}` : '',
+        `Service: ${serviceType.replace(/_/g, ' ')}`,
+        `Request: ${message}`,
+        `Scheduled: ${visitFormatted}`,
+        ``,
+        `── AI Qualification ──`,
+        `Score: ${scoreText}  |  Tier: ${tierLabel}  |  Est. Job Value: ${valueText}`,
+        qualification.summary ? `Insight: ${qualification.summary}` : '',
+        qualification.signals?.length ? `Signals: ${qualification.signals.join(', ')}` : '',
+        ``,
+        client.website_url ? `Website: ${client.website_url}` : '',
+        ``,
+        client.business_name,
+      ].filter(Boolean).join('\n');
+
+      sendEmail({
+        from: `${client.business_name} <noreply@btechsouto.shop>`,
+        to: client.owner_email,
+        subject: `${tierLabel} Showroom Visit Booked — ${name} | ${client.business_name}`,
+        body: emailBody,
+      }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
+    }
+
+    const notifyMsg = `Hey! ${agentName} received a new website lead for ${client.business_name}. ${name} scheduled a showroom visit for ${visitFormatted}. Check your email for full details.`;
+    if (client.owner_phone) {
+      makeNotifyCall({
+        to: `+${client.owner_phone}`,
+        from: client.twilio_number,
+        message: notifyMsg,
+        credentials: clientCredentials(client),
+      }).catch(err => logger.warn('thumbtack', `owner notify call failed: ${err.message}`));
+    }
+    if (client.office_phone) {
+      makeNotifyCall({
+        to: `+${client.office_phone}`,
+        from: client.twilio_number,
+        message: notifyMsg,
+        credentials: clientCredentials(client),
+      }).catch(err => logger.warn('thumbtack', `office notify call failed: ${err.message}`));
+    }
+
+    db.appendMessage(conversation.id, 'lead', message).catch(() => {});
+    logger.info('thumbtack', `website lead scheduled conv=${conversation.id} visitAt=${scheduledAt} score=${qualification.score} tier=${qualification.tier}`);
     return;
   }
 
@@ -154,7 +217,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     ...(qualification.summary    ? { summary: qualification.summary } : {}),
   }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
 
-  // Outbound call to lead (Lexy)
+  // Outbound call to lead
   const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
   let convFresh;
   try { convFresh = await db.getConversationById(conversation.id); } catch {}
@@ -181,19 +244,14 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }
   }
 
-  // Build qualification context for notifications
-  const tierEmoji  = qualification.tier === 'hot' ? '🔥' : qualification.tier === 'warm' ? '⚡' : '❄️';
-  const scoreText  = qualification.score != null ? `${qualification.score}%` : 'N/A';
-  const valueText  = qualification.jobValue ? `~$${qualification.jobValue.toLocaleString()}` : 'TBD';
-  const tierLabel  = qualification.tier ? `${tierEmoji} ${qualification.tier.toUpperCase()}` : '';
-
   // Notify owner via email (immediate — with AI insight)
   if (client.owner_email) {
     const emailBody = [
-      `New ${source === 'website' ? 'website' : 'Thumbtack'} lead received!`,
+      `New ${sourceLabel} lead received!`,
       ``,
       `Name: ${name}`,
       `Phone: +${leadPhone}`,
+      leadEmail ? `Email: ${leadEmail}` : '',
       `Service: ${serviceType.replace(/_/g, ' ')}`,
       `Request: ${message}`,
       ``,
@@ -202,7 +260,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       qualification.summary ? `Insight: ${qualification.summary}` : '',
       qualification.signals?.length ? `Signals: ${qualification.signals.join(', ')}` : '',
       ``,
-      `${client.agent_name || 'Lexy'} is calling them now.`,
+      `${agentName} is calling them now.`,
       ``,
       client.website_url ? `Website: ${client.website_url}` : '',
       ``,
@@ -217,11 +275,9 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
   }
 
-  // Notify owner + office via call (owner_phone and office_phone)
-  const agentName  = client.agent_name || 'Lexy';
-  const sourceLabel = source === 'website' ? 'website' : 'Thumbtack';
-  const tierVoice  = qualification.tier === 'hot' ? 'This is a HIGH quality lead. ' : qualification.tier === 'warm' ? 'This is a warm lead. ' : '';
-  const notifyMsg  = `Hey! ${agentName} just received a new ${sourceLabel} lead for ${client.business_name}. ${tierVoice}${name} is requesting ${serviceType.replace(/_/g, ' ')}. We are calling them right now! Check your email for full details.`;
+  // Notify owner + office via call
+  const tierVoice = qualification.tier === 'hot' ? 'This is a HIGH quality lead. ' : qualification.tier === 'warm' ? 'This is a warm lead. ' : '';
+  const notifyMsg = `Hey! ${agentName} just received a new ${sourceLabel} lead for ${client.business_name}. ${tierVoice}${name} is requesting ${serviceType.replace(/_/g, ' ')}. We are calling them right now! Check your email for full details.`;
 
   if (client.owner_phone) {
     makeNotifyCall({

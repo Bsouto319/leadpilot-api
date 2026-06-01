@@ -132,12 +132,29 @@ function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, st
 
 // ── CONFIRMATION EMAIL (sent immediately when lead is captured, before call) ──
 
-function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleUrl, websiteUrl }) {
+function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleUrl, websiteUrl, scheduledAt, agentName, timezone }) {
   const firstName = (leadName || 'there').split(' ')[0];
   const serviceLabel = (serviceType || 'general').replace(/_/g, ' ');
+  const agent = agentName || 'Alice';
+
+  const visitFormatted = scheduledAt
+    ? new Date(scheduledAt).toLocaleString('en-US', {
+        timeZone: timezone || 'America/New_York',
+        weekday: 'long', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+    : null;
+
+  const heroSub  = visitFormatted ? `Your visit is confirmed for ${visitFormatted}.` : `Our team will call you in the next few minutes.`;
+  const bodyText = visitFormatted
+    ? `Your showroom visit is booked for <strong>${visitFormatted}</strong>. We look forward to seeing you!`
+    : `Our scheduling assistant <strong>${agent}</strong> will give you a call shortly to discuss your project and schedule a FREE showroom visit.`;
+  const subject  = visitFormatted
+    ? `Your showroom visit is confirmed — ${businessName}`
+    : `We received your request — ${businessName} will call you shortly!`;
 
   return {
-    subject: `We received your request — ${businessName} will call you shortly!`,
+    subject,
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
 <body>
 <div class="wrap">
@@ -147,11 +164,11 @@ function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleU
   </div>
   <div class="hero">
     <h2>Hi ${firstName}, we got your request!</h2>
-    <p>Our team will call you in the next few minutes.</p>
+    <p>${heroSub}</p>
   </div>
   <div class="body">
     <p>Thank you for reaching out about <strong>${serviceLabel}</strong>. We're excited to help!</p>
-    <p>Our scheduling assistant <strong>Alice</strong> will give you a call shortly to discuss your project and schedule a FREE showroom visit.</p>
+    <p>${bodyText}</p>
 
     <div class="info">
       <p>
@@ -162,10 +179,10 @@ function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleU
       </p>
     </div>
 
-    <p>Prefer to schedule online? Pick a time that works for you:</p>
+    ${!visitFormatted ? `<p>Prefer to schedule online? Pick a time that works for you:</p>
     <div class="cta-block">
       <a href="${scheduleUrl}" class="cta">📅 Schedule My Free Visit</a>
-    </div>
+    </div>` : ''}
 
     <p style="color:#888;font-size:13px;">If you have any questions in the meantime, call us directly at (803) 373-8191.</p>
   </div>
@@ -189,6 +206,9 @@ async function sendLeadConfirmationEmail(conv) {
     serviceType: conv.service_type,
     scheduleUrl: `${BASE_URL}/schedule/cp-cabinets`,
     websiteUrl: client.website_url,
+    scheduledAt: conv.scheduled_at || null,
+    agentName: client.agent_name || null,
+    timezone: client.timezone || null,
   });
 
   await sendEmail({
