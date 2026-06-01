@@ -164,6 +164,7 @@
       box-shadow: 0 4px 40px rgba(0,0,0,0.10);
       padding: 36px 32px;
       position: relative;
+      overflow: visible;
     }
     @media (max-width: 480px) { .card { padding: 28px 20px; } }
 
@@ -179,7 +180,8 @@
       margin-bottom: 28px;
     }
 
-    .field { margin-bottom: 16px; }
+    .field { margin-bottom: 16px; position: relative; z-index: 1; }
+    .field:focus-within { z-index: 10; }
     label {
       display: block;
       font-size: 0.75rem;
