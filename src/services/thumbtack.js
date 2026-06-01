@@ -134,6 +134,17 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }),
   ]);
 
+  // Website leads with a scheduled date: keep stage=scheduled, skip outbound call
+  if (scheduledAt && source === 'website') {
+    await db.updateConversation(conversation.id, {
+      ai_response: voiceScript,
+      ...(qualification.score != null ? { score: qualification.score } : {}),
+      ...(qualification.summary    ? { summary: qualification.summary } : {}),
+    }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
+    logger.info('thumbtack', `website lead with scheduled date — skipping outbound call conv=${conversation.id}`);
+    return;
+  }
+
   // Save voice script + AI qualification to DB
   await db.updateConversation(conversation.id, {
     stage: 'ai_responded',

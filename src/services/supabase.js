@@ -556,8 +556,7 @@ async function closeLead(id) {
 // ── Histórico de mensagens ────────────────────────────────────────────────────
 
 async function appendMessage(conversationId, role, body, mediaUrl) {
-  const row = { conversation_id: conversationId, role, body };
-  if (mediaUrl) row.media_url = mediaUrl;
+  const row = { conversation_id: conversationId, role, content: body };
   await supabase
     .from('conversation_messages')
     .insert(row)
@@ -569,7 +568,7 @@ async function appendMessage(conversationId, role, body, mediaUrl) {
 async function getMessages(conversationId) {
   const { data, error } = await supabase
     .from('conversation_messages')
-    .select('id, role, body, media_url, created_at')
+    .select('id, role, content, created_at')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true });
   if (error) throw new Error(`getMessages: ${error.message}`);
