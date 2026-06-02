@@ -370,6 +370,8 @@ router.patch('/clients/:id', async (req, res) => {
       'google_refresh_token', 'google_calendar_id',
       'gmail_refresh_token',
       'voice_script', 'manual_mode',
+      'service_zones', 'max_radius_miles',
+      'alert_phone', 'niche', 'call_start_hour', 'call_end_hour', 'voice_enabled',
     ];
     const allowed = {};
     for (const f of editable) {
