@@ -645,6 +645,26 @@ async function markCallRetryScheduled(id, nextRetryAt, retryCount) {
   }).eq('id', id);
 }
 
+// Returns true if any scheduled/awaiting_address appointment already occupies
+// a window of ±bufferMinutes around scheduledAt for the given client.
+async function checkSlotConflict(clientId, scheduledAt, bufferMinutes = 30) {
+  const dt   = new Date(scheduledAt);
+  const from = new Date(dt.getTime() - bufferMinutes * 60 * 1000).toISOString();
+  const to   = new Date(dt.getTime() + bufferMinutes * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('client_id', clientId)
+    .in('stage', ['scheduled', 'awaiting_address'])
+    .gte('scheduled_at', from)
+    .lte('scheduled_at', to)
+    .limit(1);
+
+  if (error) throw new Error(`checkSlotConflict: ${error.message}`);
+  return Array.isArray(data) && data.length > 0;
+}
+
 module.exports = {
   getClientByTwilioNumber,
   preWarmClientCache,
@@ -700,6 +720,7 @@ module.exports = {
   markReminder2hSent,
   getLeadsForCallRetry,
   markCallRetryScheduled,
+  checkSlotConflict,
   cacheConvByCallSid,
   patchConvCache,
   getConvFromCallSidCache,

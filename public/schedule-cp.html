@@ -719,6 +719,7 @@
             <div class="field">
               <label>Preferred Date</label>
               <input type="date" name="your-date" id="dateInput" />
+              <p id="sundayMsg" style="display:none;color:#c95210;font-size:0.78rem;margin-top:5px;font-weight:500">Showroom is closed on Sundays. Please choose a weekday.</p>
             </div>
             <div class="field">
               <label>Preferred Time</label>
@@ -888,9 +889,24 @@
 </footer>
 
 <script>
-  // Lock past dates
+  // Lock past dates + block Sundays
   const di = document.getElementById('dateInput');
-  if (di) di.min = new Date().toISOString().split('T')[0];
+  if (di) {
+    di.min = new Date().toISOString().split('T')[0];
+    di.addEventListener('change', function () {
+      const sundayMsg = document.getElementById('sundayMsg');
+      if (this.value) {
+        // Use noon to avoid timezone shifts flipping the day
+        const day = new Date(this.value + 'T12:00:00').getDay();
+        if (day === 0) {
+          this.value = '';
+          sundayMsg.style.display = 'block';
+        } else {
+          sundayMsg.style.display = 'none';
+        }
+      }
+    });
+  }
 
   const WEBHOOK = 'https://leads.btechsouto.shop/webhook/cf7?clientId=5221cab9-a741-4ddc-a752-2359826fba95';
 
@@ -909,16 +925,19 @@
       return;
     }
 
+    // Block Sunday on submit as well
+    const dateVal = this.querySelector('[name="your-date"]').value;
+    if (dateVal && new Date(dateVal + 'T12:00:00').getDay() === 0) {
+      err.textContent = 'Showroom is closed on Sundays. Please choose a weekday.';
+      err.style.display = 'block';
+      return;
+    }
+
     err.style.display = 'none';
     btn.disabled = true;
     btnText.textContent = 'Sending…';
 
-    // Merge project type + notes into your-message
     const data = new URLSearchParams(new FormData(this));
-    const project = data.get('your-project') || '';
-    const notes   = data.get('your-message') || '';
-    const combined = [project, notes].filter(Boolean).join(' — ');
-    if (combined) data.set('your-message', combined);
 
     try {
       const res = await fetch(WEBHOOK, {
@@ -926,7 +945,18 @@
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: data.toString(),
       });
+
+      if (res.status === 409) {
+        const json = await res.json().catch(() => ({}));
+        err.textContent = json.message || 'This time slot is already booked. Please choose a different date or time.';
+        err.style.display = 'block';
+        btn.disabled = false;
+        btnText.textContent = 'Request My Free Visit →';
+        return;
+      }
+
       if (!res.ok) throw new Error('server');
+
       this.style.display = 'none';
       document.getElementById('successMsg').style.display = 'block';
     } catch {

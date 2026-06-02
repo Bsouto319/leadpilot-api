@@ -1656,11 +1656,9 @@ router.post('/thumbtack', express.json(), async (req, res) => {
 
 // ── CF7 WEBSITE WEBHOOK ────────────────────────────────────────────────────────
 // WordPress Contact Form 7 + plugin "CF7 to Webhook" by Moranet
-// Campos: your-name, your-email, your-phone, your-date, your-subject
+// Campos: your-name, your-email, your-phone, your-date, your-subject, your-message
 // URL de configuração: /webhook/cf7?clientId=XXX&secret=lp-thumbtack-2026-secure
 router.post('/cf7', express.urlencoded({ extended: true }), express.json(), async (req, res) => {
-  res.sendStatus(200); // CF7 plugin espera 200 imediatamente
-
   const rawBody = req.body;
   // Normalize CF7 plugin "fields[your-name]" bracket format → flat object
   const body = {};
@@ -1673,7 +1671,7 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   const clientId = req.query.clientId || body.clientId || body.client_id || rawBody.clientId;
   if (!clientId) {
     logger.warn('cf7', 'missing clientId — add as query param or CF7 hidden field');
-    return;
+    return res.sendStatus(200);
   }
 
   logger.info('cf7', `website lead received clientId=${clientId} fields=${JSON.stringify(body)}`);
@@ -1689,19 +1687,21 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     const key = Object.keys(body).find(k => /phone/i.test(k));
     return key ? String(body[key] || '').trim() : '';
   })();
-  const visitDate   = getField(body, 'your-date', 'date', 'date-of-visit', 'visit-date', 'visit_date');
-  const bestTime    = getField(body, 'your-subject', 'your-best-time', 'your-best-time-to-contact-you', 'subject', 'time', 'best-time');
-  const serviceType = getField(body, 'your-project', 'your-service', 'service', 'service-type', 'project', 'project-type', 'service_type');
+  const visitDate       = getField(body, 'your-date', 'date', 'date-of-visit', 'visit-date', 'visit_date');
+  const bestTime        = getField(body, 'your-subject', 'your-best-time', 'your-best-time-to-contact-you', 'subject', 'time', 'best-time');
+  const serviceType     = getField(body, 'your-project', 'your-service', 'service', 'service-type', 'project', 'project-type', 'service_type');
+  const additionalNotes = getField(body, 'your-message', 'message', 'additional-notes', 'notes', 'comments');
 
   if (!rawPhone) {
     logger.warn('cf7', `missing phone field — body keys: ${Object.keys(body).join(', ')}`);
-    return;
+    return res.sendStatus(200);
   }
 
   const serviceNote = [
-    serviceType && `Service: ${serviceType}`,
-    visitDate   && `Preferred visit date: ${visitDate}`,
-    bestTime    && `Best time: ${bestTime}`,
+    serviceType      && `Service: ${serviceType}`,
+    visitDate        && `Preferred visit date: ${visitDate}`,
+    bestTime         && `Best time: ${bestTime}`,
+    additionalNotes  && `Notes: ${additionalNotes}`,
   ].filter(Boolean).join(' | ') || 'Website contact form';
 
   // Convert visitDate + bestTime into scheduledAt ISO in the client's timezone
@@ -1760,6 +1760,23 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     } catch { /* invalid date, skip */ }
   }
 
+  // Double-booking guard: reject if slot already taken (±30 min window)
+  if (scheduledAt) {
+    try {
+      const conflict = await db.checkSlotConflict(clientId, scheduledAt, 30);
+      if (conflict) {
+        logger.warn('cf7', `slot conflict clientId=${clientId} scheduledAt=${scheduledAt}`);
+        return res.status(409).json({
+          message: 'This time slot is already booked. Please choose a different date or time.',
+        });
+      }
+    } catch (err) {
+      logger.warn('cf7', `slot conflict check failed: ${err.message} — proceeding`);
+      // Don't block lead on DB error — better to double-book than lose a lead
+    }
+  }
+
+  res.sendStatus(200);
   processThumbtackLead({
     clientId,
     leadPhone: rawPhone,
