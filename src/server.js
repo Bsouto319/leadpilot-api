@@ -99,7 +99,15 @@ app.use('/assets', express.static(path.join(__dirname, '..', 'public', 'dashboar
 app.get('/call', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'call.html')));
 app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'privacy.html')));
 app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'terms.html')));
-app.get('/schedule/cp-cabinets', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'schedule-cp.html')));
+app.get('/schedule/cp-cabinets',
+  (req, res, next) => {
+    // Allow embedding via iframe on cpcabinets.com
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://cpcabinets.com https://www.cpcabinets.com");
+    next();
+  },
+  (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'schedule-cp.html'))
+);
 app.get('/privacy/cp-cabinets', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'privacy-cp-cabinets.html')));
 app.get('/terms/cp-cabinets',   (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'terms-cp-cabinets.html')));
 app.get('/cp-cabinets-logo.png', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'cp-cabinets-logo.png')));
