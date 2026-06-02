@@ -92,10 +92,10 @@ function detectComplianceKeyword(text) {
 }
 
 // US compliance: check if current time is within business hours for the client timezone
-function isWithinBusinessHours(timezone = 'America/New_York') {
-  const now = new Date();
+function isWithinBusinessHours(timezone = 'America/New_York', startHour = 9, endHour = 17) {
+  const now  = new Date();
   const hour = parseInt(now.toLocaleString('en-US', { timeZone: timezone, hour: 'numeric', hour12: false }));
-  return hour >= 8 && hour < 21; // 8am–9pm
+  return hour >= startHour && hour < endHour;
 }
 
 function detectHumanHandoff(text) {
@@ -1702,13 +1702,41 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     bestTime  && `Best time: ${bestTime}`,
   ].filter(Boolean).join(' | ') || 'Website contact form';
 
-  // Convert visitDate + bestTime into scheduledAt ISO so lead lands in app agenda
+  // Convert visitDate + bestTime into scheduledAt ISO in the client's timezone
   let scheduledAt = null;
   if (visitDate) {
-    const hourMap = { morning: 10, afternoon: 14, evening: 17, 'late morning': 11, 'early afternoon': 13 };
-    const hour = hourMap[(bestTime || '').toLowerCase()] ?? 10;
+    const hourMap = {
+      morning: 9, 'early morning': 9,
+      'late morning': 11,
+      noon: 12, midday: 12,
+      afternoon: 14, 'early afternoon': 13, 'mid afternoon': 14, 'late afternoon': 16,
+      evening: 17, 'early evening': 17,
+      '9am': 9, '9 am': 9, '10am': 10, '10 am': 10, '11am': 11, '11 am': 11,
+      '12pm': 12, '12 pm': 12, '1pm': 13, '1 pm': 13,
+      '2pm': 14, '2 pm': 14, '3pm': 15, '3 pm': 15,
+      '4pm': 16, '4 pm': 16, '5pm': 17, '5 pm': 17,
+    };
+    const bt = (bestTime || '').toLowerCase().trim();
+    // Try direct map first, then regex for "N pm/am" patterns
+    let hour = hourMap[bt];
+    if (hour == null) {
+      const pmMatch = bt.match(/^(\d{1,2})(?::\d{2})?\s*pm$/);
+      const amMatch = bt.match(/^(\d{1,2})(?::\d{2})?\s*am$/);
+      if (pmMatch) { const h = parseInt(pmMatch[1]); hour = h < 12 ? h + 12 : h; }
+      else if (amMatch) { hour = parseInt(amMatch[1]) % 12; }
+      else hour = 10; // fallback
+    }
+    // Clamp to 9–17 range
+    hour = Math.max(9, Math.min(17, hour));
     try {
-      const d = new Date(`${visitDate}T${String(hour).padStart(2,'0')}:00:00`);
+      // Build ISO string as local time in client's timezone and convert to UTC
+      const tz = client?.timezone || 'America/New_York';
+      const localStr = `${visitDate}T${String(hour).padStart(2,'0')}:00:00`;
+      // Get UTC offset for this timezone on this date (handles DST automatically)
+      const probe   = new Date(localStr + 'Z'); // treat as UTC temporarily
+      const tzDate  = new Date(probe.toLocaleString('en-US', { timeZone: tz }));
+      const offsetMs = probe.getTime() - tzDate.getTime();
+      const d = new Date(probe.getTime() + offsetMs);
       if (!isNaN(d)) scheduledAt = d.toISOString();
     } catch { /* invalid date, skip */ }
   }

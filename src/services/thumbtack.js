@@ -217,12 +217,24 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     ...(qualification.summary    ? { summary: qualification.summary } : {}),
   }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
 
-  // Outbound call to lead
+  // Outbound call to lead — only within business hours
+  const tz        = client.timezone       || 'America/New_York';
+  const startHour = client.call_start_hour ?? 9;
+  const endHour   = client.call_end_hour   ?? 17;
+  const nowHour   = parseInt(new Date().toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }));
+  const withinHours = nowHour >= startHour && nowHour < endHour;
+
+  if (!withinHours) {
+    logger.info('thumbtack', `outside business hours (${nowHour}h in ${tz}, window ${startHour}-${endHour}) — skipping call`);
+  }
+
   const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
   let convFresh;
   try { convFresh = await db.getConversationById(conversation.id); } catch {}
   if (convFresh?.call_sid && activeCallStatuses.includes(convFresh.call_status)) {
     logger.info('thumbtack', `skipping outbound call — active call already exists sid=${convFresh.call_sid}`);
+  } else if (!withinHours) {
+    // Already logged above — do not call outside hours
   } else {
     try {
       const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
