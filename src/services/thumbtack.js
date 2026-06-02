@@ -28,7 +28,7 @@ function clientCredentials(client) {
   return null;
 }
 
-async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, serviceNote, apiKey, thumbtackLeadId, leadEmail = null, source = 'thumbtack', scheduledAt = null }) {
+async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, serviceNote, serviceType: explicitServiceType, apiKey, thumbtackLeadId, leadEmail = null, source = 'thumbtack', scheduledAt = null }) {
   const expectedKey = process.env.THUMBTACK_WEBHOOK_SECRET;
   if (expectedKey && apiKey !== undefined && apiKey !== expectedKey) {
     logger.warn('thumbtack', 'invalid apiKey');
@@ -83,7 +83,8 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
   }
 
   const name        = leadName || 'Customer';
-  const serviceType = serviceNote ? detectServiceType(serviceNote) : 'free_estimate';
+  // Use explicit serviceType from form if provided; otherwise detect from note text
+  const serviceType = explicitServiceType || (serviceNote ? detectServiceType(serviceNote) : 'free_estimate');
   const message     = serviceNote || 'Thumbtack lead request';
 
   let conversation;

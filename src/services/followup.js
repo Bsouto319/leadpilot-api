@@ -134,7 +134,9 @@ function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, st
 
 function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleUrl, websiteUrl, scheduledAt, agentName, timezone }) {
   const firstName = (leadName || 'there').split(' ')[0];
-  const serviceLabel = (serviceType || 'general').replace(/_/g, ' ');
+  const serviceLabel = serviceType && serviceType !== 'general' && serviceType !== 'free_estimate'
+    ? serviceType.replace(/_/g, ' ')
+    : 'your project';
   const agent = agentName || 'Alice';
 
   const visitFormatted = scheduledAt
@@ -153,13 +155,16 @@ function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleU
     ? `Your showroom visit is confirmed — ${businessName}`
     : `We received your request — ${businessName} will call you shortly!`;
 
+  const logoUrl = 'https://leads.btechsouto.shop/cp-cabinets-logo.png';
+
   return {
     subject,
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
 <body>
 <div class="wrap">
-  <div class="header">
-    <h1>${businessName}</h1>
+  <div class="header" style="padding-bottom:12px">
+    <img src="${logoUrl}" alt="${businessName}" style="max-width:220px;width:100%;height:auto;display:block;margin:0 auto 12px auto;" />
+    <h1 style="font-size:20px;margin:0">${businessName}</h1>
     <p>Irmo, South Carolina</p>
   </div>
   <div class="hero">

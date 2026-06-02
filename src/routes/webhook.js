@@ -1689,8 +1689,9 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     const key = Object.keys(body).find(k => /phone/i.test(k));
     return key ? String(body[key] || '').trim() : '';
   })();
-  const visitDate = getField(body, 'your-date', 'date', 'date-of-visit', 'visit-date', 'visit_date');
-  const bestTime  = getField(body, 'your-subject', 'your-best-time', 'your-best-time-to-contact-you', 'subject', 'time', 'best-time', 'message', 'your-message');
+  const visitDate   = getField(body, 'your-date', 'date', 'date-of-visit', 'visit-date', 'visit_date');
+  const bestTime    = getField(body, 'your-subject', 'your-best-time', 'your-best-time-to-contact-you', 'subject', 'time', 'best-time');
+  const serviceType = getField(body, 'your-project', 'your-service', 'service', 'service-type', 'project', 'project-type', 'service_type');
 
   if (!rawPhone) {
     logger.warn('cf7', `missing phone field — body keys: ${Object.keys(body).join(', ')}`);
@@ -1698,8 +1699,9 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   }
 
   const serviceNote = [
-    visitDate && `Preferred visit date: ${visitDate}`,
-    bestTime  && `Best time: ${bestTime}`,
+    serviceType && `Service: ${serviceType}`,
+    visitDate   && `Preferred visit date: ${visitDate}`,
+    bestTime    && `Best time: ${bestTime}`,
   ].filter(Boolean).join(' | ') || 'Website contact form';
 
   // Convert visitDate + bestTime into scheduledAt ISO in the client's timezone
@@ -1717,24 +1719,41 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
       '4pm': 16, '4 pm': 16, '5pm': 17, '5 pm': 17,
     };
     const bt = (bestTime || '').toLowerCase().trim();
-    // Try direct map first, then regex for "N pm/am" patterns
-    let hour = hourMap[bt];
+    // Parse time string → { hour, minute }
+    let hour = null; let minute = 0;
+
+    // Try map first (morning/afternoon/etc)
+    const mapped = hourMap[bt];
+    if (mapped != null) { hour = mapped; }
+
+    // Try "H:MM AM/PM" or "H:MM" or "H AM/PM" patterns
     if (hour == null) {
-      const pmMatch = bt.match(/^(\d{1,2})(?::\d{2})?\s*pm$/);
-      const amMatch = bt.match(/^(\d{1,2})(?::\d{2})?\s*am$/);
-      if (pmMatch) { const h = parseInt(pmMatch[1]); hour = h < 12 ? h + 12 : h; }
-      else if (amMatch) { hour = parseInt(amMatch[1]) % 12; }
-      else hour = 10; // fallback
+      const timeMatch = bt.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+      if (timeMatch) {
+        let h = parseInt(timeMatch[1]);
+        const m = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+        const meridiem = timeMatch[3];
+        if (meridiem === 'pm' && h < 12) h += 12;
+        if (meridiem === 'am' && h === 12) h = 0;
+        hour = h; minute = m;
+      }
     }
-    // Clamp to 9–17 range
-    hour = Math.max(9, Math.min(17, hour));
+
+    // Fallback
+    if (hour == null) { hour = 10; minute = 0; }
+
+    // Clamp to 9:00–17:00 range
+    const totalMins = hour * 60 + minute;
+    const clampedMins = Math.max(9 * 60, Math.min(17 * 60, totalMins));
+    hour   = Math.floor(clampedMins / 60);
+    minute = clampedMins % 60;
+
     try {
-      // Build ISO string as local time in client's timezone and convert to UTC
-      const tz = client?.timezone || 'America/New_York';
-      const localStr = `${visitDate}T${String(hour).padStart(2,'0')}:00:00`;
-      // Get UTC offset for this timezone on this date (handles DST automatically)
-      const probe   = new Date(localStr + 'Z'); // treat as UTC temporarily
-      const tzDate  = new Date(probe.toLocaleString('en-US', { timeZone: tz }));
+      // Build ISO string as local time in client's timezone (America/New_York) and convert to UTC
+      const tz = 'America/New_York'; // always US Eastern
+      const localStr = `${visitDate}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00`;
+      const probe    = new Date(localStr + 'Z');
+      const tzDate   = new Date(probe.toLocaleString('en-US', { timeZone: tz }));
       const offsetMs = probe.getTime() - tzDate.getTime();
       const d = new Date(probe.getTime() + offsetMs);
       if (!isNaN(d)) scheduledAt = d.toISOString();
@@ -1747,6 +1766,7 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     leadName,
     leadEmail,
     serviceNote,
+    serviceType: serviceType || undefined,
     source: 'website',
     scheduledAt,
   }).catch(err => handleError('cf7', err));
