@@ -102,6 +102,8 @@ app.get('/terms', (req, res) => res.sendFile(path.join(__dirname, '..', 'public'
 app.get('/schedule/cp-cabinets', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'schedule-cp.html')));
 app.get('/privacy/cp-cabinets', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'privacy-cp-cabinets.html')));
 app.get('/terms/cp-cabinets',   (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'terms-cp-cabinets.html')));
+app.get('/cp-cabinets-logo.png', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'cp-cabinets-logo.png')));
+app.get('/cp-cabinets-logo.jpg', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'cp-cabinets-logo.jpg')));
 
 // ── AUDIO — serve pre-generated ElevenLabs MP3s (public — Twilio fetches these)
 // Routes:  GET /audio/:clientId/:phraseKey   (all phrases)
