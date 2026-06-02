@@ -59,6 +59,7 @@ function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, st
 <body>
 <div class="wrap">
   <div class="header">
+    <img src="https://leads.btechsouto.shop/cp-cabinets-logo.png" alt="CP Cabinets &amp; Quartz" style="max-width:200px;width:100%;height:auto;display:block;margin:0 auto 14px auto;" />
     <h1>CP Cabinets &amp; Quartz</h1>
     <p>Irmo, South Carolina</p>
   </div>
