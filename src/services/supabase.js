@@ -132,19 +132,28 @@ async function checkDuplicate(clientId, leadPhone, minutes = 60) {
   return data;
 }
 
-async function saveLead({ clientId, leadPhone, leadName = 'Customer', source, serviceType, message, thumbtackLeadId = null, leadEmail = null, scheduledAt = null }) {
+async function saveLead({ clientId, leadPhone, leadName = 'Customer', source, serviceType, message, thumbtackLeadId = null, leadEmail = null, scheduledAt = null, leadAddress = null }) {
+  // Stage logic:
+  // - no scheduledAt  → new_lead (Alice will call)
+  // - scheduledAt + no address → awaiting_address (visit booked, still need address)
+  // - scheduledAt + address   → scheduled (fully confirmed)
+  const stage = !scheduledAt ? 'new_lead'
+    : leadAddress ? 'scheduled'
+    : 'awaiting_address';
+
   const row = {
     client_id: clientId,
     lead_name: leadName,
     lead_phone: leadPhone,
     source,
-    stage: scheduledAt ? 'scheduled' : 'new_lead',
+    stage,
     service_type: serviceType,
     email_body: message,
   };
   if (thumbtackLeadId) row.thumbtack_lead_id = thumbtackLeadId;
-  if (leadEmail) row.lead_email = leadEmail;
-  if (scheduledAt) row.scheduled_at = scheduledAt;
+  if (leadEmail)    row.lead_email    = leadEmail;
+  if (scheduledAt)  row.scheduled_at  = scheduledAt;
+  if (leadAddress)  row.lead_address  = leadAddress;
   const { data, error } = await supabase
     .from('conversations')
     .insert(row)
