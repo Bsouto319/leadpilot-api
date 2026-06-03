@@ -143,20 +143,24 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
   const agentName   = client.agent_name || 'Lexy';
   const sourceLabel = source === 'website' ? 'website' : 'Thumbtack';
 
-  // Website leads with a scheduled date: keep stage=scheduled, skip outbound call
-  // but still send all owner/staff notifications
+  // Website leads with a scheduled date: notify owner/staff AND call lead to confirm
   if (scheduledAt && source === 'website') {
-    await db.updateConversation(conversation.id, {
-      ai_response: voiceScript,
-      ...(qualification.score != null ? { score: qualification.score } : {}),
-      ...(qualification.summary    ? { summary: qualification.summary } : {}),
-    }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
-
     const visitFormatted = new Date(scheduledAt).toLocaleString('en-US', {
       timeZone: 'America/New_York', weekday: 'short', month: 'short',
       day: 'numeric', hour: '2-digit', minute: '2-digit',
     });
 
+    // Confirmation voice script — warmer than cold outreach
+    const firstName = name.split(' ')[0];
+    const confirmScript = `Hi ${firstName}! This is ${agentName} calling from ${client.business_name}. I'm reaching out to confirm your FREE in-home estimate scheduled for ${visitFormatted}. We're really excited to work with you! If you have any questions before your visit, feel free to reply to our email or call us back. See you soon!`;
+
+    await db.updateConversation(conversation.id, {
+      ai_response: confirmScript,
+      ...(qualification.score != null ? { score: qualification.score } : {}),
+      ...(qualification.summary    ? { summary: qualification.summary } : {}),
+    }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
+
+    // Owner email notification
     if (client.owner_email) {
       const emailBody = [
         `New website lead — showroom visit scheduled!`,
@@ -173,6 +177,8 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
         qualification.summary ? `Insight: ${qualification.summary}` : '',
         qualification.signals?.length ? `Signals: ${qualification.signals.join(', ')}` : '',
         ``,
+        `${agentName} is calling the lead now to confirm the visit.`,
+        ``,
         client.website_url ? `Website: ${client.website_url}` : '',
         ``,
         client.business_name,
@@ -186,7 +192,8 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
     }
 
-    const notifyMsg = `Hey! ${agentName} received a new website lead for ${client.business_name}. ${name} scheduled a showroom visit for ${visitFormatted}. Check your email for full details.`;
+    // Owner + office alert call
+    const notifyMsg = `Hey! ${agentName} received a new website lead for ${client.business_name}. ${name} scheduled a showroom visit for ${visitFormatted}. ${agentName} is calling the lead now to confirm. Check your email for full details.`;
     if (client.owner_phone) {
       makeNotifyCall({
         to: `+${client.owner_phone}`,
@@ -202,6 +209,37 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
         message: notifyMsg,
         credentials: clientCredentials(client),
       }).catch(err => logger.warn('thumbtack', `office notify call failed: ${err.message}`));
+    }
+
+    // Confirmation call to lead (within business hours)
+    const tz        = client.timezone       || 'America/New_York';
+    const startHour = client.call_start_hour ?? 9;
+    const endHour   = client.call_end_hour   ?? 17;
+    const nowHour   = parseInt(new Date().toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }));
+    const withinHours = nowHour >= startHour && nowHour < endHour;
+
+    if (withinHours) {
+      try {
+        const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
+        const call = await twilioSvc.makeCall({
+          to: `+${leadPhone}`,
+          from: client.twilio_number,
+          voiceScript: confirmScript,
+          statusCallbackUrl: `${BASE}/webhook/call-status`,
+          intakeUrl: `${BASE}/webhook/voice-outbound-intake?conversationId=${conversation.id}&clientId=${client.id}`,
+          credentials: clientCredentials(client),
+        });
+        await db.updateConversation(conversation.id, {
+          call_sid: call.sid,
+          call_status: call.status,
+          call_attempted_at: new Date().toISOString(),
+        });
+        logger.info('thumbtack', `confirmation call placed conv=${conversation.id} sid=${call.sid}`);
+      } catch (err) {
+        await handleError('twilio', err);
+      }
+    } else {
+      logger.info('thumbtack', `outside business hours (${nowHour}h) — confirmation call skipped`);
     }
 
     db.appendMessage(conversation.id, 'lead', message).catch(() => {});
