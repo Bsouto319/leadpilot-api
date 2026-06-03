@@ -915,6 +915,17 @@ router.post('/send-audio-call', express.json({ limit: '10mb' }), async (req, res
 });
 
 // ── TEST EMAIL ────────────────────────────────────────────────────────────────
+router.post('/run-competitor-intel', async (req, res) => {
+  res.json({ ok: true, message: 'Competitor intel job started — check logs for progress' });
+  try {
+    const { runCompetitorIntelCron } = require('../services/competitorIntel');
+    await runCompetitorIntelCron();
+    logger.info('admin', 'competitor intel job completed via manual trigger');
+  } catch (err) {
+    logger.warn('admin', `competitor intel job failed: ${err.message}`);
+  }
+});
+
 router.post('/test-email', async (req, res) => {
   const { to, subject, body } = req.body;
   if (!to) return res.status(400).json({ ok: false, error: 'to is required' });
