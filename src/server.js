@@ -353,6 +353,13 @@ function startCronJobs() {
     try { await runFollowUpCron(3); } catch (err) { handleError('cron-followup-3', err).catch(() => {}); }
   });
 
+  // Every hour — Reddit + forums + Craigslist prospector for CP Cabinets
+  const { runRedditProspectorCron } = require('./services/redditProspector');
+  cron.schedule('0 * * * *', async () => {
+    logger.info('cron', 'running reddit prospector');
+    try { await runRedditProspectorCron(); } catch (err) { handleError('cron-reddit-prospector', err).catch(() => {}); }
+  });
+
   // Every Sunday at 10pm ET — competitor intelligence report for all active clients
   const { runCompetitorIntelCron } = require('./services/competitorIntel');
   cron.schedule('0 22 * * 0', async () => {
