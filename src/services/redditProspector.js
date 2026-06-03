@@ -219,15 +219,35 @@ async function assessAndGenerateDM(post) {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const postText = `${post.title}\n${post.selftext}`.slice(0, 700);
 
-  const prompt = `You analyze posts to find people who want to BUY NEW kitchen cabinets or countertops (quartz/granite) in SC/Southeast US.
+  const prompt = `You find leads for CP Cabinets & Quartz (Irmo, SC) — a company that supplies and installs premium all-plywood kitchen/bathroom cabinets and quartz/granite countertops.
 
-CP Cabinets & Quartz sells ONLY new custom kitchen cabinets and quartz/granite countertops. No repairs.
+QUALIFY ONLY if the person wants:
+- Complete kitchen or bathroom cabinet installation (new or remodel)
+- Countertop replacement or installation (quartz/granite)
+- New construction cabinetry project
+- Minimum project scope: $6,000+
+- Location: South Carolina, Charlotte NC, or within ~100 miles of Columbia SC
+
+DISQUALIFY immediately if they want:
+- Single door or drawer replacement
+- Cabinet painting or refinishing
+- Small repairs or handyman work
+- Fully custom/bespoke woodworking (we sell pre-fabricated premium cabinets)
+- Plumbing or electrical work
 
 Post from ${post.subreddit}:
 "${postText}"
 
-Evaluate purchase intent (1-10) and write a short natural DM if worth contacting (intent >= 7).
-DM should: reference their post specifically, mention CP Cabinets in Columbia SC, offer free estimate, end with ${WEBSITE_URL}. No emojis, no corporate tone.
+Score purchase intent 1-10. Score 8-10 = complete project, right area, right scope. Score below 7 = not worth contacting.
+
+If worth contacting (score >= 7), write a short natural DM (3-4 sentences) that:
+- References something specific from their post
+- Mentions CP Cabinets is in Irmo/Columbia SC with a showroom
+- Offers FREE in-home estimate, no obligation
+- Ends naturally with: ${WEBSITE_URL}
+- No emojis, no corporate tone, sounds like a real person
+
+NEVER say "custom cabinets" — say "premium cabinets" or "all-plywood cabinets".
 
 Respond ONLY with JSON:
 {"intent_score":<1-10>,"in_area":<true/false/unknown>,"worth_contacting":<true/false>,"reason":"<1 sentence>","dm_text":"<DM or null>"}`;

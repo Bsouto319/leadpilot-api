@@ -40,18 +40,26 @@ async function generateReport(competitors, clientName) {
       .map(r => ({ stars: r.rating, text: (r.text || '').slice(0, 350) })),
   }));
 
-  const prompt = `You are a competitive intelligence analyst for ${clientName}, a cabinet and countertop company.
+  const prompt = `You are a competitive intelligence analyst for ${clientName}, a premium cabinet and countertop company in Irmo/Columbia SC.
 
-Here are local competitors from Google Maps:
+${clientName} positioning:
+- Premium all-plywood pre-fabricated cabinets: Shaker, Slim Shaker, European/Frameless styles
+- Quartz and granite countertops — measurement, fabrication, installation
+- Minimum project $6,000. Focus: complete kitchen/bathroom projects, new construction, remodels
+- Does NOT do: repairs, painting, single door replacements, custom woodworking, plumbing, electrical
+- Service radius: 50 miles primary (Columbia, Lexington, Greenville, Charleston), up to 100 miles
+- Brand values: trust, professionalism, quality, sophistication, attention to detail, home value appreciation
+
+Local competitors from Google Maps:
 ${JSON.stringify(payload, null, 2)}
 
-Write a concise report (under 450 words) with:
-1. **Market Overview** — competitor count, average ratings, pricing tiers
-2. **Top Weaknesses** — patterns in negative reviews (delays, quality, communication, pricing)
-3. **Opportunities for ${clientName}** — specific gaps to exploit based on competitor failures
-4. **Alice's Talking Points** — 3-4 bullet points for when leads mention competitors
+Write a concise competitive intelligence report (under 450 words):
+1. **Market Overview** — competitor count, average ratings, price levels in the area
+2. **Competitor Weaknesses** — patterns in negative reviews (delays, poor installation, communication, quality)
+3. **Opportunities for ${clientName}** — specific gaps based on competitor failures aligned with our positioning
+4. **Alice's Talking Points** — 3-4 bullets for when leads mention competitors (highlight all-plywood quality, professional installation, free in-home estimate, local showroom in Irmo)
 
-Be direct and actionable. Use markdown headers.`;
+Be direct, commercial and actionable. Use markdown headers.`;
 
   const result = await openai.chat.completions.create({
     model:       'gpt-4o-mini',
