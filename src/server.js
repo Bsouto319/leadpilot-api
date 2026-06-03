@@ -353,5 +353,12 @@ function startCronJobs() {
     try { await runFollowUpCron(3); } catch (err) { handleError('cron-followup-3', err).catch(() => {}); }
   });
 
-  logger.info('server', 'cron jobs scheduled: appt-reminder@9am, 2h-reminder@every30min, call-retry@every30min, weekly-report@mon8am, thumbtack-poll@every10min, followup-emails@every12h');
+  // Every Sunday at 10pm ET — competitor intelligence report for all active clients
+  const { runCompetitorIntelCron } = require('./services/competitorIntel');
+  cron.schedule('0 22 * * 0', async () => {
+    logger.info('cron', 'running competitor intelligence report');
+    try { await runCompetitorIntelCron(); } catch (err) { handleError('cron-competitor-intel', err).catch(() => {}); }
+  }, { timezone: 'America/New_York' });
+
+  logger.info('server', 'cron jobs scheduled: appt-reminder@9am, 2h-reminder@every30min, call-retry@every30min, weekly-report@mon8am, thumbtack-poll@every10min, followup-emails@every12h, competitor-intel@sun10pm');
 }
