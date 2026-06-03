@@ -184,9 +184,10 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
         client.business_name,
       ].filter(Boolean).join('\n');
 
+      const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
       sendEmail({
         from: `${client.business_name} <noreply@btechsouto.shop>`,
-        to: client.owner_email,
+        to: alertRecipients,
         subject: `${tierLabel} Showroom Visit Booked — ${name} | ${client.business_name}`,
         body: emailBody,
       }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
@@ -318,9 +319,10 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       client.business_name,
     ].filter(Boolean).join('\n');
 
+    const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
     sendEmail({
       from: `${client.business_name} <noreply@btechsouto.shop>`,
-      to: client.owner_email,
+      to: alertRecipients,
       subject: `${tierLabel} Lead ${scoreText} — ${name} | ${client.business_name}`,
       body: emailBody,
     }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
