@@ -915,6 +915,18 @@ router.post('/send-audio-call', express.json({ limit: '10mb' }), async (req, res
 });
 
 // ── TEST EMAIL ────────────────────────────────────────────────────────────────
+router.post('/run-reddit-prospector', async (req, res) => {
+  const testEmail = req.body?.testEmail || null;
+  res.json({ ok: true, message: `Reddit prospector started${testEmail ? ` — sending only to ${testEmail}` : ''}` });
+  try {
+    const { runRedditProspectorTest } = require('../services/redditProspector');
+    await runRedditProspectorTest(testEmail ? [testEmail] : null);
+    logger.info('admin', `reddit prospector completed via manual trigger${testEmail ? ` (test: ${testEmail})` : ''}`);
+  } catch (err) {
+    logger.warn('admin', `reddit prospector failed: ${err.message}`);
+  }
+});
+
 router.post('/run-competitor-intel', async (req, res) => {
   res.json({ ok: true, message: 'Competitor intel job started — check logs for progress' });
   try {

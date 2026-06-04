@@ -295,7 +295,7 @@ async function saveProspect(supabase, post, assessment) {
 }
 
 // ── Digest email ──────────────────────────────────────────────────────────────
-async function sendDigestEmail(prospects) {
+async function sendDigestEmail(prospects, overrideRecipients = null) {
   if (!prospects.length) return;
   const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -349,17 +349,18 @@ async function sendDigestEmail(prospects) {
   </p>
 </div></body></html>`;
 
+  const recipients = overrideRecipients || DIGEST_RECIPIENTS;
   await sendEmail({
-    to:      DIGEST_RECIPIENTS,
+    to:      recipients,
     subject: `🎯 ${prospects.length} New Leads Ready — CP Cabinets (${date})`,
     html,
     from:    'CP Cabinets Outreach <noreply@btechsouto.shop>',
   });
-  logger.info('redditProspector', `digest sent: ${prospects.length} leads to ${DIGEST_RECIPIENTS.join(', ')}`);
+  logger.info('redditProspector', `digest sent: ${prospects.length} leads to ${Array.isArray(recipients) ? recipients.join(', ') : recipients}`);
 }
 
 // ── Fetch unsent from DB and send if conditions met ───────────────────────────
-async function fetchAndSendDigest(supabase) {
+async function fetchAndSendDigest(supabase, { force = false, overrideRecipients = null } = {}) {
   const { data: pending } = await supabase
     .from('outbound_prospects')
     .select('*')
@@ -371,20 +372,23 @@ async function fetchAndSendDigest(supabase) {
   const hourET = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
   const isWindow = SEND_HOURS_ET.includes(hourET);
 
-  if (!isWindow && count < BATCH_THRESHOLD) {
+  if (!force && !isWindow && count < BATCH_THRESHOLD) {
     logger.info('redditProspector', `${count} pending leads — waiting for 8h/16h ET or ${BATCH_THRESHOLD} threshold`);
     return;
   }
   if (!count) { logger.info('redditProspector', 'no pending leads to send'); return; }
 
-  await sendDigestEmail(pending);
+  await sendDigestEmail(pending, overrideRecipients);
 
-  await supabase
-    .from('outbound_prospects')
-    .update({ digest_emailed: true, digest_emailed_at: new Date().toISOString() })
-    .in('id', pending.map(p => p.id));
-
-  logger.info('redditProspector', `${count} leads marked as digest_emailed`);
+  if (!overrideRecipients) {
+    await supabase
+      .from('outbound_prospects')
+      .update({ digest_emailed: true, digest_emailed_at: new Date().toISOString() })
+      .in('id', pending.map(p => p.id));
+    logger.info('redditProspector', `${count} leads marked as digest_emailed`);
+  } else {
+    logger.info('redditProspector', `test digest sent to ${overrideRecipients} — leads NOT marked as sent`);
+  }
 }
 
 // ── Main cron function ────────────────────────────────────────────────────────
@@ -470,4 +474,11 @@ async function runRedditProspectorCron() {
   await fetchAndSendDigest(supabase);
 }
 
-module.exports = { runRedditProspectorCron };
+async function runRedditProspectorTest(overrideRecipients) {
+  const supabase = getSupabase();
+  await runRedditProspectorCron();
+  // Also force-send any pending that weren't sent yet
+  await fetchAndSendDigest(supabase, { force: true, overrideRecipients });
+}
+
+module.exports = { runRedditProspectorCron, runRedditProspectorTest };
