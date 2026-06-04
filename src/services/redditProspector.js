@@ -12,7 +12,7 @@ const WEBSITE_URL   = 'https://cpcabinets.com';
 const BUSINESS      = 'CP Cabinets & Quartz';
 
 const SEND_HOURS_ET    = [8, 16];
-const BATCH_THRESHOLD  = 10;
+const BATCH_THRESHOLD  = 1; // send every hour as soon as any qualified lead is found
 
 const DIGEST_RECIPIENTS = [
   'brunosouto1108@gmail.com',
@@ -419,7 +419,7 @@ async function runRedditProspectorCron() {
         let assessment;
         try { assessment = await assessAndGenerateDM(post); } catch (e) { logger.warn('redditProspector', `GPT error: ${e.message}`); continue; }
         logger.info('redditProspector', `r/${sub} u/${post.author} score=${assessment.intent_score}`);
-        if (!assessment.worth_contacting) continue;
+        if (!assessment.worth_contacting || assessment.intent_score < 8) continue;
 
         await saveProspect(supabase, post, assessment);
         newProspects.push({ ...post, ...assessment });
@@ -440,7 +440,7 @@ async function runRedditProspectorCron() {
 
     let assessment;
     try { assessment = await assessAndGenerateDM(post); } catch { continue; }
-    if (!assessment.worth_contacting) continue;
+    if (!assessment.worth_contacting || assessment.intent_score < 8) continue;
 
     await saveProspect(supabase, { ...post, author: 'forum_user' }, assessment);
     newProspects.push({ ...post, ...assessment });
@@ -458,7 +458,7 @@ async function runRedditProspectorCron() {
 
     let assessment;
     try { assessment = await assessAndGenerateDM(post); } catch { continue; }
-    if (!assessment.worth_contacting) continue;
+    if (!assessment.worth_contacting || assessment.intent_score < 8) continue;
 
     await saveProspect(supabase, { ...post, author: 'craigslist_user' }, assessment);
     newProspects.push({ ...post, ...assessment });
