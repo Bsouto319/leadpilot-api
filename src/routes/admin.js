@@ -938,18 +938,67 @@ router.post('/run-reddit-prospector', async (req, res) => {
         return;
       }
 
-      // Build simple plain-text email to guarantee delivery
       const { sendEmail } = require('../services/gmail');
       const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-      const lines = pending.map((p, i) =>
-        `${i + 1}. [Score ${p.intent_score}/10] ${p.post_title || 'No title'}\n   Source: ${p.subreddit}\n   DM: ${p.dm_text || 'N/A'}\n   Link: ${p.post_url || ''}`
-      ).join('\n\n');
+      const to   = testEmail || ['brunosouto1108@gmail.com', 'carvalhopintoge@gmail.com', 'contact@cpcabinets.com'];
 
-      const to = testEmail || ['brunosouto1108@gmail.com', 'carvalhopintoge@gmail.com', 'contact@cpcabinets.com'];
+      const cards = pending.map(p => {
+        const score = p.intent_score || 0;
+        const bg    = score >= 8 ? '#f0fdf4' : '#fffbeb';
+        const border= score >= 8 ? '#bbf7d0' : '#fde68a';
+        const color = score >= 8 ? '#16a34a' : '#d97706';
+        return `
+        <div style="border:1px solid ${border};border-radius:12px;padding:18px;margin-bottom:14px;background:${bg}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div>
+              <span style="font-size:13px;font-weight:700;color:#1e40af">u/${p.username || 'user'}</span>
+              <span style="color:#9ca3af;font-size:12px"> · ${p.subreddit || ''}</span>
+            </div>
+            <span style="background:${color};color:#fff;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">Score ${score}/10</span>
+          </div>
+          <p style="margin:0 0 10px;font-weight:700;color:#111827;font-size:14px">${(p.post_title || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+          ${p.post_content ? `<p style="margin:0 0 12px;font-size:12px;color:#6b7280;font-style:italic">"${p.post_content.slice(0,200).replace(/</g,'&lt;')}…"</p>` : ''}
+          ${p.dm_text ? `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:10px">
+            <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase">Message Ready to Send</p>
+            <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.6">${p.dm_text.replace(/</g,'&lt;')}</p>
+          </div>` : ''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <a href="https://www.reddit.com/message/compose/?to=${encodeURIComponent(p.username||'')}&subject=Your+kitchen+project" style="background:#ff4500;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:700">Send on Reddit →</a>
+            ${p.post_url ? `<a href="${p.post_url}" style="background:#f3f4f6;color:#374151;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:12px">View Post</a>` : ''}
+            <a href="https://cpcabinets.com" style="background:#1e3a5f;color:#fff;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:12px">cpcabinets.com</a>
+          </div>
+        </div>`;
+      }).join('');
+
+      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="max-width:620px;margin:0 auto;padding:24px 16px">
+  <div style="background:#1e3a5f;border-radius:14px 14px 0 0;padding:16px 28px;text-align:center">
+    <p style="margin:0;color:rgba(255,255,255,0.5);font-size:11px;letter-spacing:1px;text-transform:uppercase">CP Cabinets & Quartz</p>
+  </div>
+  <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);border-radius:0 0 14px 14px;padding:20px 28px 24px;margin-bottom:20px;text-align:center">
+    <p style="margin:0 0 4px;color:rgba(255,255,255,0.6);font-size:11px;text-transform:uppercase;letter-spacing:1px">${date}</p>
+    <h1 style="margin:0 0 4px;color:#fff;font-size:20px;font-weight:800">🎯 ${pending.length} Lead${pending.length>1?'s':''} Ready for Review</h1>
+    <p style="margin:0;color:rgba(255,255,255,0.7);font-size:13px">Outreach System · Columbia, SC</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 18px;margin-bottom:18px">
+    <ol style="margin:0;padding-left:18px;color:#4b5563;font-size:13px;line-height:1.9">
+      <li>Review leads — people looking for NEW kitchen cabinets or countertops in SC/NC</li>
+      <li>Click <strong>"Send on Reddit"</strong> for promising ones — message already written</li>
+      <li>When they reply with contact info, Alice calls automatically</li>
+    </ol>
+  </div>
+  ${cards}
+  <p style="text-align:center;font-size:11px;color:#9ca3af;margin-top:12px;padding-top:14px;border-top:1px solid #e5e7eb">
+    CP Cabinets & Quartz · Powered by BTech Outreach · Max 10 DMs/day
+  </p>
+</div></body></html>`;
+
       await sendEmail({
         to,
-        subject: `CP Cabinets Outreach — ${pending.length} Leads (${date})`,
-        body: `CP Cabinets & Quartz — Lead Digest\n${date}\n\n${lines}\n\n---\nReview and send DMs directly on Reddit.\nMax 10 messages/day.`,
+        subject: `🎯 CP Cabinets — ${pending.length} Leads Ready (${date})`,
+        html,
+        from: 'CP Cabinets Outreach <noreply@btechsouto.shop>',
       });
 
       if (!testEmail) {
@@ -960,7 +1009,7 @@ router.post('/run-reddit-prospector', async (req, res) => {
         logger.info('admin', `${pending.length} leads marked as digest_emailed`);
       }
 
-      logger.info('admin', `plain-text digest sent to ${Array.isArray(to) ? to.join(', ') : to}`);
+      logger.info('admin', `HTML digest sent to ${Array.isArray(to) ? to.join(', ') : to}`);
     } else {
       const { runRedditProspectorTest } = require('../services/redditProspector');
       await runRedditProspectorTest(testEmail ? [testEmail] : null);
