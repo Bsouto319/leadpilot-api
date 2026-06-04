@@ -944,8 +944,19 @@ router.post('/run-reddit-prospector', async (req, res) => {
         return;
       }
 
-      const recipients = testEmail ? [testEmail] : null;
-      await sendDigestEmail(pending, recipients);
+      // Build simple plain-text email to guarantee delivery
+      const { sendEmail } = require('../services/gmail');
+      const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      const lines = pending.map((p, i) =>
+        `${i + 1}. [Score ${p.intent_score}/10] ${p.post_title || 'No title'}\n   Source: ${p.subreddit}\n   DM: ${p.dm_text || 'N/A'}\n   Link: ${p.post_url || ''}`
+      ).join('\n\n');
+
+      const to = testEmail || ['brunosouto1108@gmail.com', 'carvalhopintoge@gmail.com', 'contact@cpcabinets.com'];
+      await sendEmail({
+        to,
+        subject: `CP Cabinets Outreach — ${pending.length} Leads (${date})`,
+        body: `CP Cabinets & Quartz — Lead Digest\n${date}\n\n${lines}\n\n---\nReview and send DMs directly on Reddit.\nMax 10 messages/day.`,
+      });
 
       if (!testEmail) {
         await supaAdm
@@ -954,7 +965,7 @@ router.post('/run-reddit-prospector', async (req, res) => {
           .in('id', pending.map(p => p.id));
       }
 
-      logger.info('admin', `digest sent to ${testEmail || 'all recipients'}`);
+      logger.info('admin', `plain-text digest sent to ${Array.isArray(to) ? to.join(', ') : to}`);
     } else {
       const { runRedditProspectorTest } = require('../services/redditProspector');
       await runRedditProspectorTest(testEmail ? [testEmail] : null);
