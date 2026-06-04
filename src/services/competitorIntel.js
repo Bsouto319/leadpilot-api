@@ -89,8 +89,8 @@ async function runCompetitorIntelCron() {
   }
 
   const supabase = createClient(
-    process.env.SUPABASE_URL || 'https://pvphgusjofufwtyiyviu.supabase.co',
-    process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY
+    'https://pvphgusjofufwtyiyviu.supabase.co',
+    process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2cGhndXNqb2Z1Znd0eWl5dml1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNjkwODYsImV4cCI6MjA5MDg0NTA4Nn0.0aA8YNmhVusNuBjWZoEZW50dTRZWowm9AoNVoyGCXBM'
   );
 
   const { data: clients, error } = await supabase
