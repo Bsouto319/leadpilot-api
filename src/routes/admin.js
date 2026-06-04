@@ -921,13 +921,7 @@ router.post('/run-reddit-prospector', async (req, res) => {
   res.json({ ok: true, message: `Reddit prospector started${testEmail ? ` — sending only to ${testEmail}` : ''}` });
   try {
     const { sendDigestEmail } = require('../services/redditProspector');
-    const { createClient }    = require('@supabase/supabase-js');
-
-    // Use service role key if available — bypasses RLS completely
-    const supaAdm = createClient(
-      process.env.SUPABASE_URL || 'https://pvphgusjofufwtyiyviu.supabase.co',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-    );
+    const supaAdm = db.supabaseClient();
 
     if (digestOnly) {
       const { data: pending, error } = await supaAdm
@@ -963,6 +957,7 @@ router.post('/run-reddit-prospector', async (req, res) => {
           .from('outbound_prospects')
           .update({ digest_emailed: true, digest_emailed_at: new Date().toISOString() })
           .in('id', pending.map(p => p.id));
+        logger.info('admin', `${pending.length} leads marked as digest_emailed`);
       }
 
       logger.info('admin', `plain-text digest sent to ${Array.isArray(to) ? to.join(', ') : to}`);
