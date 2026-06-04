@@ -916,19 +916,51 @@ router.post('/send-audio-call', express.json({ limit: '10mb' }), async (req, res
 
 // ── TEST EMAIL ────────────────────────────────────────────────────────────────
 router.post('/run-reddit-prospector', async (req, res) => {
-  const testEmail   = req.body?.testEmail || null;
-  const digestOnly  = req.body?.digestOnly || false;
+  const testEmail  = req.body?.testEmail || null;
+  const digestOnly = req.body?.digestOnly || false;
   res.json({ ok: true, message: `Reddit prospector started${testEmail ? ` — sending only to ${testEmail}` : ''}` });
   try {
-    const { runRedditProspectorTest, sendPendingDigest } = require('../services/redditProspector');
+    const { sendDigestEmail } = require('../services/redditProspector');
+    const { createClient }    = require('@supabase/supabase-js');
+
+    // Use service role key if available — bypasses RLS completely
+    const supaAdm = createClient(
+      process.env.SUPABASE_URL || 'https://pvphgusjofufwtyiyviu.supabase.co',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+    );
+
     if (digestOnly) {
-      await sendPendingDigest(testEmail ? [testEmail] : null);
+      const { data: pending, error } = await supaAdm
+        .from('outbound_prospects')
+        .select('*')
+        .eq('client_id', '5221cab9-a741-4ddc-a752-2359826fba95')
+        .eq('digest_emailed', false)
+        .order('intent_score', { ascending: false });
+
+      logger.info('admin', `digest pending count=${pending?.length || 0} error=${error?.message || 'none'}`);
+
+      if (!pending?.length) {
+        logger.info('admin', 'no pending leads to send');
+        return;
+      }
+
+      const recipients = testEmail ? [testEmail] : null;
+      await sendDigestEmail(pending, recipients);
+
+      if (!testEmail) {
+        await supaAdm
+          .from('outbound_prospects')
+          .update({ digest_emailed: true, digest_emailed_at: new Date().toISOString() })
+          .in('id', pending.map(p => p.id));
+      }
+
+      logger.info('admin', `digest sent to ${testEmail || 'all recipients'}`);
     } else {
+      const { runRedditProspectorTest } = require('../services/redditProspector');
       await runRedditProspectorTest(testEmail ? [testEmail] : null);
     }
-    logger.info('admin', `reddit prospector completed (digestOnly=${digestOnly})`);
   } catch (err) {
-    logger.warn('admin', `reddit prospector failed: ${err.message}`);
+    logger.warn('admin', `reddit prospector failed: ${err.message} stack: ${err.stack?.split('\n')[1] || ''}`);
   }
 });
 

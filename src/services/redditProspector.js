@@ -90,8 +90,10 @@ const DISCARD_KEYWORDS = [
   'repair', 'fix', 'broken', 'cracked', 'scratched', 'chip', 'already installed',
   'finished', 'done', 'completed', 'selling', 'for sale', 'diy', 'ikea', 'amazon',
   'lowes', 'home depot', 'canada', 'australia', 'uk', 'england', 'toronto', 'tutorial',
-  'how to paint', 'how to refinish', 'california', 'texas', 'florida', 'new york',
-  'ohio', 'michigan', 'illinois', 'pennsylvania', 'georgia', 'virginia', 'new jersey',
+  'how to paint', 'how to refinish', 'california', 'texas', 'new york',
+  'ohio', 'michigan', 'illinois', 'pennsylvania', 'virginia', 'new jersey',
+  'indiana', ' india ', 'india,', 'brazil', 'brasil', 'mexico', 'china',
+  'imported from', 'quarried in', 'mined in',
 ];
 
 // ── Parsers ───────────────────────────────────────────────────────────────────
@@ -295,7 +297,7 @@ async function saveProspect(supabase, post, assessment) {
 }
 
 // ── Digest email ──────────────────────────────────────────────────────────────
-async function sendDigestEmail(prospects, overrideRecipients = null) {
+async function sendDigestEmail(prospects, overrideRecipients = null, isLowerScore = false) {
   if (!prospects.length) return;
   const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -327,32 +329,55 @@ async function sendDigestEmail(prospects, overrideRecipients = null) {
     </div>`;
   }).join('');
 
+  const headerNote = isLowerScore
+    ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e">
+        ⚠️ No highly-qualified leads (score 8+) found today. Showing lower-scored prospects for your review — only send DMs to those you feel are worth it.
+       </div>`
+    : '';
+
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,sans-serif">
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 <div style="max-width:620px;margin:0 auto;padding:24px 16px">
-  <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a9e);border-radius:14px;padding:26px 28px;margin-bottom:24px;text-align:center">
-    <p style="margin:0 0 4px;color:rgba(255,255,255,0.7);font-size:12px;text-transform:uppercase;letter-spacing:1px">${date}</p>
-    <h1 style="margin:0 0 6px;color:#fff;font-size:22px;font-weight:800">🎯 ${prospects.length} New Lead${prospects.length > 1 ? 's' : ''} Ready for Review</h1>
-    <p style="margin:0;color:rgba(255,255,255,0.8);font-size:14px">CP Cabinets & Quartz · Outreach System</p>
+
+  <!-- CP Cabinets Header -->
+  <div style="background:#1e3a5f;border-radius:14px 14px 0 0;padding:20px 28px 16px;text-align:center">
+    <p style="margin:0;color:rgba(255,255,255,0.5);font-size:11px;text-transform:uppercase;letter-spacing:1px">CP Cabinets & Quartz</p>
   </div>
-  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px;margin-bottom:20px">
-    <ol style="margin:0;padding-left:18px;color:#4b5563;font-size:13px;line-height:1.8">
-      <li>Review leads below — people looking for NEW kitchen cabinets or countertops</li>
-      <li>Click <strong>"Send on Reddit"</strong> for promising ones — message already written</li>
-      <li>When they respond with contact info, Alice calls automatically</li>
+  <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a9e);border-radius:0 0 14px 14px;padding:20px 28px 24px;margin-bottom:20px;text-align:center">
+    <p style="margin:0 0 4px;color:rgba(255,255,255,0.6);font-size:11px;text-transform:uppercase;letter-spacing:1px">${date}</p>
+    <h1 style="margin:0 0 6px;color:#fff;font-size:20px;font-weight:800">${isLowerScore ? '📋' : '🎯'} ${prospects.length} Lead${prospects.length > 1 ? 's' : ''} for Review</h1>
+    <p style="margin:0;color:rgba(255,255,255,0.7);font-size:13px">Outreach System · Columbia, SC</p>
+  </div>
+
+  ${headerNote}
+
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px 18px;margin-bottom:20px">
+    <ol style="margin:0;padding-left:18px;color:#4b5563;font-size:13px;line-height:1.9">
+      <li>Review each lead — these are people looking for NEW kitchen cabinets or countertops in SC/NC</li>
+      <li>Click <strong>"Send on Reddit"</strong> for the ones that look promising — message already written</li>
+      <li>When they reply with their contact, Alice calls them automatically</li>
     </ol>
   </div>
-  <p style="font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">TODAY'S PROSPECTS (score ≥ 7/10)</p>
+
+  <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">
+    ${isLowerScore ? 'LEADS FOR YOUR REVIEW' : 'QUALIFIED LEADS (score ≥ 8/10)'}
+  </p>
+
   ${cards}
-  <p style="text-align:center;font-size:11px;color:#9ca3af;margin-top:8px;padding-top:16px;border-top:1px solid #e5e7eb">
-    CP Cabinets & Quartz · Outreach System by BTech · Max 10 messages/day on Reddit
+
+  <p style="text-align:center;font-size:11px;color:#9ca3af;margin-top:12px;padding-top:16px;border-top:1px solid #e5e7eb">
+    CP Cabinets & Quartz · Powered by BTech Outreach · Max 10 DMs/day on Reddit
   </p>
 </div></body></html>`;
 
   const recipients = overrideRecipients || DIGEST_RECIPIENTS;
+  const subject = isLowerScore
+    ? `📋 CP Cabinets Outreach — ${prospects.length} Leads for Review (${date})`
+    : `🎯 ${prospects.length} Qualified Leads Ready — CP Cabinets (${date})`;
+
   await sendEmail({
     to:      recipients,
-    subject: `🎯 ${prospects.length} New Leads Ready — CP Cabinets (${date})`,
+    subject,
     html,
     from:    'CP Cabinets Outreach <noreply@btechsouto.shop>',
   });
@@ -361,22 +386,51 @@ async function sendDigestEmail(prospects, overrideRecipients = null) {
 
 // ── Fetch unsent from DB and send if conditions met ───────────────────────────
 async function fetchAndSendDigest(supabase, { force = false, overrideRecipients = null } = {}) {
-  const { data: pending } = await supabase
+  const { data: pending, error: dbErr } = await supabase
     .from('outbound_prospects')
     .select('*')
     .eq('client_id', CP_CLIENT_ID)
     .eq('digest_emailed', false)
     .order('intent_score', { ascending: false });
 
+  if (dbErr) { logger.warn('redditProspector', `DB error: ${dbErr.message}`); return; }
+
   const count  = pending?.length || 0;
   const hourET = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
   const isWindow = SEND_HOURS_ET.includes(hourET);
 
+  logger.info('redditProspector', `digest check: count=${count} hourET=${hourET} isWindow=${isWindow} force=${force}`);
+
   if (!force && !isWindow && count < BATCH_THRESHOLD) {
-    logger.info('redditProspector', `${count} pending leads — waiting for 8h/16h ET or ${BATCH_THRESHOLD} threshold`);
+    logger.info('redditProspector', `${count} pending leads — waiting for 8h/16h ET`);
     return;
   }
-  if (!count) { logger.info('redditProspector', 'no pending leads to send'); return; }
+
+  // At 8h/16h ET with no score 8+ leads: fetch lower-score leads (6-7) as fallback
+  if (isWindow && !count) {
+    const { data: lower } = await supabase
+      .from('outbound_prospects')
+      .select('*')
+      .eq('client_id', CP_CLIENT_ID)
+      .eq('digest_emailed', false)
+      .gte('intent_score', 6)
+      .order('intent_score', { ascending: false })
+      .limit(10);
+
+    if (lower?.length) {
+      logger.info('redditProspector', `no score 8+ leads — sending ${lower.length} lower-score leads`);
+      await sendDigestEmail(lower, overrideRecipients, true);
+      await supabase
+        .from('outbound_prospects')
+        .update({ digest_emailed: true, digest_emailed_at: new Date().toISOString() })
+        .in('id', lower.map(p => p.id));
+    } else {
+      logger.info('redditProspector', 'no pending leads at scheduled time');
+    }
+    return;
+  }
+
+  if (!count) { logger.info('redditProspector', 'no pending leads'); return; }
 
   await sendDigestEmail(pending, overrideRecipients);
 
