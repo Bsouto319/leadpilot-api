@@ -481,4 +481,9 @@ async function runRedditProspectorTest(overrideRecipients) {
   await fetchAndSendDigest(supabase, { force: true, overrideRecipients });
 }
 
-module.exports = { runRedditProspectorCron, runRedditProspectorTest };
+async function sendPendingDigest(overrideRecipients = null) {
+  const supabase = getSupabase();
+  await fetchAndSendDigest(supabase, { force: true, overrideRecipients });
+}
+
+module.exports = { runRedditProspectorCron, runRedditProspectorTest, sendPendingDigest };
