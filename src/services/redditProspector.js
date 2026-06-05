@@ -92,8 +92,9 @@ const DISCARD_KEYWORDS = [
   'lowes', 'home depot', 'canada', 'australia', 'uk', 'england', 'toronto', 'tutorial',
   'how to paint', 'how to refinish', 'california', 'texas', 'new york',
   'ohio', 'michigan', 'illinois', 'pennsylvania', 'virginia', 'new jersey',
-  'indiana', ' india ', 'india,', 'brazil', 'brasil', 'mexico', 'china',
-  'imported from', 'quarried in', 'mined in',
+  'indiana', 'india', 'indian marble', 'brazil', 'brasil', 'mexico', 'china',
+  'pakistan', 'bangladesh', 'vietnam', 'turkey', 'italy', 'spain', 'portugal',
+  'imported from', 'quarried in', 'mined in', 'made in china', 'made in india',
 ];
 
 // ── Parsers ───────────────────────────────────────────────────────────────────
@@ -240,9 +241,9 @@ DISQUALIFY immediately if they want:
 Post from ${post.subreddit}:
 "${postText}"
 
-Score purchase intent 1-10. Score 8-10 = complete project, right area, right scope. Score below 7 = not worth contacting.
+Score purchase intent 1-10. Score 8-10 = complete project, right area, right scope. Score 5-7 = possible lead in area, worth a review. Score below 5 = discard.
 
-If worth contacting (score >= 7), write a short natural DM (3-4 sentences) that:
+If score >= 5 AND in_area is true or unknown, write a short natural DM (3-4 sentences) that:
 - References something specific from their post
 - Mentions CP Cabinets is in Irmo/Columbia SC with a showroom
 - Offers FREE in-home estimate, no obligation
@@ -329,14 +330,17 @@ async function sendEmptyDigestEmail(overrideRecipients = null) {
   }
 }
 
-async function sendDigestEmail(prospects, overrideRecipients = null, isLowerScore = false) {
+async function sendDigestEmail(prospects, overrideRecipients = null) {
   if (!prospects.length) return;
-  const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' });
+  const high   = prospects.filter(p => p.intent_score >= 8);
+  const medium = prospects.filter(p => p.intent_score >= 6 && p.intent_score < 8);
+  const low    = prospects.filter(p => p.intent_score < 6);
 
-  const cards = prospects.map(p => {
-    const scoreColor  = p.intent_score >= 8 ? '#16a34a' : '#d97706';
-    const scoreBg     = p.intent_score >= 8 ? '#f0fdf4' : '#fffbeb';
-    const scoreBorder = p.intent_score >= 8 ? '#bbf7d0' : '#fde68a';
+  function makeCard(p) {
+    const scoreColor  = p.intent_score >= 8 ? '#16a34a' : p.intent_score >= 6 ? '#d97706' : '#6b7280';
+    const scoreBg     = p.intent_score >= 8 ? '#f0fdf4' : p.intent_score >= 6 ? '#fffbeb' : '#f9fafb';
+    const scoreBorder = p.intent_score >= 8 ? '#bbf7d0' : p.intent_score >= 6 ? '#fde68a' : '#e5e7eb';
     return `
     <div style="border:1px solid ${scoreBorder};border-radius:12px;padding:20px;margin-bottom:16px;background:${scoreBg}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px">
@@ -350,7 +354,7 @@ async function sendDigestEmail(prospects, overrideRecipients = null, isLowerScor
       ${(p.post_content || p.selftext) ? `<p style="margin:0 0 12px;font-size:12px;color:#4b5563;font-style:italic">"${(p.post_content || p.selftext || '').slice(0, 220)}…"</p>` : ''}
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:10px">
         <p style="margin:0 0 6px;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase">Message Ready to Send</p>
-        <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.6;white-space:pre-line">${p.dm_text}</p>
+        <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.6;white-space:pre-line">${p.dm_text || '—'}</p>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <a href="https://www.reddit.com/message/compose/?to=${p.username || p.author}&subject=Your+kitchen+project"
@@ -359,43 +363,41 @@ async function sendDigestEmail(prospects, overrideRecipients = null, isLowerScor
         <a href="${WEBSITE_URL}" style="background:#1e3a5f;color:#fff;padding:7px 16px;border-radius:6px;text-decoration:none;font-size:12px">cpcabinets.com</a>
       </div>
     </div>`;
-  }).join('');
+  }
 
-  const headerNote = isLowerScore
-    ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e">
-        ⚠️ No highly-qualified leads (score 8+) found today. Showing lower-scored prospects for your review — only send DMs to those you feel are worth it.
-       </div>`
-    : '';
+  const sectionHtml = (label, emoji, note, list) => !list.length ? '' : `
+    <p style="font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin:20px 0 10px">${emoji} ${label}</p>
+    ${note ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#92400e">${note}</div>` : ''}
+    ${list.map(makeCard).join('')}`;
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 <div style="max-width:620px;margin:0 auto;padding:24px 16px">
 
-  <!-- CP Cabinets Header -->
   <div style="background:#1e3a5f;border-radius:14px 14px 0 0;padding:20px 28px 16px;text-align:center">
     <p style="margin:0;color:rgba(255,255,255,0.5);font-size:11px;text-transform:uppercase;letter-spacing:1px">CP Cabinets & Quartz</p>
   </div>
   <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a9e);border-radius:0 0 14px 14px;padding:20px 28px 24px;margin-bottom:20px;text-align:center">
     <p style="margin:0 0 4px;color:rgba(255,255,255,0.6);font-size:11px;text-transform:uppercase;letter-spacing:1px">${date}</p>
-    <h1 style="margin:0 0 6px;color:#fff;font-size:20px;font-weight:800">${isLowerScore ? '📋' : '🎯'} ${prospects.length} Lead${prospects.length > 1 ? 's' : ''} for Review</h1>
-    <p style="margin:0;color:rgba(255,255,255,0.7);font-size:13px">Outreach System · Columbia, SC</p>
+    <h1 style="margin:0 0 6px;color:#fff;font-size:20px;font-weight:800">
+      ${high.length ? '🎯' : medium.length ? '📋' : '🔍'} ${prospects.length} Lead${prospects.length !== 1 ? 's' : ''} for Review
+    </h1>
+    <p style="margin:0;color:rgba(255,255,255,0.7);font-size:13px">
+      ${high.length ? `${high.length} top priority` : ''}${medium.length ? ` · ${medium.length} medium` : ''}${low.length ? ` · ${low.length} regional` : ''} · Columbia SC
+    </p>
   </div>
 
-  ${headerNote}
-
-  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px 18px;margin-bottom:20px">
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 18px;margin-bottom:20px">
     <ol style="margin:0;padding-left:18px;color:#4b5563;font-size:13px;line-height:1.9">
-      <li>Review each lead — these are people looking for NEW kitchen cabinets or countertops in SC/NC</li>
-      <li>Click <strong>"Send on Reddit"</strong> for the ones that look promising — message already written</li>
-      <li>When they reply with their contact, Alice calls them automatically</li>
+      <li>Review each lead — people looking for cabinets/countertops in SC/NC</li>
+      <li>Click <strong>"Send on Reddit"</strong> for promising ones — message already written</li>
+      <li>When they reply with contact info, Alice calls them automatically</li>
     </ol>
   </div>
 
-  <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">
-    ${isLowerScore ? 'LEADS FOR YOUR REVIEW' : 'QUALIFIED LEADS (score ≥ 8/10)'}
-  </p>
-
-  ${cards}
+  ${sectionHtml('Top Priority — Score 8+', '🎯', '', high)}
+  ${sectionHtml('Worth Reviewing — Score 6-7', '📋', 'Not highly qualified (score 8+) but in the area. Sara/Eveline — review before sending DM.', medium)}
+  ${sectionHtml('Regional — Evaluate', '🔍', 'Low score but in the service area. Only contact if the post clearly mentions a real project nearby.', low)}
 
   <p style="text-align:center;font-size:11px;color:#9ca3af;margin-top:12px;padding-top:16px;border-top:1px solid #e5e7eb">
     CP Cabinets & Quartz · Powered by BTech Outreach · Max 10 DMs/day on Reddit
@@ -418,48 +420,35 @@ async function sendDigestEmail(prospects, overrideRecipients = null, isLowerScor
 
 // ── Fetch unsent from DB and send if conditions met ───────────────────────────
 async function fetchAndSendDigest(supabase, { force = false, overrideRecipients = null } = {}) {
+  // Fetch ALL unsent leads score 5+ — saves everything, Sara/Eveline decide what to act on
   const { data: pending, error: dbErr } = await supabase
     .from('outbound_prospects')
     .select('*')
     .eq('client_id', CP_CLIENT_ID)
     .eq('digest_emailed', false)
+    .gte('intent_score', 5)
     .order('intent_score', { ascending: false });
 
   if (dbErr) { logger.warn('redditProspector', `DB error: ${dbErr.message}`); return; }
 
-  const count  = pending?.length || 0;
-  const hourET = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
+  const count    = pending?.length || 0;
+  const hourET   = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
   const isWindow = SEND_HOURS_ET.includes(hourET);
 
   logger.info('redditProspector', `digest check: count=${count} hourET=${hourET} isWindow=${isWindow} force=${force}`);
 
+  // Outside scheduled window: only send immediately if score 8+
   if (!force && !isWindow && count < BATCH_THRESHOLD) {
-    logger.info('redditProspector', `${count} pending leads — waiting for 8h/16h ET`);
-    return;
+    const hasHigh = (pending || []).some(p => p.intent_score >= 8);
+    if (!hasHigh) {
+      logger.info('redditProspector', `${count} pending leads (no score 8+) — holding for 8h/16h ET window`);
+      return;
+    }
   }
 
-  // At 8h/16h ET with no score 8+ leads: fetch lower-score leads (6-7) as fallback
-  if (isWindow && !count) {
-    const { data: lower } = await supabase
-      .from('outbound_prospects')
-      .select('*')
-      .eq('client_id', CP_CLIENT_ID)
-      .eq('digest_emailed', false)
-      .gte('intent_score', 6)
-      .order('intent_score', { ascending: false })
-      .limit(10);
-
-    if (lower?.length) {
-      logger.info('redditProspector', `no score 8+ leads — sending ${lower.length} lower-score leads`);
-      await sendDigestEmail(lower, overrideRecipients, true);
-      await supabase
-        .from('outbound_prospects')
-        .update({ digest_emailed: true, digest_emailed_at: new Date().toISOString() })
-        .in('id', lower.map(p => p.id));
-    } else {
-      logger.info('redditProspector', 'no leads found — sending empty digest at scheduled window');
-      await sendEmptyDigestEmail(overrideRecipients);
-    }
+  if (!count && isWindow) {
+    logger.info('redditProspector', 'no leads found — sending empty digest at scheduled window');
+    await sendEmptyDigestEmail(overrideRecipients);
     return;
   }
 
@@ -510,7 +499,7 @@ async function runRedditProspectorCron() {
         let assessment;
         try { assessment = await assessAndGenerateDM(post); } catch (e) { logger.warn('redditProspector', `GPT error: ${e.message}`); continue; }
         logger.info('redditProspector', `r/${sub} u/${post.author} score=${assessment.intent_score}`);
-        if (!assessment.worth_contacting || assessment.intent_score < 8) continue;
+        if (assessment.intent_score < 5 || assessment.in_area === false) continue;
 
         await saveProspect(supabase, post, assessment);
         newProspects.push({ ...post, ...assessment });
@@ -531,7 +520,7 @@ async function runRedditProspectorCron() {
 
     let assessment;
     try { assessment = await assessAndGenerateDM(post); } catch { continue; }
-    if (!assessment.worth_contacting || assessment.intent_score < 8) continue;
+    if (assessment.intent_score < 5 || assessment.in_area === false) continue;
 
     await saveProspect(supabase, { ...post, author: 'forum_user' }, assessment);
     newProspects.push({ ...post, ...assessment });
@@ -549,7 +538,7 @@ async function runRedditProspectorCron() {
 
     let assessment;
     try { assessment = await assessAndGenerateDM(post); } catch { continue; }
-    if (!assessment.worth_contacting || assessment.intent_score < 8) continue;
+    if (assessment.intent_score < 5 || assessment.in_area === false) continue;
 
     await saveProspect(supabase, { ...post, author: 'craigslist_user' }, assessment);
     newProspects.push({ ...post, ...assessment });
