@@ -297,6 +297,38 @@ async function saveProspect(supabase, post, assessment) {
 }
 
 // ── Digest email ──────────────────────────────────────────────────────────────
+async function sendEmptyDigestEmail(overrideRecipients = null) {
+  const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' });
+  const hourET = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
+  const slot = hourET <= 10 ? 'Morning' : 'Afternoon';
+  const to = overrideRecipients || DIGEST_RECIPIENTS;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="max-width:620px;margin:0 auto;padding:24px 16px">
+  <div style="background:#1e3a5f;border-radius:14px 14px 0 0;padding:20px 28px 16px;text-align:center">
+    <p style="margin:0;color:rgba(255,255,255,0.5);font-size:11px;text-transform:uppercase;letter-spacing:1px">CP Cabinets & Quartz</p>
+  </div>
+  <div style="background:linear-gradient(135deg,#1e3a5f,#2d5a9e);border-radius:0 0 14px 14px;padding:20px 28px 24px;margin-bottom:20px;text-align:center">
+    <p style="margin:0 0 4px;color:rgba(255,255,255,0.6);font-size:11px;text-transform:uppercase;letter-spacing:1px">${date}</p>
+    <h1 style="margin:0 0 6px;color:#fff;font-size:20px;font-weight:800">📋 ${slot} Scan — No New Leads</h1>
+    <p style="margin:0;color:rgba(255,255,255,0.7);font-size:13px">Outreach System · Columbia, SC</p>
+  </div>
+  <div style="background:#fff;border-radius:12px;padding:28px;text-align:center;border:1px solid #e5e7eb">
+    <p style="font-size:40px;margin:0 0 12px">🔍</p>
+    <p style="font-size:16px;font-weight:700;color:#111827;margin:0 0 8px">No qualified leads found in this scan</p>
+    <p style="font-size:14px;color:#6b7280;margin:0 0 20px">Reddit, forums, and listing sites were checked. No posts matched your target profile (cabinets/countertops, SC area, score 6+).</p>
+    <p style="font-size:12px;color:#9ca3af;margin:0">✅ System is working normally · Next scan in ~1 hour</p>
+  </div>
+  <p style="text-align:center;font-size:11px;color:#9ca3af;margin-top:16px">LeadPilot Outreach · Powered by BTechSouto</p>
+</div></body></html>`;
+  try {
+    await sendEmail({ to, subject: `[CP Cabinets] ${slot} Scan — No Leads Found · ${date}`, html });
+    logger.info('redditProspector', `empty digest sent to ${Array.isArray(to) ? to.join(', ') : to}`);
+  } catch (err) {
+    logger.warn('redditProspector', `empty digest email failed: ${err.message}`);
+  }
+}
+
 async function sendDigestEmail(prospects, overrideRecipients = null, isLowerScore = false) {
   if (!prospects.length) return;
   const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -425,7 +457,8 @@ async function fetchAndSendDigest(supabase, { force = false, overrideRecipients 
         .update({ digest_emailed: true, digest_emailed_at: new Date().toISOString() })
         .in('id', lower.map(p => p.id));
     } else {
-      logger.info('redditProspector', 'no pending leads at scheduled time');
+      logger.info('redditProspector', 'no leads found — sending empty digest at scheduled window');
+      await sendEmptyDigestEmail(overrideRecipients);
     }
     return;
   }
