@@ -371,17 +371,15 @@
     const leadName = `${data.firstName} ${data.lastName}`.trim();
 
     try {
-      await fetch('https://leads.btechsouto.shop/webhook/schedule/147789ae-8576-4310-a243-416c04a99b36', {
+      await fetch('https://leads.btechsouto.shop/webhook/cf7?clientId=147789ae-8576-4310-a243-416c04a99b36', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          leadName,
-          leadPhone: data.phone.replace(/\D/g,''),
-          leadEmail: data.email || null,
-          serviceType: data.projectType,
-          leadAddress: data.address || null,
-          notes: data.notes || null,
-          source: 'landing_page',
+          name: leadName,
+          phone: data.phone,
+          email: data.email || '',
+          service_type: data.projectType,
+          notes: [data.address, data.notes].filter(Boolean).join(' | ') || '',
         }),
       });
     } catch (_) {}
