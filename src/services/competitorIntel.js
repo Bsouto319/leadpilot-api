@@ -95,7 +95,7 @@ async function runCompetitorIntelCron() {
 
   const { data: clients, error } = await supabase
     .from('clients')
-    .select('id, business_name, zip_code, competitor_keywords, owner_email, secondary_email')
+    .select('id, business_name, zip_code, competitor_keywords, owner_email, secondary_email, admin_email')
     .eq('active', true)
     .not('zip_code', 'is', null);
 
