@@ -40,16 +40,30 @@ function emailStyle() {
     </style>`;
 }
 
-function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, step }) {
+function clientBranding(client) {
+  return {
+    logoUrl:         client.logo_url          || 'https://leads.btechsouto.shop/cp-cabinets-logo.png',
+    cityState:       client.city_state         || 'Irmo, South Carolina',
+    addressDisplay:  client.address_display    || '1085 Lake Murray Blvd, Suite E, Irmo, SC 29063',
+    contactPhone:    client.contact_phone_display || '(803) 373-8191',
+    scheduleSlug:    client.schedule_slug      || 'cp-cabinets',
+  };
+}
+
+function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, step, logoUrl, cityState, addressDisplay, contactPhone }) {
   const firstName = (leadName || 'there').split(' ')[0];
+  logoUrl       = logoUrl       || 'https://leads.btechsouto.shop/cp-cabinets-logo.png';
+  cityState     = cityState     || 'Irmo, South Carolina';
+  addressDisplay= addressDisplay|| '1085 Lake Murray Blvd, Suite E, Irmo, SC 29063';
+  contactPhone  = contactPhone  || '(803) 373-8191';
   const subjects = {
-    1: `Your Dream Kitchen Awaits — ${businessName}`,
-    2: `Still thinking about new cabinets? — ${businessName}`,
+    1: `We received your request — ${businessName} will call you shortly!`,
+    2: `Still interested? — ${businessName}`,
     3: `One last note from ${businessName} 👋`,
   };
   const intros = {
-    1: `Hi ${firstName},<br><br>We tried to reach you earlier — no worries! We'd love to show you our premium all-plywood cabinet collections in person at our Irmo showroom.<br><br>Take a look at what we have for you:`,
-    2: `Hi ${firstName},<br><br>Just checking in! We know choosing the right cabinets is a big decision. Our team is ready to answer any questions and schedule a visit at your convenience.`,
+    1: `Hi ${firstName},<br><br>We tried to reach you earlier — no worries! We'd love to discuss your project and schedule a FREE estimate at your convenience.`,
+    2: `Hi ${firstName},<br><br>Just checking in! We know choosing the right contractor is a big decision. Our team is ready to answer any questions.`,
     3: `Hi ${firstName},<br><br>This is our final follow-up. We don't want to bother you, but we'd hate for you to miss out on the quality and craftsmanship we offer. If you're still interested, we're here for you!`,
   };
 
@@ -59,9 +73,9 @@ function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, st
 <body>
 <div class="wrap">
   <div class="header">
-    <img src="https://leads.btechsouto.shop/cp-cabinets-logo.png" alt="CP Cabinets &amp; Quartz" style="max-width:200px;width:100%;height:auto;display:block;margin:0 auto 14px auto;" />
-    <h1>CP Cabinets &amp; Quartz</h1>
-    <p>Irmo, South Carolina</p>
+    <img src="${logoUrl}" alt="${businessName}" style="max-width:200px;width:100%;height:auto;display:block;margin:0 auto 14px auto;" />
+    <h1>${businessName}</h1>
+    <p>${cityState}</p>
   </div>
 
   <div class="hero">
@@ -133,7 +147,11 @@ function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, st
 
 // ── CONFIRMATION EMAIL (sent immediately when lead is captured, before call) ──
 
-function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleUrl, websiteUrl, scheduledAt, agentName, timezone }) {
+function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleUrl, websiteUrl, scheduledAt, agentName, timezone, logoUrl, cityState, addressDisplay, contactPhone }) {
+  logoUrl        = logoUrl        || 'https://leads.btechsouto.shop/cp-cabinets-logo.png';
+  cityState      = cityState      || 'Irmo, South Carolina';
+  addressDisplay = addressDisplay || '1085 Lake Murray Blvd, Suite E, Irmo, SC 29063';
+  contactPhone   = contactPhone   || '(803) 373-8191';
   const firstName = (leadName || 'there').split(' ')[0];
   const serviceLabel = serviceType && serviceType !== 'general' && serviceType !== 'free_estimate'
     ? serviceType.replace(/_/g, ' ')
@@ -156,17 +174,15 @@ function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleU
     ? `Your showroom visit is confirmed — ${businessName}`
     : `We received your request — ${businessName} will call you shortly!`;
 
-  const logoUrl = 'https://leads.btechsouto.shop/cp-cabinets-logo.png';
-
   return {
     subject,
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
 <body>
 <div class="wrap">
   <div class="header" style="padding-bottom:12px">
-    <img src="${logoUrl}" alt="${businessName}" style="max-width:220px;width:100%;height:auto;display:block;margin:0 auto 12px auto;" />
+    ${logoUrl ? `<img src="${logoUrl}" alt="${businessName}" style="max-width:220px;width:100%;height:auto;display:block;margin:0 auto 12px auto;" />` : ''}
     <h1 style="font-size:20px;margin:0">${businessName}</h1>
-    <p>Irmo, South Carolina</p>
+    <p>${cityState}</p>
   </div>
   <div class="hero">
     <h2>Hi ${firstName}, we got your request!</h2>
@@ -178,10 +194,9 @@ function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleU
 
     <div class="info">
       <p>
-        📍 <strong>1085 Lake Murray Blvd, Suite E, Irmo, SC 29063</strong><br>
-        📞 <strong>(803) 373-8191</strong><br>
-        🕐 Mon–Fri, 9AM–4PM (by appointment)<br>
-        ✅ TSCA VI &amp; KCMA Certified
+        📍 <strong>${addressDisplay}</strong><br>
+        📞 <strong>${contactPhone}</strong><br>
+        🕐 Mon–Fri, 9AM–5PM
       </p>
     </div>
 
@@ -206,15 +221,17 @@ async function sendLeadConfirmationEmail(conv) {
   const client = conv.clients || conv.client;
   if (!client) return;
 
+  const branding = clientBranding(client);
   const { subject, html } = buildConfirmationEmail({
     leadName: conv.lead_name,
     businessName: client.business_name,
     serviceType: conv.service_type,
-    scheduleUrl: `${BASE_URL}/schedule/cp-cabinets`,
+    scheduleUrl: `${BASE_URL}/schedule/${branding.scheduleSlug}`,
     websiteUrl: client.website_url,
     scheduledAt: conv.scheduled_at || null,
     agentName: client.agent_name || null,
     timezone: client.timezone || null,
+    ...branding,
   });
 
   await sendEmail({
@@ -234,13 +251,15 @@ async function sendImmediateFollowUp(conv) {
   const client = conv.clients || conv.client;
   if (!client) return;
 
-  const scheduleUrl = `${BASE_URL}/schedule/cp-cabinets`;
+  const branding1 = clientBranding(client);
+  const scheduleUrl = `${BASE_URL}/schedule/${branding1.scheduleSlug}`;
   const { subject, html } = buildCatalogEmail({
     leadName: conv.lead_name,
     businessName: client.business_name,
-    scheduleUrl: client.website_url ? `${BASE_URL}/schedule/cp-cabinets` : scheduleUrl,
+    scheduleUrl,
     websiteUrl: client.website_url,
     step: 1,
+    ...branding1,
   });
 
   await sendEmail({
@@ -270,13 +289,15 @@ async function runFollowUpCron(step) {
       const client = conv.clients;
       if (!client) continue;
 
-      const scheduleUrl = `${BASE_URL}/schedule/cp-cabinets`;
+      const brandingC = clientBranding(client);
+      const scheduleUrl = `${BASE_URL}/schedule/${brandingC.scheduleSlug}`;
       const { subject, html } = buildCatalogEmail({
         leadName: conv.lead_name,
         businessName: client.business_name,
         scheduleUrl,
         websiteUrl: client.website_url,
         step,
+        ...brandingC,
       });
 
       await sendEmail({

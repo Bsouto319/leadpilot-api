@@ -115,6 +115,7 @@ app.get('/cp-cabinets-logo.jpg', (req, res) => res.sendFile(path.join(__dirname,
 
 // ── JF TILE ─────────────────────────────────────────────────────────────────
 app.get('/schedule/jf-tile', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'schedule-jf-tile.html')));
+app.get('/jf-tile-logo.jpg', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'jf-tile-logo.jpg')));
 app.get('/jf-tile/:img', (req, res) => {
   const allowed = ['gallery1.jpg','gallery2.jpg','gallery3.jpg','gallery4.jpg'];
   if (!allowed.includes(req.params.img)) return res.status(404).end();
