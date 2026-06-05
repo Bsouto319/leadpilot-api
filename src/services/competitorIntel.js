@@ -188,17 +188,23 @@ async function runCompetitorIntelCron() {
 </body></html>`;
 
       const recipients = [
+        'brunosouto1108@gmail.com', // BTechSouto admin — sempre primeiro
         client.owner_email,
         client.secondary_email,
-        'brunosouto1108@gmail.com', // BTechSouto admin sempre recebe
+        client.admin_email,
       ].filter(Boolean);
+
       for (const to of recipients) {
-        await sendEmail({
-          to,
-          subject: `🎯 Competitor Intel — ${client.business_name} (${date})`,
-          html,
-        });
-        logger.info('competitorIntel', `report sent to ${to}`);
+        try {
+          await sendEmail({
+            to,
+            subject: `🎯 Competitor Intel — ${client.business_name} (${date})`,
+            html,
+          });
+          logger.info('competitorIntel', `report sent to ${to}`);
+        } catch (emailErr) {
+          logger.warn('competitorIntel', `email failed for ${to}: ${emailErr.message}`);
+        }
       }
     } catch (err) {
       logger.warn('competitorIntel', `failed for ${client.business_name}: ${err.message}`);
