@@ -1069,49 +1069,13 @@ router.post('/send-reddit-dm', async (req, res) => {
 
 router.post('/run-competitor-intel', async (req, res) => {
   try {
-    const PLACES_KEY = process.env.GOOGLE_PLACES_API_KEY;
-    const PLACES_BASE = 'https://maps.googleapis.com/maps/api/place';
-
-    // Step 1: search
-    const searchRes = await fetch(`${PLACES_BASE}/textsearch/json?query=cabinet+contractor+near+29201&key=${PLACES_KEY}`);
-    const searchData = await searchRes.json();
-    if (searchData.status !== 'OK') {
-      return res.status(500).json({ step: 'search', status: searchData.status, error: searchData.error_message });
-    }
-    const places = searchData.results.slice(0, 3);
-
-    // Step 2: get details for first place
-    const detailRes = await fetch(`${PLACES_BASE}/details/json?place_id=${places[0].place_id}&fields=name,rating,user_ratings_total,reviews,formatted_address&key=${PLACES_KEY}`);
-    const detailData = await detailRes.json();
-
-    // Step 3: GPT report
-    const OpenAI = require('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const gptRes = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: `Write a 2-sentence competitive insight for CP Cabinets about this competitor: ${places[0].name} (${places[0].rating} stars, ${places[0].user_ratings_total} reviews)` }],
-      max_tokens: 100,
-    });
-    const insight = gptRes.choices[0].message.content;
-
-    // Step 4: send email
-    const { sendEmail } = require('../services/gmail');
-    await sendEmail({
-      to: 'brunosouto1108@gmail.com',
-      subject: '🎯 Competitor Intel DIAGNÓSTICO — CP Cabinets',
-      html: `<div style="font-family:sans-serif;padding:20px;background:#f9fafb">
-        <h2 style="color:#1e3a5f">Competitor Intel — Diagnóstico</h2>
-        <p><strong>Lugares encontrados:</strong> ${searchData.results.length}</p>
-        <p><strong>1º concorrente:</strong> ${places[0].name} ⭐${places[0].rating} (${places[0].user_ratings_total} reviews)</p>
-        <p><strong>Insight GPT:</strong> ${insight}</p>
-        <p style="color:#16a34a">✅ Sistema funcionando! O relatório completo roda todo domingo 22h ET.</p>
-      </div>`,
-    });
-
-    res.json({ ok: true, places_found: searchData.results.length, first: places[0].name, insight });
+    const { runCompetitorIntelCron } = require('../services/competitorIntel');
+    await runCompetitorIntelCron();
+    logger.info('admin', 'competitor intel job completed via manual trigger');
+    res.json({ ok: true, message: 'Competitor intel completed — emails sent' });
   } catch (err) {
-    logger.warn('admin', `competitor intel diagnose failed: ${err.message}`);
-    res.status(500).json({ ok: false, error: err.message, stack: err.stack?.split('\n')[1] });
+    logger.warn('admin', `competitor intel job failed: ${err.message}`);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
