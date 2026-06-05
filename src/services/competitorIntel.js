@@ -187,7 +187,11 @@ async function runCompetitorIntelCron() {
 </div>
 </body></html>`;
 
-      const recipients = [client.owner_email, client.secondary_email].filter(Boolean);
+      const recipients = [
+        client.owner_email,
+        client.secondary_email,
+        'brunosouto1108@gmail.com', // BTechSouto admin sempre recebe
+      ].filter(Boolean);
       for (const to of recipients) {
         await sendEmail({
           to,
