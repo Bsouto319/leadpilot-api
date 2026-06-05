@@ -1080,13 +1080,14 @@ router.post('/run-competitor-intel', async (req, res) => {
 });
 
 router.post('/test-email', async (req, res) => {
-  const { to, subject, body } = req.body;
+  const { to, subject, body, html } = req.body;
   if (!to) return res.status(400).json({ ok: false, error: 'to is required' });
   try {
     const { sendEmail } = require('../services/gmail');
     await sendEmail({
       to,
       subject: subject || '✅ LeadPilot — Teste de Email',
+      html: html || null,
       body: body || `Email de teste enviado em ${new Date().toISOString()}.\n\nSe chegou aqui, o Resend está funcionando corretamente!`,
     });
     res.json({ ok: true, message: `Email enviado para ${to}` });
