@@ -357,8 +357,8 @@ async function sendDigestEmail(prospects, overrideRecipients = null) {
         <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.6;white-space:pre-line">${p.dm_text || '—'}</p>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <a href="https://www.reddit.com/message/compose/?to=${p.username || p.author}&subject=Your+kitchen+project"
-           style="background:#ff4500;color:#fff;padding:7px 16px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:700">Send on Reddit →</a>
+        <a href="https://leads.btechsouto.shop/api/admin/send-reddit-dm-link?to=${encodeURIComponent(p.username || p.author)}&id=${p.id}&key=LP8141FEB8E1C3BD37F8615730F7F31994B7E5378F&msg=${encodeURIComponent((p.dm_text||'').slice(0,500))}"
+           style="background:#ff4500;color:#fff;padding:7px 16px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:700">🚀 Send DM (auto) →</a>
         ${(p.post_url || p.permalink) ? `<a href="${p.post_url || ('https://reddit.com' + p.permalink)}" style="background:#f3f4f6;color:#374151;padding:7px 16px;border-radius:6px;text-decoration:none;font-size:12px">View Post</a>` : ''}
         <a href="${WEBSITE_URL}" style="background:#1e3a5f;color:#fff;padding:7px 16px;border-radius:6px;text-decoration:none;font-size:12px">cpcabinets.com</a>
       </div>

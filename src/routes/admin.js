@@ -1019,6 +1019,54 @@ router.post('/run-reddit-prospector', async (req, res) => {
   }
 });
 
+// ── SEND REDDIT DM via GET link (called from email button) ───────────────────
+router.get('/send-reddit-dm-link', async (req, res) => {
+  const { to, msg, id, key } = req.query;
+  if (key !== (process.env.ADMIN_KEY || 'LP8141FEB8E1C3BD37F8615730F7F31994B7E5378F')) {
+    return res.status(401).send('Unauthorized');
+  }
+  if (!to || !msg) return res.status(400).send('Missing params');
+  try {
+    const { sendDM } = require('../services/redditDM');
+    await sendDM({ to, subject: 'Your kitchen project', message: decodeURIComponent(msg) });
+    if (id) {
+      const supabase = db.supabaseClient();
+      await supabase.from('outbound_prospects').update({ dm_sent: true, dm_sent_at: new Date().toISOString() }).eq('id', id);
+    }
+    res.send(`<html><body style="font-family:sans-serif;padding:40px;text-align:center">
+      <h2 style="color:#16a34a">✅ DM enviado para u/${to}</h2>
+      <p>Pela conta u/One-Custard-2339</p>
+      <p style="color:#6b7280;font-size:14px">Pode fechar esta aba.</p>
+    </body></html>`);
+  } catch (err) {
+    logger.warn('admin', `reddit dm-link failed: ${err.message}`);
+    res.send(`<html><body style="font-family:sans-serif;padding:40px;text-align:center">
+      <h2 style="color:#dc2626">❌ Erro ao enviar DM</h2>
+      <p>${err.message}</p>
+    </body></html>`);
+  }
+});
+
+// ── SEND REDDIT DM ────────────────────────────────────────────────────────────
+router.post('/send-reddit-dm', async (req, res) => {
+  const { to, message, prospectId } = req.body;
+  if (!to || !message) return res.status(400).json({ error: 'to and message required' });
+  try {
+    const { sendDM } = require('../services/redditDM');
+    await sendDM({ to, subject: 'Your kitchen project', message });
+
+    // Mark as dm_sent in DB
+    if (prospectId) {
+      const supabase = db.supabaseClient();
+      await supabase.from('outbound_prospects').update({ dm_sent: true, dm_sent_at: new Date().toISOString() }).eq('id', prospectId);
+    }
+    res.json({ ok: true, message: `DM sent to u/${to}` });
+  } catch (err) {
+    logger.warn('admin', `reddit dm failed: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/run-competitor-intel', async (req, res) => {
   res.json({ ok: true, message: 'Competitor intel job started — check logs for progress' });
   try {
