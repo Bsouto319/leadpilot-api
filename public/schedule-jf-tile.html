@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Free Estimate — JF Tile LLC | Premium Tile Installation, Long Branch NJ</title>
+  <meta name="description" content="Get a free estimate from JF Tile LLC — premium tile installation in Long Branch, NJ. Bathroom remodels, shower tile, floor tile & commercial projects." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:       #1d4ed8;
+      --blue-dark:  #1e3a8a;
+      --blue-light: #3b82f6;
+      --blue-glow:  rgba(29,78,216,0.10);
+      --navy:       #0f172a;
+      --text:       #1c1c2e;
+      --muted:      #64748b;
+      --light:      #94a3b8;
+      --border:     #e2e8f0;
+      --bg:         #f8fafc;
+      --white:      #ffffff;
+      --shadow:     0 4px 32px rgba(0,0,0,0.09);
+      --radius:     16px;
+    }
+
+    body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+    /* HEADER */
+    header {
+      background: var(--white);
+      display: flex; align-items: center; justify-content: space-between;
+      height: 70px; padding: 0 20px;
+      position: sticky; top: 0; z-index: 200;
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+    }
+    .logo-area { display: flex; align-items: center; gap: 12px; }
+    .logo-box {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: var(--blue-dark); display: flex; align-items: center; justify-content: center;
+    }
+    .logo-box span { color: white; font-weight: 900; font-size: 18px; letter-spacing: -1px; }
+    .logo-name { font-weight: 700; color: var(--navy); font-size: 1rem; line-height: 1.2; }
+    .logo-sub { font-size: 0.7rem; color: var(--muted); font-weight: 500; }
+    .header-phone {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--blue); font-weight: 700; font-size: 0.85rem;
+      text-decoration: none; padding: 8px 16px;
+      border: 2px solid var(--blue); border-radius: 100px; transition: all 0.18s;
+    }
+    .header-phone:hover { background: var(--blue); color: white; }
+    @media (max-width: 480px) { .header-phone .ph-label { display: none; } }
+
+    /* HERO */
+    .hero {
+      background: linear-gradient(160deg, #eff6ff 0%, #dbeafe 40%, #eff6ff 100%);
+      border-bottom: 1px solid #bfdbfe;
+      padding: 64px 24px 96px; text-align: center; position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 70% 20%, rgba(29,78,216,0.08) 0%, transparent 55%),
+                  radial-gradient(ellipse at 15% 90%, rgba(29,78,216,0.05) 0%, transparent 45%);
+    }
+    .hero-inner { position: relative; max-width: 640px; margin: 0 auto; animation: fadeUp 0.55s ease both; }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: rgba(29,78,216,0.09); border: 1px solid rgba(29,78,216,0.28);
+      color: var(--blue-dark); font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      padding: 6px 16px; border-radius: 100px; margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 5.5vw, 3.2rem);
+      font-weight: 700; color: var(--navy);
+      line-height: 1.14; margin-bottom: 18px;
+    }
+    .hero-sub { font-size: 1.05rem; color: var(--muted); line-height: 1.65; max-width: 500px; margin: 0 auto 32px; }
+    .hero-badges { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 36px; }
+    .badge {
+      display: flex; align-items: center; gap: 6px;
+      background: white; border: 1px solid var(--border);
+      border-radius: 100px; padding: 6px 14px;
+      font-size: 0.78rem; font-weight: 600; color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .hero-cta {
+      display: inline-block; background: var(--blue); color: white;
+      font-size: 1rem; font-weight: 700; padding: 15px 36px;
+      border-radius: 12px; text-decoration: none; transition: all 0.2s;
+      box-shadow: 0 4px 20px rgba(29,78,216,0.35);
+    }
+    .hero-cta:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 6px 28px rgba(29,78,216,0.4); }
+
+    /* GALLERY */
+    .gallery-section { padding: 72px 24px; background: var(--white); }
+    .section-label { text-align: center; color: var(--blue); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 10px; }
+    .section-title { text-align: center; font-family: 'Playfair Display', serif; font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; color: var(--navy); margin-bottom: 12px; }
+    .section-sub { text-align: center; color: var(--muted); font-size: 0.95rem; max-width: 480px; margin: 0 auto 48px; }
+
+    .gallery-grid {
+      max-width: 1100px; margin: 0 auto;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    }
+    .gallery-item { border-radius: 14px; overflow: hidden; aspect-ratio: 4/3; background: #e2e8f0; }
+    .gallery-item.tall { aspect-ratio: 3/4; }
+    .gallery-item.wide { grid-column: span 2; aspect-ratio: 16/9; }
+    .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s; display: block; }
+    .gallery-item:hover img { transform: scale(1.03); }
+    @media (max-width: 640px) { .gallery-grid { grid-template-columns: 1fr 1fr; } .gallery-item.wide { grid-column: span 2; } }
+    @media (max-width: 400px) { .gallery-grid { grid-template-columns: 1fr; } .gallery-item.wide { grid-column: span 1; } }
+
+    /* SERVICES */
+    .services-section { padding: 72px 24px; background: var(--bg); }
+    .services-grid { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+    .service-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px 24px;
+      text-align: center; transition: all 0.2s;
+    }
+    .service-card:hover { border-color: var(--blue-light); box-shadow: 0 4px 20px rgba(29,78,216,0.1); transform: translateY(-2px); }
+    .service-icon { font-size: 2rem; margin-bottom: 12px; }
+    .service-name { font-weight: 700; color: var(--navy); font-size: 0.95rem; margin-bottom: 6px; }
+    .service-desc { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+
+    /* TRUST */
+    .trust-section { padding: 56px 24px; background: var(--blue-dark); }
+    .trust-grid { max-width: 800px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; }
+    .trust-item { text-align: center; }
+    .trust-num { font-size: 2.5rem; font-weight: 800; color: white; line-height: 1; }
+    .trust-label { font-size: 0.8rem; color: rgba(255,255,255,0.65); font-weight: 500; margin-top: 4px; }
+
+    /* FORM */
+    .form-section { padding: 80px 24px; background: var(--white); }
+    .form-wrap { max-width: 640px; margin: 0 auto; }
+    .form-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 20px; padding: 40px 36px;
+      box-shadow: var(--shadow);
+    }
+    @media (max-width: 480px) { .form-card { padding: 28px 20px; } }
+    .form-title { font-family: 'Playfair Display', serif; font-size: 1.7rem; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+    .form-sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 500px) { .form-row { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .field label { font-size: 0.78rem; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: 0.05em; }
+    .field input, .field select, .field textarea {
+      padding: 13px 16px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-size: 0.95rem; font-family: inherit;
+      background: var(--white); color: var(--text);
+      transition: border-color 0.18s;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      outline: none; border-color: var(--blue-light);
+    }
+    .field textarea { resize: vertical; min-height: 90px; }
+    .submit-btn {
+      width: 100%; padding: 16px; border: none; border-radius: 12px;
+      background: var(--blue); color: white; font-size: 1rem; font-weight: 700;
+      cursor: pointer; transition: all 0.2s; margin-top: 8px;
+      box-shadow: 0 4px 20px rgba(29,78,216,0.3);
+    }
+    .submit-btn:hover { background: var(--blue-dark); transform: translateY(-1px); }
+    .submit-btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+    .privacy-note { text-align: center; font-size: 0.75rem; color: var(--light); margin-top: 14px; }
+
+    #success-msg {
+      display: none; text-align: center; padding: 32px 20px;
+      background: #f0fdf4; border: 1.5px solid #86efac;
+      border-radius: 16px; margin-top: 20px;
+    }
+    #success-msg h3 { color: #16a34a; font-size: 1.2rem; font-weight: 700; margin-bottom: 6px; }
+    #success-msg p { color: #166534; font-size: 0.9rem; }
+
+    /* FOOTER */
+    footer { background: var(--navy); color: rgba(255,255,255,0.5); text-align: center; padding: 24px; font-size: 0.78rem; }
+    footer strong { color: rgba(255,255,255,0.85); }
+
+    @keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo-area">
+    <div class="logo-box"><span>JF</span></div>
+    <div>
+      <div class="logo-name">JF Tile LLC</div>
+      <div class="logo-sub">Premium Tile Installation · NJ</div>
+    </div>
+  </div>
+  <a href="tel:+18482753259" class="header-phone">
+    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+    <span class="ph-label">(848) 275-3259</span>
+  </a>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      Long Branch, New Jersey
+    </div>
+    <h1>Premium Tile Installation<br/><em>Built to Last, Built to Impress</em></h1>
+    <p class="hero-sub">From luxury bathroom remodels to commercial flooring — JF Tile delivers precision craftsmanship with premium materials throughout New Jersey.</p>
+    <div class="hero-badges">
+      <span class="badge">✅ Free Estimates</span>
+      <span class="badge">🏆 Premium Materials</span>
+      <span class="badge">📍 NJ Shore Area</span>
+      <span class="badge">🔨 Residential & Commercial</span>
+    </div>
+    <a href="#estimate" class="hero-cta">Get Your Free Estimate →</a>
+  </div>
+</section>
+
+<!-- GALLERY -->
+<section class="gallery-section">
+  <div class="section-label">Our Work</div>
+  <h2 class="section-title">Transformations That Speak for Themselves</h2>
+  <p class="section-sub">Every project is crafted with precision — from luxury bathroom remodels to large commercial spaces.</p>
+  <div class="gallery-grid">
+    <div class="gallery-item wide">
+      <img src="/jf-tile/gallery1.jpg" alt="Luxury bathroom tile installation by JF Tile LLC" loading="lazy" />
+    </div>
+    <div class="gallery-item">
+      <img src="/jf-tile/gallery3.jpg" alt="Premium shower tile installation" loading="lazy" />
+    </div>
+    <div class="gallery-item">
+      <img src="/jf-tile/gallery2.jpg" alt="Commercial tile flooring" loading="lazy" />
+    </div>
+    <div class="gallery-item wide">
+      <img src="/jf-tile/gallery4.jpg" alt="Marble tile work and JF Tile LLC logo" loading="lazy" />
+    </div>
+  </div>
+</section>
+
+<!-- SERVICES -->
+<section class="services-section">
+  <div class="section-label">Services</div>
+  <h2 class="section-title">What We Do</h2>
+  <p class="section-sub">Specializing in high-end tile installations for residential and commercial clients across New Jersey.</p>
+  <div class="services-grid">
+    <div class="service-card">
+      <div class="service-icon">🚿</div>
+      <div class="service-name">Bathroom Remodels</div>
+      <div class="service-desc">Complete bathroom transformations with luxury marble, porcelain & ceramic tile.</div>
+    </div>
+    <div class="service-card">
+      <div class="service-icon">🛁</div>
+      <div class="service-name">Shower Tile</div>
+      <div class="service-desc">Custom shower surrounds, benches and niches with premium waterproofing.</div>
+    </div>
+    <div class="service-card">
+      <div class="service-icon">🏠</div>
+      <div class="service-name">Floor Tile</div>
+      <div class="service-desc">Large format, herringbone, chevron and mosaic floor installations.</div>
+    </div>
+    <div class="service-card">
+      <div class="service-icon">🏢</div>
+      <div class="service-name">Commercial</div>
+      <div class="service-desc">Restaurants, offices and retail spaces — durable, professional tile solutions.</div>
+    </div>
+    <div class="service-card">
+      <div class="service-icon">🔥</div>
+      <div class="service-name">Feature Walls</div>
+      <div class="service-desc">Fireplace surrounds, accent walls and backsplashes that make a statement.</div>
+    </div>
+    <div class="service-card">
+      <div class="service-icon">🌊</div>
+      <div class="service-name">Outdoor Tile</div>
+      <div class="service-desc">Pool surrounds, patios and outdoor spaces built to handle NJ weather.</div>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST -->
+<section class="trust-section">
+  <div class="trust-grid">
+    <div class="trust-item"><div class="trust-num">100+</div><div class="trust-label">Projects Completed</div></div>
+    <div class="trust-item"><div class="trust-num">5★</div><div class="trust-label">Customer Rating</div></div>
+    <div class="trust-item"><div class="trust-num">NJ</div><div class="trust-label">Shore Area Experts</div></div>
+    <div class="trust-item"><div class="trust-num">Free</div><div class="trust-label">Estimates Always</div></div>
+  </div>
+</section>
+
+<!-- FORM -->
+<section class="form-section" id="estimate">
+  <div class="form-wrap">
+    <div class="section-label" style="text-align:left;margin-bottom:8px">Free Estimate</div>
+    <div class="form-card">
+      <div class="form-title">Get Your Free Estimate</div>
+      <div class="form-sub">Tell us about your project — we'll reach out within 24 hours to discuss your vision.</div>
+
+      <form id="estimate-form" onsubmit="submitForm(event)">
+        <div class="form-row">
+          <div class="field">
+            <label>First Name *</label>
+            <input type="text" name="firstName" required placeholder="John" />
+          </div>
+          <div class="field">
+            <label>Last Name *</label>
+            <input type="text" name="lastName" required placeholder="Smith" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Phone *</label>
+            <input type="tel" name="phone" required placeholder="(732) 555-0100" />
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="john@email.com" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Project Type *</label>
+          <select name="projectType" required>
+            <option value="">Select your project...</option>
+            <option value="bathroom_remodel">Bathroom Remodel</option>
+            <option value="shower_tile">Shower Tile</option>
+            <option value="floor_tile">Floor Tile</option>
+            <option value="commercial">Commercial Space</option>
+            <option value="feature_wall">Feature Wall / Fireplace</option>
+            <option value="outdoor">Outdoor / Patio</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Project Address / City</label>
+          <input type="text" name="address" placeholder="Long Branch, NJ" />
+        </div>
+        <div class="field">
+          <label>Tell us about your project</label>
+          <textarea name="notes" placeholder="Square footage, materials in mind, timeline, any other details..."></textarea>
+        </div>
+        <button type="submit" class="submit-btn" id="submit-btn">
+          Get My Free Estimate →
+        </button>
+        <div class="privacy-note">🔒 Your information is private and will never be shared or sold.</div>
+      </form>
+
+      <div id="success-msg">
+        <h3>✅ Request Received!</h3>
+        <p>Thank you! We'll reach out within 24 hours to discuss your tile project.<br/>Questions? Call us: <strong>(848) 275-3259</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <strong>JF Tile LLC</strong> · 6 Manahassett Park Dr, Long Branch, NJ 07740 · (848) 275-3259<br/>
+  <span style="margin-top:6px;display:block">© 2026 JF Tile LLC. All rights reserved. Premium tile installation across New Jersey.</span>
+</footer>
+
+<script>
+  async function submitForm(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+
+    const data = Object.fromEntries(new FormData(e.target));
+    const leadName = `${data.firstName} ${data.lastName}`.trim();
+
+    try {
+      await fetch('https://leads.btechsouto.shop/webhook/schedule/147789ae-8576-4310-a243-416c04a99b36', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadName,
+          leadPhone: data.phone.replace(/\D/g,''),
+          leadEmail: data.email || null,
+          serviceType: data.projectType,
+          leadAddress: data.address || null,
+          notes: data.notes || null,
+          source: 'landing_page',
+        }),
+      });
+    } catch (_) {}
+
+    document.getElementById('estimate-form').style.display = 'none';
+    document.getElementById('success-msg').style.display = 'block';
+  }
+
+  // Smooth scroll
+  document.querySelectorAll('a[href="#estimate"]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      document.getElementById('estimate').scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+</script>
+</body>
+</html>

@@ -113,6 +113,14 @@ app.get('/terms/cp-cabinets',   (req, res) => res.sendFile(path.join(__dirname, 
 app.get('/cp-cabinets-logo.png', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'cp-cabinets-logo.png')));
 app.get('/cp-cabinets-logo.jpg', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'cp-cabinets-logo.jpg')));
 
+// ── JF TILE ─────────────────────────────────────────────────────────────────
+app.get('/schedule/jf-tile', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'schedule-jf-tile.html')));
+app.get('/jf-tile/:img', (req, res) => {
+  const allowed = ['gallery1.jpg','gallery2.jpg','gallery3.jpg','gallery4.jpg'];
+  if (!allowed.includes(req.params.img)) return res.status(404).end();
+  res.sendFile(path.join(__dirname, '..', 'public', 'jf-tile', req.params.img));
+});
+
 // ── AUDIO — serve pre-generated ElevenLabs MP3s (public — Twilio fetches these)
 // Routes:  GET /audio/:clientId/:phraseKey   (all phrases)
 //          GET /audio/greeting/:clientId     (backward compat)
