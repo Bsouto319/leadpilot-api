@@ -160,6 +160,41 @@ app.use('/webhook', webhookRoutes);
 app.use('/api/admin', adminLimiter, adminRoutes);
 app.use('/api/cron',  cronLimiter,  cronRoutes);
 
+// ── Reddit DM via email button (GET, key in query) ────────────────────────────
+app.get('/dm/reddit', async (req, res) => {
+  const { to, msg, id, key } = req.query;
+  const ADMIN_KEY = process.env.ADMIN_KEY || 'LP8141FEB8E1C3BD37F8615730F7F31994B7E5378F';
+  if (key !== ADMIN_KEY) return res.status(401).send('Unauthorized');
+  if (!to || !msg) return res.status(400).send('Missing params');
+  try {
+    const { sendDM } = require('./services/redditDM');
+    await sendDM({ to, subject: 'Your kitchen project', message: decodeURIComponent(msg) });
+    if (id) {
+      const db = require('./services/supabase');
+      const supabase = db.supabaseClient();
+      await supabase.from('outbound_prospects').update({ dm_sent: true, dm_sent_at: new Date().toISOString() }).eq('id', id);
+    }
+    res.send(`<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#f0fdf4">
+      <div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
+        <div style="font-size:48px;margin-bottom:16px">✅</div>
+        <h2 style="color:#16a34a;margin:0 0 8px">DM Enviado!</h2>
+        <p style="color:#374151">Para u/${to}</p>
+        <p style="color:#6b7280;font-size:13px">Enviado como u/One-Custard-2339</p>
+        <p style="color:#9ca3af;font-size:12px;margin-top:24px">Pode fechar esta aba.</p>
+      </div>
+    </body></html>`);
+  } catch (err) {
+    logger.warn('server', `reddit dm failed: ${err.message}`);
+    res.send(`<html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#fef2f2">
+      <div style="max-width:400px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
+        <div style="font-size:48px;margin-bottom:16px">❌</div>
+        <h2 style="color:#dc2626;margin:0 0 8px">Erro ao enviar</h2>
+        <p style="color:#374151;font-size:13px">${err.message}</p>
+      </div>
+    </body></html>`);
+  }
+});
+
 // ── CF7 COMPAT — handles old /api/webhook/cf7 path (no clientId in URL)
 // Identifies client by CF7 form ID (_wpcf7 field sent automatically in every submission)
 const CF7_FORM_MAP = {
