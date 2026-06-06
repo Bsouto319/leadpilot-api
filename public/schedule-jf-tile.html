@@ -10,6 +10,7 @@
   <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;}
 :root{
   --stone:#f7f5f0;--stone2:#edeae2;--stone3:#d6d0c4;
   --dark:#1c1917;--dark2:#292524;--dark3:#3d3935;
@@ -520,15 +521,6 @@ async function submitForm() {
 document.querySelectorAll('[id^="ff-"]').forEach(el => {
   el.addEventListener('change', () => el.classList.remove('err'));
   el.addEventListener('input',  () => el.classList.remove('err'));
-});
-
-// Hero CTA smooth scroll
-document.querySelectorAll('a[href="#estimate"]').forEach(a => {
-  a.addEventListener('click', e => {
-    e.preventDefault();
-    const target = document.getElementById('estimate');
-    if (target) window.scrollTo({ top: target.offsetTop - 10, behavior: 'smooth' });
-  });
 });
 </script>
 </body>
