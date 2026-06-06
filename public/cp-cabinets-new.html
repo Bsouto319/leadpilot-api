@@ -44,12 +44,21 @@
       display: flex; align-items: center; justify-content: center;
       text-align: center; padding: 120px 40px 80px; overflow: hidden;
     }
+    @keyframes kenburns {
+      0%   { transform: scale(1.0)  translate(0%, 0%); }
+      25%  { transform: scale(1.06) translate(-1.5%, 0.5%); }
+      50%  { transform: scale(1.10) translate(-0.5%, -1%); }
+      75%  { transform: scale(1.06) translate(1.5%, -0.5%); }
+      100% { transform: scale(1.0)  translate(0%, 0%); }
+    }
     .hero-bg {
       position: absolute; inset: 0;
       background-size: cover; background-position: center 30%;
-      transform: scale(1.02); transition: transform 10s ease;
+      animation: kenburns 20s ease-in-out infinite;
+      transform-origin: center center;
+      will-change: transform;
     }
-    .hero-bg.loaded { transform: scale(1); }
+    .hero-bg.loaded { opacity: 1; }
     .hero-overlay {
       position: absolute; inset: 0;
       background: linear-gradient(to bottom,rgba(12,6,2,0.45) 0%,rgba(12,6,2,0.25) 50%,rgba(12,6,2,0.65) 100%);
@@ -758,11 +767,10 @@
 
 <script>
   // Hero background — foto real do portfolio (cozinha instalada)
-  window.addEventListener('load', function() {
+  (function() {
     var bg = document.getElementById('hero-bg');
     bg.style.backgroundImage = "url('https://cpcabinets.com/wp-content/uploads/2024/03/PHOTO-2023-10-05-12-34-17-2.jpg')";
-    setTimeout(function(){ bg.classList.add('loaded'); }, 100);
-  });
+  })();
 
   // Min date = hoje, bloqueia domingo
   (function(){
