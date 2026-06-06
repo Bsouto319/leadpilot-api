@@ -395,6 +395,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--stone);color:var(--text);
             </select>
           </div>
         </div>
+        <div class="form-row" style="margin-bottom:16px;">
+          <div class="f-field">
+            <label class="f-label">Preferred Visit Date <span class="f-req">*</span></label>
+            <input class="f-inp" id="ff-date" type="date">
+          </div>
+          <div class="f-field">
+            <label class="f-label">Preferred Time <span class="f-req">*</span></label>
+            <select class="f-sel" id="ff-time">
+              <option value="">Select a time...</option>
+              <option value="morning">Morning (9am – 12pm)</option>
+              <option value="afternoon">Afternoon (12pm – 5pm)</option>
+              <option value="9am">9:00 AM</option>
+              <option value="10am">10:00 AM</option>
+              <option value="11am">11:00 AM</option>
+              <option value="1pm">1:00 PM</option>
+              <option value="2pm">2:00 PM</option>
+              <option value="3pm">3:00 PM</option>
+              <option value="4pm">4:00 PM</option>
+            </select>
+          </div>
+        </div>
         <div class="form-row full" style="margin-bottom:16px;">
           <div class="f-field">
             <label class="f-label">Project Address / City</label>
@@ -407,10 +428,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--stone);color:var(--text);
             <textarea class="f-ta" id="ff-notes" placeholder="Describe your project, size, timeline, any specific materials or style preferences..."></textarea>
           </div>
         </div>
+        <div id="ferror" style="display:none;padding:10px 14px;background:#fff0f0;border:1px solid #f87171;border-radius:8px;font-size:13px;color:#991b1b;margin-bottom:14px;">
+          Something went wrong. Please try again or call <a href="tel:+18482753259" style="color:#991b1b;font-weight:700;">(848) 275-3259</a>.
+        </div>
         <div class="privacy-row">
           🔒 Your information is private and will never be shared or sold.
         </div>
-        <button class="f-submit" id="submit-btn" onclick="submitForm()">Get My Free Estimate →</button>
+        <button class="f-submit" id="submit-btn" onclick="submitForm()">Schedule My Free Estimate →</button>
       </div>
       <div class="success-box" id="fsuccess">
         <div class="suc-ico">✓</div>
@@ -431,31 +455,43 @@ body{font-family:'DM Sans',sans-serif;background:var(--stone);color:var(--text);
 </div>
 
 <script>
+// Set min date to tomorrow
+(function(){
+  const d = new Date(); d.setDate(d.getDate()+1);
+  const iso = d.toISOString().split('T')[0];
+  const el = document.getElementById('ff-date');
+  if (el) el.min = iso;
+})();
+
 async function submitForm() {
   const fname   = document.getElementById('ff-fname').value.trim();
   const lname   = document.getElementById('ff-lname').value.trim();
   const phone   = document.getElementById('ff-phone').value.trim();
   const type    = document.getElementById('ff-type').value;
+  const date    = document.getElementById('ff-date').value;
+  const time    = document.getElementById('ff-time').value;
   const email   = document.getElementById('ff-email').value.trim();
   const address = document.getElementById('ff-address').value.trim();
   const notes   = document.getElementById('ff-notes').value.trim();
 
-  let ok = true;
-  ['ff-fname','ff-lname','ff-phone','ff-type'].forEach(id => {
+  const required = ['ff-fname','ff-lname','ff-phone','ff-type','ff-date','ff-time'];
+  let valid = true;
+  required.forEach(id => {
     const el = document.getElementById(id);
-    if (!el.value.trim()) { el.classList.add('err'); ok = false; }
+    if (!el.value.trim()) { el.classList.add('err'); valid = false; }
     else el.classList.remove('err');
   });
-  if (!ok) return;
+  if (!valid) return;
 
+  document.getElementById('ferror').style.display = 'none';
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
-  btn.textContent = 'Submitting...';
+  btn.textContent = 'Sending...';
 
   const notesFull = [address, notes].filter(Boolean).join(' | ') || '';
 
   try {
-    await fetch('https://leads.btechsouto.shop/webhook/cf7?clientId=147789ae-8576-4310-a243-416c04a99b36', {
+    const res = await fetch('https://leads.btechsouto.shop/webhook/cf7?clientId=147789ae-8576-4310-a243-416c04a99b36', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -463,24 +499,35 @@ async function submitForm() {
         phone:        phone,
         email:        email || '',
         service_type: type,
+        date:         date,
+        time:         time,
         notes:        notesFull,
       }),
     });
-  } catch (_) {}
+    if (!res.ok) throw new Error('server ' + res.status);
+  } catch (err) {
+    console.error('LeadPilot submit error:', err);
+    document.getElementById('ferror').style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Schedule My Free Estimate →';
+    return;
+  }
 
   document.getElementById('fbody').style.display = 'none';
   document.getElementById('fsuccess').style.display = 'flex';
 }
 
-['ff-fname','ff-lname','ff-phone','ff-type'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('input', () => el.classList.remove('err'));
+document.querySelectorAll('[id^="ff-"]').forEach(el => {
+  el.addEventListener('change', () => el.classList.remove('err'));
+  el.addEventListener('input',  () => el.classList.remove('err'));
 });
 
+// Hero CTA smooth scroll
 document.querySelectorAll('a[href="#estimate"]').forEach(a => {
   a.addEventListener('click', e => {
     e.preventDefault();
-    document.getElementById('estimate').scrollIntoView({ behavior: 'smooth' });
+    const target = document.getElementById('estimate');
+    if (target) window.scrollTo({ top: target.offsetTop - 10, behavior: 'smooth' });
   });
 });
 </script>
