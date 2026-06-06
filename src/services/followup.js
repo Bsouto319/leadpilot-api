@@ -147,7 +147,8 @@ function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, st
 
 // ── CONFIRMATION EMAIL (sent immediately when lead is captured, before call) ──
 
-function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleUrl, websiteUrl, scheduledAt, agentName, timezone, logoUrl, cityState, addressDisplay, contactPhone }) {
+function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleUrl, websiteUrl, scheduledAt, agentName, timezone, logoUrl, cityState, addressDisplay, contactPhone, visitLabel }) {
+  visitLabel = visitLabel || 'scheduled visit';
   logoUrl        = logoUrl        || 'https://leads.btechsouto.shop/cp-cabinets-logo.png';
   cityState      = cityState      || 'Irmo, South Carolina';
   addressDisplay = addressDisplay || '1085 Lake Murray Blvd, Suite E, Irmo, SC 29063';
@@ -168,10 +169,10 @@ function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleU
 
   const heroSub  = visitFormatted ? `Your visit is confirmed for ${visitFormatted}.` : `Our team will call you in the next few minutes.`;
   const bodyText = visitFormatted
-    ? `Your showroom visit is booked for <strong>${visitFormatted}</strong>. We look forward to seeing you!`
-    : `Our scheduling assistant <strong>${agent}</strong> will give you a call shortly to discuss your project and schedule a FREE showroom visit.`;
+    ? `Your ${visitLabel} is booked for <strong>${visitFormatted}</strong>. We look forward to seeing you!`
+    : `Our scheduling assistant <strong>${agent}</strong> will give you a call shortly to discuss your project and schedule a FREE ${visitLabel}.`;
   const subject  = visitFormatted
-    ? `Your showroom visit is confirmed — ${businessName}`
+    ? `Your ${visitLabel} is confirmed — ${businessName}`
     : `We received your request — ${businessName} will call you shortly!`;
 
   return {
@@ -231,6 +232,7 @@ async function sendLeadConfirmationEmail(conv) {
     scheduledAt: conv.scheduled_at || null,
     agentName: client.agent_name || null,
     timezone: client.timezone || null,
+    visitLabel: client.visit_label || 'scheduled visit',
     ...branding,
   });
 
@@ -321,47 +323,46 @@ async function runFollowUpCron(step) {
 
 // ── APPOINTMENT REMINDER — lead email (24h before) ───────────────────────────
 
-function buildLeadReminderEmail({ leadName, businessName, scheduledAt, address, timezone, scheduleUrl }) {
-  const firstName = (leadName || 'there').split(' ')[0];
-  const formatted = new Date(scheduledAt).toLocaleString('en-US', {
+function buildLeadReminderEmail({ leadName, businessName, scheduledAt, address, timezone, scheduleUrl, visitLabel, addressDisplay, contactPhone, websiteUrl }) {
+  const firstName  = (leadName || 'there').split(' ')[0];
+  const vLabel     = visitLabel || 'scheduled visit';
+  const formatted  = new Date(scheduledAt).toLocaleString('en-US', {
     timeZone: timezone || 'America/New_York',
     weekday: 'long', month: 'long', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
 
   return {
-    subject: `Reminder: Your Showroom Visit Tomorrow — ${businessName}`,
+    subject: `Reminder: Your ${vLabel} tomorrow — ${businessName}`,
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
 <body>
 <div class="wrap">
   <div class="header">
     <h1>${businessName}</h1>
-    <p>Irmo, South Carolina</p>
+    ${addressDisplay ? `<p>${addressDisplay}</p>` : ''}
   </div>
   <div class="hero">
     <h2>See you tomorrow, ${firstName}!</h2>
-    <p>Your showroom visit is confirmed for tomorrow.</p>
+    <p>Your ${vLabel} is confirmed for tomorrow.</p>
   </div>
   <div class="body">
     <p>Hi ${firstName},</p>
-    <p>Just a friendly reminder that you have a showroom visit scheduled for <strong>tomorrow</strong>. We're looking forward to showing you our premium cabinet collections in person!</p>
+    <p>Just a friendly reminder that you have a ${vLabel} scheduled for <strong>tomorrow</strong>. We're looking forward to it!</p>
 
     <div class="info">
       <p>
         📅 <strong>${formatted}</strong><br>
-        📍 <strong>1085 Lake Murray Blvd, Suite E, Irmo, SC 29063</strong><br>
-        📞 <strong>(803) 373-8191</strong><br>
-        🕐 Please arrive on time — visits are by appointment only
+        ${addressDisplay ? `📍 <strong>${addressDisplay}</strong><br>` : ''}
+        ${contactPhone ? `📞 <strong>${contactPhone}</strong><br>` : ''}
+        🕐 By appointment only
       </p>
     </div>
 
-    <p>During your visit you'll be able to see and touch our full collections: <strong>Shaker</strong>, <strong>Slim Shaker</strong>, and <strong>European Frameless</strong> — all in plywood construction. We also have quartz countertop samples and vinyl flooring on display.</p>
-
-    <p style="color:#888;font-size:13px;">Need to reschedule? Call us at (803) 373-8191 or reply to this email and we'll find a time that works for you.</p>
+    ${contactPhone ? `<p style="color:#888;font-size:13px;">Need to reschedule? Call us at ${contactPhone} or reply to this email.</p>` : ''}
   </div>
   <div class="footer">
     <p>© 2026 ${businessName}</p>
-    <p><a href="https://cpcabinets.com">cpcabinets.com</a></p>
+    ${websiteUrl ? `<p><a href="${websiteUrl}">${websiteUrl}</a></p>` : ''}
   </div>
 </div>
 </body></html>`,
@@ -373,12 +374,17 @@ async function sendAppointmentReminderToLead(conv) {
   const client = conv.clients || conv.client;
   if (!client) return;
 
+  const branding2 = clientBranding(client);
   const { subject, html } = buildLeadReminderEmail({
     leadName: conv.lead_name,
     businessName: client.business_name,
     scheduledAt: conv.scheduled_at,
     address: conv.lead_address,
     timezone: client.timezone,
+    visitLabel: client.visit_label || 'scheduled visit',
+    addressDisplay: branding2.addressDisplay,
+    contactPhone: branding2.contactPhoneDisplay,
+    websiteUrl: client.website_url,
   });
 
   await sendEmail({

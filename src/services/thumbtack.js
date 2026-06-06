@@ -152,8 +152,9 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     });
 
     // Confirmation voice script — warmer than cold outreach
-    const firstName = name.split(' ')[0];
-    const confirmScript = `Hi ${firstName}! This is ${agentName} calling from ${client.business_name}. I'm reaching out to confirm your FREE in-home estimate scheduled for ${visitFormatted}. We're really excited to work with you! If you have any questions before your visit, feel free to reply to our email or call us back. See you soon!`;
+    const firstName  = name.split(' ')[0];
+    const vLabel     = client.visit_label || 'scheduled visit';
+    const confirmScript = `Hi ${firstName}! This is ${agentName} calling from ${client.business_name}. I'm reaching out to confirm your FREE ${vLabel} scheduled for ${visitFormatted}. We're really excited to work with you! If you have any questions before your visit, feel free to reply to our email or call us back. See you soon!`;
 
     await db.updateConversation(conversation.id, {
       ai_response: confirmScript,
@@ -161,41 +162,34 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       ...(qualification.summary    ? { summary: qualification.summary } : {}),
     }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
 
-    // Owner email notification
+    // Owner email notification — HTML
     if (client.owner_email) {
-      const emailBody = [
-        `New website lead — showroom visit scheduled!`,
-        ``,
-        `Name: ${name}`,
-        `Phone: +${leadPhone}`,
-        leadEmail ? `Email: ${leadEmail}` : '',
-        `Service: ${serviceType.replace(/_/g, ' ')}`,
-        `Request: ${message}`,
-        `Scheduled: ${visitFormatted}`,
-        ``,
-        `── AI Qualification ──`,
-        `Score: ${scoreText}  |  Tier: ${tierLabel}  |  Est. Job Value: ${valueText}`,
-        qualification.summary ? `Insight: ${qualification.summary}` : '',
-        qualification.signals?.length ? `Signals: ${qualification.signals.join(', ')}` : '',
-        ``,
-        `${agentName} is calling the lead now to confirm the visit.`,
-        ``,
-        client.website_url ? `Website: ${client.website_url}` : '',
-        ``,
-        client.business_name,
-      ].filter(Boolean).join('\n');
-
+      const branding = clientBranding(client);
+      const vLabel   = client.visit_label || 'scheduled visit';
+      const { subject: alertSubject, html: alertHtml } = buildNewLeadAlertEmail({
+        leadName: name, leadPhone, leadEmail,
+        serviceType,
+        agentName,
+        businessName: client.business_name,
+        source: `${vLabel} booked for ${visitFormatted}`,
+        score: qualification.score,
+        tier: qualification.tier,
+        summary: qualification.summary,
+        signals: qualification.signals,
+        ...branding,
+      });
       const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
       sendEmail({
         from: `${client.business_name} <noreply@btechsouto.shop>`,
         to: alertRecipients,
-        subject: `${tierLabel} Showroom Visit Booked — ${name} | ${client.business_name}`,
-        body: emailBody,
+        subject: `${tierLabel} ${vLabel.charAt(0).toUpperCase() + vLabel.slice(1)} Booked — ${name} | ${client.business_name}`,
+        html: alertHtml,
       }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
     }
 
     // Owner + office alert call
-    const notifyMsg = `Hey! ${agentName} received a new website lead for ${client.business_name}. ${name} scheduled a showroom visit for ${visitFormatted}. ${agentName} is calling the lead now to confirm. Check your email for full details.`;
+    const vLabel2   = client.visit_label || 'scheduled visit';
+    const notifyMsg = `Hey! ${agentName} received a new website lead for ${client.business_name}. ${name} scheduled a ${vLabel2} for ${visitFormatted}. ${agentName} is calling the lead now to confirm. Check your email for full details.`;
     if (client.owner_phone) {
       makeNotifyCall({
         to: `+${client.owner_phone}`,
