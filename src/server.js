@@ -113,6 +113,9 @@ app.get('/terms/cp-cabinets',   (req, res) => res.sendFile(path.join(__dirname, 
 app.get('/cp-cabinets-logo.png', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'cp-cabinets-logo.png')));
 app.get('/cp-cabinets-logo.jpg', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'cp-cabinets-logo.jpg')));
 
+// ── CP CABINETS — nova LP apresentação ──────────────────────────────────────
+app.get('/cp-cabinets', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'cp-cabinets-new.html')));
+
 // ── JF TILE ─────────────────────────────────────────────────────────────────
 app.get('/schedule/jf-tile', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'schedule-jf-tile.html')));
 app.get('/jf-tile-logo.jpg', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'jf-tile-logo.jpg')));
