@@ -32,10 +32,10 @@
     .nav-logo img { height: 44px; object-fit: contain; }
     .nav-name { font-weight: 600; font-size: 15px; color: #fff; line-height: 1.2; }
     .nav-sub  { font-size: 11px; color: rgba(232,98,26,0.8); letter-spacing: 1px; }
-    .nav-actions { display: flex; align-items: center; gap: 10px; }
-    .nav-site { padding: 8px 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; font-size: 13px; color: rgba(255,255,255,0.7); transition: all .2s; }
-    .nav-site:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
-    .nav-cta { padding: 10px 20px; background: var(--accent2); border: none; border-radius: 8px; font-size: 14px; font-weight: 700; color: #fff; cursor: pointer; transition: all .2s; text-decoration: none; }
+    .nav-links { display: flex; align-items: center; gap: 4px; }
+    .nav-link { padding: 7px 12px; font-size: 13px; color: rgba(255,255,255,0.7); border-radius: 6px; transition: all .2s; font-weight: 500; }
+    .nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .nav-cta { padding: 10px 18px; background: var(--accent2); border: none; border-radius: 8px; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; transition: all .2s; text-decoration: none; margin-left: 6px; }
     .nav-cta:hover { background: var(--accent); transform: translateY(-1px); }
 
     /* ── HERO ── */
@@ -45,8 +45,9 @@
       text-align: center; padding: 120px 40px 80px; overflow: hidden;
     }
     .hero-bg {
-      position: absolute; inset: 0; background-size: cover; background-position: center;
-      transform: scale(1.05); transition: transform 8s ease;
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center 30%;
+      transform: scale(1.02); transition: transform 10s ease;
     }
     .hero-bg.loaded { transform: scale(1); }
     .hero-overlay {
@@ -209,7 +210,7 @@
     /* ── RESPONSIVE ── */
     @media (max-width: 900px) { .showroom-grid { grid-template-columns: 1fr; } .collections-grid { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 768px) {
-      .nav { padding: 0 20px; } .nav-site { display: none; }
+      .nav { padding: 0 20px; } .nav-links .nav-link { display: none; }
       .hero { padding: 100px 24px 60px; } .hero-title { font-size: 36px; }
       .section { padding: 48px 24px; } .services-grid { grid-template-columns: 1fr 1fr; }
       .stats-row { grid-template-columns: 1fr 1fr; }
@@ -247,8 +248,13 @@
       <div class="nav-sub">Premium Kitchens · Irmo, SC</div>
     </div>
   </div>
-  <div class="nav-actions">
-    <a class="nav-site" href="https://cpcabinets.com" target="_blank" rel="noopener">← cpcabinets.com</a>
+  <div class="nav-links">
+    <a class="nav-link" href="https://cpcabinets.com/#about" target="_blank" rel="noopener">About Us</a>
+    <a class="nav-link" href="#catalog">Kitchen Cabinets</a>
+    <a class="nav-link" href="https://cpcabinets.com/vynil-flooring/" target="_blank" rel="noopener">Vinyl Flooring</a>
+    <a class="nav-link" href="https://cpcabinets.com/home-improvements/" target="_blank" rel="noopener">Home Improvements</a>
+    <a class="nav-link" href="https://cpcabinets.com/portfolio/" target="_blank" rel="noopener">Portfolio</a>
+    <a class="nav-link" href="https://cpcabinets.com/contact/" target="_blank" rel="noopener">Contact</a>
     <a class="nav-cta" href="#estimate" onclick="scrollToForm(event)">Book Free Visit</a>
   </div>
 </nav>
@@ -429,6 +435,125 @@
   </div>
 </div>
 
+<!-- VINYL FLOORING -->
+<div class="section" style="background:var(--stone);" id="flooring">
+  <div class="section-inner">
+    <div class="eyebrow">Vinyl Flooring</div>
+    <h2 class="section-title">Parliament 605 Series</h2>
+    <p class="section-sub">Enhanced SPC luxury vinyl plank — 20-mil commercial-grade wear layer. 17 colors available. Waterproof &amp; durable for any room.</p>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-top:40px;">
+
+      <!-- Parliament 605 card -->
+      <div class="collection-card" style="grid-column:1/-1;">
+        <div style="display:grid;grid-template-columns:300px 1fr;gap:0;">
+          <div style="height:100%;min-height:220px;overflow:hidden;">
+            <img src="https://cpcabinets.com/wp-content/uploads/2026/04/Light-Oak.png" alt="Parliament 605 Series" style="width:100%;height:100%;object-fit:cover;display:block;transition:transform .5s;" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'" />
+          </div>
+          <div class="collection-body">
+            <div class="collection-name">Parliament 605 — All 17 Colors</div>
+            <div class="collection-desc">Waterproof · Click-lock install · 20-mil wear layer · Commercial grade · Available in 17 wood-look finishes</div>
+            <div class="thumb-grid" style="grid-template-columns:repeat(6,1fr);">
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Aged Wood','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Aged-Wood.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Aged-Wood.png" alt="Aged Wood" /><div class="thumb-label">Aged Wood</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Antique Gray','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Antique-Gray.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Antique-Gray.png" alt="Antique Gray" /><div class="thumb-label">Antique Gray</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Autumn Oak','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Autumn-Oak.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Autumn-Oak.png" alt="Autumn Oak" /><div class="thumb-label">Autumn Oak</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Classic Tree','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Classic-Tree.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Classic-Tree.png" alt="Classic Tree" /><div class="thumb-label">Classic Tree</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Cream Teak','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Cream-Teak.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Cream-Teak.png" alt="Cream Teak" /><div class="thumb-label">Cream Teak</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Hard Mapple','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Hard-Mapple.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Hard-Mapple.png" alt="Hard Mapple" /><div class="thumb-label">Hard Mapple</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Light Oak','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Light-Oak.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Light-Oak.png" alt="Light Oak" /><div class="thumb-label">Light Oak</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Light Pinewood','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Light-Pinewood.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Light-Pinewood.png" alt="Light Pinewood" /><div class="thumb-label">Light Pinewood</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Mapple Light','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Mapple-Light.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Mapple-Light.png" alt="Mapple Light" /><div class="thumb-label">Mapple Light</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Norfolk Oak','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Nofolk-Oak.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Nofolk-Oak.png" alt="Norfolk Oak" /><div class="thumb-label">Norfolk Oak</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Oaktree Brown','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Oaktree-Brown.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Oaktree-Brown.png" alt="Oaktree Brown" /><div class="thumb-label">Oaktree Brown</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Rosewood','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Rosewood.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Rosewood.png" alt="Rosewood" /><div class="thumb-label">Rosewood</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Smoked Hickory','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Smoked-Hickory.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Smoked-Hickory.png" alt="Smoked Hickory" /><div class="thumb-label">Smoked Hickory</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Straight Oak','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Straigh-Oak.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Straigh-Oak.png" alt="Straight Oak" /><div class="thumb-label">Straight Oak</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Vintage Blue','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Vintage-Blue.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Vintage-Blue.png" alt="Vintage Blue" /><div class="thumb-label">Vintage Blue</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Yellow Pine','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Yellow-Pine.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Yellow-Pine.png" alt="Yellow Pine" /><div class="thumb-label">Yellow Pine</div></div>
+              <div class="thumb-item" onclick="openModal('Vinyl Flooring','Yellowtail Leaf','Parliament 605 · 20-mil wear layer · Waterproof · Click-lock','https://cpcabinets.com/wp-content/uploads/2026/04/Yellowtail-Leaf.png','https://cpcabinets.com/vynil-flooring/')"><img src="https://cpcabinets.com/wp-content/uploads/2026/04/Yellowtail-Leaf.png" alt="Yellowtail Leaf" /><div class="thumb-label">Yellowtail Leaf</div></div>
+            </div>
+            <a class="collection-link" href="https://cpcabinets.com/vynil-flooring/" target="_blank" rel="noopener">See full flooring catalog →</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- HOME IMPROVEMENTS -->
+<div class="section" style="background:var(--white);" id="improvements">
+  <div class="section-inner">
+    <div class="eyebrow">Home Improvements</div>
+    <h2 class="section-title">Marble, Stone &amp; Wall Panels</h2>
+    <p class="section-sub">Premium PVC marble panels, flexible stone, slat cladding and more — everything to finish your space beautifully.</p>
+
+    <div class="collections-grid" style="margin-top:40px;">
+
+      <!-- Marble PVC Shine -->
+      <div class="collection-card">
+        <div class="collection-cover">
+          <img src="https://cpcabinets.com/wp-content/uploads/2025/07/01-DY2438.png" alt="Marble PVC Shine" />
+          <div class="collection-tag">Marble PVC Shine</div>
+        </div>
+        <div class="collection-body">
+          <div class="collection-name">Marble PVC Shine 4'×10'</div>
+          <div class="collection-desc">High-gloss PVC marble panels. Waterproof, easy to install. 22+ color options — from classic white to bold designs.</div>
+          <div class="thumb-grid">
+            <div class="thumb-item" onclick="openModal('Marble PVC Shine','DY2438','4\'×10\' · High-gloss finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/01-DY2438.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/01-DY2438.png" alt="DY2438" /><div class="thumb-label">DY2438</div></div>
+            <div class="thumb-item" onclick="openModal('Marble PVC Shine','DY2432','4\'×10\' · High-gloss finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/02-DY2432.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/02-DY2432.png" alt="DY2432" /><div class="thumb-label">DY2432</div></div>
+            <div class="thumb-item" onclick="openModal('Marble PVC Shine','DY2436','4\'×10\' · High-gloss finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/03-DY2436.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/03-DY2436.png" alt="DY2436" /><div class="thumb-label">DY2436</div></div>
+            <div class="thumb-item" onclick="openModal('Marble PVC Shine','DY2435','4\'×10\' · High-gloss finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/04-DY2435.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/04-DY2435.png" alt="DY2435" /><div class="thumb-label">DY2435</div></div>
+            <div class="thumb-item" onclick="openModal('Marble PVC Shine','2041','4\'×10\' · High-gloss finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/05-2041.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/05-2041.png" alt="2041" /><div class="thumb-label">2041</div></div>
+            <div class="thumb-item" onclick="openModal('Marble PVC Shine','2044','4\'×10\' · High-gloss finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/06-2044.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/06-2044.png" alt="2044" /><div class="thumb-label">2044</div></div>
+          </div>
+          <a class="collection-link" href="https://cpcabinets.com/home-improvements/" target="_blank" rel="noopener">See all 22 colors →</a>
+        </div>
+      </div>
+
+      <!-- Marble PVC Matt -->
+      <div class="collection-card">
+        <div class="collection-cover">
+          <img src="https://cpcabinets.com/wp-content/uploads/2025/07/01-Caramel.png" alt="Marble PVC Matt" />
+          <div class="collection-tag">Marble PVC Matt</div>
+        </div>
+        <div class="collection-body">
+          <div class="collection-name">Marble PVC Matt 4'×10'</div>
+          <div class="collection-desc">Matte finish PVC marble panels. Sophisticated look, easy to maintain. 9 elegant finishes from warm caramel to dark ebony.</div>
+          <div class="thumb-grid">
+            <div class="thumb-item" onclick="openModal('Marble PVC Matt','Caramel','4\'×10\' · Matte finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/01-Caramel.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/01-Caramel.png" alt="Caramel" /><div class="thumb-label">Caramel</div></div>
+            <div class="thumb-item" onclick="openModal('Marble PVC Matt','Ebony','4\'×10\' · Matte finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/02-Ebony.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/02-Ebony.png" alt="Ebony" /><div class="thumb-label">Ebony</div></div>
+            <div class="thumb-item" onclick="openModal('Marble PVC Matt','Foam Classic Gray','4\'×10\' · Matte finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/03-Foam-Classic-Gray-RJ.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/03-Foam-Classic-Gray-RJ.png" alt="Classic Gray" /><div class="thumb-label">Classic Gray</div></div>
+            <div class="thumb-item" onclick="openModal('Marble PVC Matt','Foam Sharpy Walnut','4\'×10\' · Matte finish · Waterproof · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/04-Foam-Sharpy-Wallnut.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/04-Foam-Sharpy-Wallnut.png" alt="Sharpy Walnut" /><div class="thumb-label">Sharpy Walnut</div></div>
+          </div>
+          <a class="collection-link" href="https://cpcabinets.com/home-improvements/" target="_blank" rel="noopener">See all 9 colors →</a>
+        </div>
+      </div>
+
+      <!-- Flexible Stones + Slat Cladding -->
+      <div class="collection-card">
+        <div class="collection-cover">
+          <img src="https://cpcabinets.com/wp-content/uploads/2025/07/03-Travertine-4x8-1.png" alt="Flexible Stones & Slat Panels" />
+          <div class="collection-tag">Stone &amp; Wall Panels</div>
+        </div>
+        <div class="collection-body">
+          <div class="collection-name">Flexible Stones &amp; Slat Cladding</div>
+          <div class="collection-desc">Natural stone veneers, slat wall cladding and WPC beam accents — for feature walls, fireplaces and accent surfaces.</div>
+          <div class="thumb-grid">
+            <div class="thumb-item" onclick="openModal('Flexible Stone','Pure White 2\'×4\'','Natural stone veneer · Flexible · Lightweight · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/02-Pure-White-2x4-1.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/02-Pure-White-2x4-1.png" alt="Pure White" /><div class="thumb-label">Pure White</div></div>
+            <div class="thumb-item" onclick="openModal('Flexible Stone','Travertine 4\'×8\'','Natural stone veneer · Flexible · Lightweight · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/03-Travertine-4x8-1.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/03-Travertine-4x8-1.png" alt="Travertine" /><div class="thumb-label">Travertine</div></div>
+            <div class="thumb-item" onclick="openModal('Flexible Stone','Beige 2\'×4\'','Natural stone veneer · Flexible · Lightweight · Easy install','https://cpcabinets.com/wp-content/uploads/2025/07/Beige-2x4-1.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/Beige-2x4-1.png" alt="Beige" /><div class="thumb-label">Beige</div></div>
+            <div class="thumb-item" onclick="openModal('Slat Cladding','Carbon Black','Slat wall cladding · 6\"×12\' panels · Modern finish','https://cpcabinets.com/wp-content/uploads/2025/07/01-carbon-black.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/01-carbon-black.png" alt="Carbon Black" /><div class="thumb-label">Carbon Black</div></div>
+            <div class="thumb-item" onclick="openModal('Slat Cladding','Walnut','Slat wall cladding · 6\"×12\' panels · Natural wood finish','https://cpcabinets.com/wp-content/uploads/2025/07/02-wallnut.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/02-wallnut.png" alt="Walnut" /><div class="thumb-label">Walnut</div></div>
+            <div class="thumb-item" onclick="openModal('Slat Cladding','Walnut Flowline','Slat wall cladding · 6\"×12\' panels · Natural wood finish','https://cpcabinets.com/wp-content/uploads/2025/07/03-wallnut-flowline.png','https://cpcabinets.com/home-improvements/')"><img src="https://cpcabinets.com/wp-content/uploads/2025/07/03-wallnut-flowline.png" alt="Walnut Flowline" /><div class="thumb-label">Walnut Flowline</div></div>
+          </div>
+          <a class="collection-link" href="https://cpcabinets.com/home-improvements/" target="_blank" rel="noopener">See all stone &amp; panel options →</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- SERVICES -->
 <div class="section" style="background:var(--stone);">
   <div class="section-inner">
@@ -444,8 +569,8 @@
       <div class="service-card"><div class="svc-icon">📐</div><div class="svc-title">Free Design Quote</div><div class="svc-desc">Walk in with your dimensions, walk out with a detailed personalized quote — no pressure.</div></div>
     </div>
     <div class="stats-row">
-      <div class="stat-box"><div class="stat-val">24</div><div class="stat-label">Cabinet Colors</div></div>
-      <div class="stat-box"><div class="stat-val">3</div><div class="stat-label">Collections</div></div>
+      <div class="stat-box"><div class="stat-val">24+</div><div class="stat-label">Cabinet Colors</div></div>
+      <div class="stat-box"><div class="stat-val">17</div><div class="stat-label">Flooring Styles</div></div>
       <div class="stat-box"><div class="stat-val">KCMA</div><div class="stat-label">Certified Build</div></div>
       <div class="stat-box"><div class="stat-val">Free</div><div class="stat-label">Showroom Quote</div></div>
     </div>
@@ -578,10 +703,10 @@
 </footer>
 
 <script>
-  // Hero background — foto real do site
+  // Hero background — foto real do portfolio (cozinha instalada)
   window.addEventListener('load', function() {
     var bg = document.getElementById('hero-bg');
-    bg.style.backgroundImage = "url('https://cpcabinets.com/wp-content/uploads/2026/02/CP-Cabinets-Insta-e-FB-4.jpg')";
+    bg.style.backgroundImage = "url('https://cpcabinets.com/wp-content/uploads/2024/03/PHOTO-2023-10-05-12-34-17-2.jpg')";
     setTimeout(function(){ bg.classList.add('loaded'); }, 100);
   });
 
