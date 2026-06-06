@@ -18,11 +18,20 @@ async function searchCompetitors(keyword, zipCode) {
 }
 
 async function getPlaceDetails(placeId) {
-  const fields = 'name,rating,user_ratings_total,price_level,reviews,formatted_address,website';
+  const fields = 'name,rating,user_ratings_total,formatted_address,reviews';
   const url    = `${PLACES_BASE}/details/json?place_id=${placeId}&fields=${fields}&key=${PLACES_KEY}`;
-  const res    = await fetch(url);
-  const data   = await res.json();
-  return data.result || null;
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.status && data.status !== 'OK') {
+      logger.warn('competitorIntel', `getPlaceDetails status=${data.status} placeId=${placeId} msg=${data.error_message || ''}`);
+      return null;
+    }
+    return data.result || null;
+  } catch (err) {
+    logger.warn('competitorIntel', `getPlaceDetails fetch error: ${err.message}`);
+    return null;
+  }
 }
 
 async function generateReport(competitors, clientName) {
@@ -113,9 +122,13 @@ async function runCompetitorIntelCron() {
       const competitors = [];
       for (const keyword of keywords.slice(0, 2)) {
         const results = await searchCompetitors(keyword, client.zip_code);
+        logger.info('competitorIntel', `keyword="${keyword}" zip=${client.zip_code} → ${results.length} places from Search API`);
         for (const place of results) {
           if (competitors.some(c => c.place_id === place.place_id)) continue;
           const details = await getPlaceDetails(place.place_id);
+          if (details) {
+            logger.info('competitorIntel', `details OK: ${details.name}`);
+          }
           if (details && details.name !== client.business_name) {
             competitors.push({ ...details, place_id: place.place_id });
           }
@@ -125,9 +138,10 @@ async function runCompetitorIntelCron() {
       }
 
       if (!competitors.length) {
-        logger.info('competitorIntel', `no competitors found for ${client.business_name}`);
+        logger.info('competitorIntel', `no competitors found for ${client.business_name} — skipping email`);
         continue;
       }
+      logger.info('competitorIntel', `found ${competitors.length} competitors for ${client.business_name}`);
 
       const report      = await generateReport(competitors, client.business_name);
       const negCount    = competitors.reduce((n, c) => n + (c.reviews || []).filter(r => r.rating <= 2).length, 0);

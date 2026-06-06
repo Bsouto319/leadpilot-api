@@ -1072,7 +1072,7 @@ router.post('/run-competitor-intel', async (req, res) => {
     const { runCompetitorIntelCron } = require('../services/competitorIntel');
     await runCompetitorIntelCron();
     logger.info('admin', 'competitor intel job completed via manual trigger');
-    res.json({ ok: true, message: 'Competitor intel completed — emails sent' });
+    res.json({ ok: true, message: 'Competitor intel job completed — check server logs for results' });
   } catch (err) {
     logger.warn('admin', `competitor intel job failed: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });

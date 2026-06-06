@@ -405,6 +405,7 @@ async function sendDigestEmail(prospects, overrideRecipients = null) {
 </div></body></html>`;
 
   const recipients = overrideRecipients || DIGEST_RECIPIENTS;
+  const isLowerScore = high.length === 0;
   const subject = isLowerScore
     ? `📋 CP Cabinets Outreach — ${prospects.length} Leads for Review (${date})`
     : `🎯 ${prospects.length} Qualified Leads Ready — CP Cabinets (${date})`;
