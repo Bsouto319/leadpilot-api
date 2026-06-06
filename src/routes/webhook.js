@@ -1698,6 +1698,7 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   const bestTime        = getField(body, 'your-subject', 'your-best-time', 'your-best-time-to-contact-you', 'subject', 'time', 'best-time');
   const serviceType     = getField(body, 'your-project', 'your-service', 'service', 'service-type', 'project', 'project-type', 'service_type');
   const additionalNotes = getField(body, 'your-message', 'message', 'additional-notes', 'notes', 'comments');
+  const leadAddress     = getField(body, 'address', 'lead-address', 'your-address', 'street-address') || null;
 
   if (!rawPhone) {
     logger.warn('cf7', `missing phone field — body keys: ${Object.keys(body).join(', ')}`);
@@ -1708,6 +1709,7 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     serviceType      && `Service: ${serviceType}`,
     visitDate        && `Preferred visit date: ${visitDate}`,
     bestTime         && `Best time: ${bestTime}`,
+    leadAddress      && `Address: ${leadAddress}`,
     additionalNotes  && `Notes: ${additionalNotes}`,
   ].filter(Boolean).join(' | ') || 'Website contact form';
 
@@ -1793,6 +1795,7 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     serviceType: serviceType || undefined,
     source: 'website',
     scheduledAt,
+    leadAddress: leadAddress || null,
   }).catch(err => handleError('cf7', err));
 });
 

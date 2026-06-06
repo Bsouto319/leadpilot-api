@@ -259,7 +259,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--stone);color:var(--text);
       <div class="nav-sub">Premium Tile Installation · NJ</div>
     </div>
   </div>
-  <a href="tel:+18482753259" class="nav-phone">📞 (848) 275-3259</a>
+  <a href="#estimate" class="nav-phone" onclick="event.preventDefault();document.getElementById('estimate').scrollIntoView({behavior:'smooth'})">📞 (848) 275-3259</a>
 </div>
 
 <div class="hero">
@@ -272,7 +272,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--stone);color:var(--text);
     <div class="badge">📍 NJ Shore Area</div>
     <div class="badge">🔨 Residential &amp; Commercial</div>
   </div>
-  <a href="#estimate" class="hero-cta">Get Your Free Estimate →</a>
+  <a href="#estimate" class="hero-cta" onclick="event.preventDefault();document.getElementById('estimate').scrollIntoView({behavior:'smooth'})">Get Your Free Estimate →</a>
 </div>
 
 <div class="section" style="background:var(--white);">
@@ -489,8 +489,6 @@ async function submitForm() {
   btn.disabled = true;
   btn.textContent = 'Sending...';
 
-  const notesFull = [address, notes].filter(Boolean).join(' | ') || '';
-
   try {
     const res = await fetch('https://leads.btechsouto.shop/webhook/cf7?clientId=147789ae-8576-4310-a243-416c04a99b36', {
       method: 'POST',
@@ -502,7 +500,8 @@ async function submitForm() {
         service_type: type,
         date:         date,
         time:         time,
-        notes:        notesFull,
+        address:      address || '',
+        notes:        notes  || '',
       }),
     });
     if (!res.ok) throw new Error('server ' + res.status);
