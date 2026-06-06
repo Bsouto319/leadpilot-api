@@ -1758,13 +1758,26 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     minute = clampedMins % 60;
 
     try {
-      // Build ISO string as local time in client's timezone (America/New_York) and convert to UTC
-      const tz = 'America/New_York'; // always US Eastern
-      const localStr = `${visitDate}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00`;
-      const probe    = new Date(localStr + 'Z');
-      const tzDate   = new Date(probe.toLocaleString('en-US', { timeZone: tz }));
-      const offsetMs = probe.getTime() - tzDate.getTime();
-      const d = new Date(probe.getTime() + offsetMs);
+      // Convert local Eastern time → UTC without relying on server's local timezone.
+      // Uses Date.UTC() + Intl.DateTimeFormat.formatToParts() — both timezone-agnostic.
+      const tz = 'America/New_York';
+      const [yr, mo, dy] = visitDate.split('-').map(Number);
+      // Build a pseudo-UTC timestamp treating the local time as UTC temporarily
+      const pseudoMs = Date.UTC(yr, mo - 1, dy, hour, minute, 0, 0);
+      const pseudoDate = new Date(pseudoMs);
+      // Find what Eastern time shows at pseudoMs (tells us the offset)
+      const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+      });
+      const p = {};
+      for (const { type, value } of fmt.formatToParts(pseudoDate)) p[type] = value;
+      const tzH  = parseInt(p.hour) === 24 ? 0 : parseInt(p.hour);
+      const tzMs = Date.UTC(parseInt(p.year), parseInt(p.month) - 1, parseInt(p.day), tzH, parseInt(p.minute), 0);
+      // offsetMs: how far pseudo-UTC drifts from real Eastern local → add it back to get true UTC
+      const d = new Date(pseudoMs + (pseudoMs - tzMs));
       if (!isNaN(d)) scheduledAt = d.toISOString();
     } catch { /* invalid date, skip */ }
   }

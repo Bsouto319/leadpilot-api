@@ -42,11 +42,11 @@ function emailStyle() {
 
 function clientBranding(client) {
   return {
-    logoUrl:         client.logo_url          || 'https://leads.btechsouto.shop/cp-cabinets-logo.png',
-    cityState:       client.city_state         || 'Irmo, South Carolina',
-    addressDisplay:  client.address_display    || '1085 Lake Murray Blvd, Suite E, Irmo, SC 29063',
-    contactPhone:    client.contact_phone_display || '(803) 373-8191',
-    scheduleSlug:    client.schedule_slug      || 'cp-cabinets',
+    logoUrl:         client.logo_url              || '',
+    cityState:       client.city_state             || '',
+    addressDisplay:  client.address_display        || '',
+    contactPhone:    client.contact_phone_display  || '',
+    scheduleSlug:    client.schedule_slug          || '',
   };
 }
 
@@ -533,7 +533,7 @@ async function sendGoogleReviewEmail(conv) {
 
 // ── NEW LEAD ALERT (HTML) para o dono ─────────────────────────────────────────
 
-function buildNewLeadAlertEmail({ leadName, leadPhone, leadEmail, serviceType, agentName, businessName, logoUrl, cityState, addressDisplay, contactPhone, score, tier, summary, signals, source }) {
+function buildNewLeadAlertEmail({ leadName, leadPhone, leadEmail, serviceType, agentName, businessName, logoUrl, cityState, addressDisplay, contactPhone, score, tier, summary, signals, source, leadAddress }) {
   const service = (serviceType || 'general').replace(/_/g, ' ');
   const scoreText = score != null ? `${score}/10` : null;
   const tierLabel = tier === 'hot' ? '🔥 Hot' : tier === 'warm' ? '♨️ Warm' : tier ? `${tier}` : null;
@@ -567,7 +567,7 @@ function buildNewLeadAlertEmail({ leadName, leadPhone, leadEmail, serviceType, a
         👤 <strong>Name:</strong> ${leadName}<br>
         📞 <strong>Phone:</strong> +${leadPhone}<br>
         ${leadEmail ? `📧 <strong>Email:</strong> ${leadEmail}<br>` : ''}
-        🔧 <strong>Service:</strong> ${service}
+        🔧 <strong>Service:</strong> ${service}${leadAddress ? `<br>📍 <strong>Address:</strong> ${leadAddress}` : ''}
       </p>
     </div>
     ${qualBlock}

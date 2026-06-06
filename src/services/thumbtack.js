@@ -177,6 +177,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
         tier: qualification.tier,
         summary: qualification.summary,
         signals: qualification.signals,
+        leadAddress: leadAddress || null,
         ...branding,
       });
       const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
@@ -303,6 +304,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       tier: qualification.tier,
       summary: qualification.summary,
       signals: qualification.signals,
+      leadAddress: leadAddress || null,
       ...branding,
     });
     const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
