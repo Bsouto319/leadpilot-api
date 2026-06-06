@@ -189,6 +189,27 @@
     .f-ta:focus { border-color: var(--accent2); background: #fff; box-shadow: 0 0 0 3px rgba(232,98,26,0.1); }
     .f-ta::placeholder { color: var(--muted2); }
     .sunday-msg { display: none; font-size: 12px; color: var(--accent); margin-top: 4px; font-weight: 500; }
+    /* ── VISIT TYPE SELECTOR ── */
+    .visit-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    .visit-opt {
+      border: 2px solid var(--border); border-radius: 12px; padding: 16px 14px;
+      cursor: pointer; transition: all .2s; text-align: center; background: #f9f7f4;
+      position: relative;
+    }
+    .visit-opt:hover { border-color: var(--accent2); background: #fff; }
+    .visit-opt.selected { border-color: var(--accent2); background: var(--accent-pale); box-shadow: 0 0 0 3px rgba(232,98,26,0.1); }
+    .visit-opt-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+    .visit-opt-title { font-size: 14px; font-weight: 700; color: var(--dark); margin-bottom: 4px; }
+    .visit-opt-sub { font-size: 11px; color: var(--muted); line-height: 1.4; }
+    .visit-opt-check {
+      position: absolute; top: 10px; right: 10px;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--accent2); display: none;
+      align-items: center; justify-content: center;
+      font-size: 10px; color: #fff; font-weight: 800;
+    }
+    .visit-opt.selected .visit-opt-check { display: flex; }
+
     .consent-row { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; background: #f9f7f4; border-radius: 9px; margin-bottom: 20px; font-size: 11px; color: var(--muted); line-height: 1.6; }
     .consent-row a { color: var(--accent2); }
     .f-error { display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 9px; padding: 12px 14px; font-size: 13px; color: #dc2626; text-align: center; margin-bottom: 12px; }
@@ -642,6 +663,30 @@
         <div class="form-head-sub">Free personalized quote · No obligation · Mon–Fri 9 AM – 4 PM</div>
       </div>
       <div class="form-body" id="fbody">
+
+        <!-- STEP 1: VISIT TYPE -->
+        <div style="margin-bottom:20px;">
+          <div class="f-label" style="margin-bottom:10px;">How would you like to meet? <span class="f-req">*</span></div>
+          <div class="visit-selector">
+            <div class="visit-opt" id="opt-inhome" onclick="selectVisitType('inhome')">
+              <div class="visit-opt-check">✓</div>
+              <span class="visit-opt-icon">🏠</span>
+              <div class="visit-opt-title">In-Home Estimate</div>
+              <div class="visit-opt-sub">Our specialist comes to your home — measures your space and gives you a quote on the spot</div>
+            </div>
+            <div class="visit-opt" id="opt-showroom" onclick="selectVisitType('showroom')">
+              <div class="visit-opt-check">✓</div>
+              <span class="visit-opt-icon">🏪</span>
+              <div class="visit-opt-title">Visit Our Showroom</div>
+              <div class="visit-opt-sub">Come see our full collections in person — touch the doors, compare colors, get a free quote</div>
+            </div>
+          </div>
+          <!-- Showroom address hint -->
+          <div id="showroom-hint" style="display:none;background:#f9f7f4;border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:13px;color:var(--muted);margin-top:-4px;">
+            📍 <strong style="color:var(--dark);">1085 Lake Murray Blvd, Suite E — Irmo, SC 29063</strong><br>Mon–Fri 9:00 AM – 4:00 PM · Saturday by appointment
+          </div>
+        </div>
+
         <div class="form-row">
           <div class="f-field"><label class="f-label">Full Name <span class="f-req">*</span></label><input class="f-inp" id="ff-name" name="your-name" placeholder="John Smith" autocomplete="name"></div>
           <div class="f-field"><label class="f-label">Phone <span class="f-req">*</span></label><input class="f-inp" id="ff-phone" name="your-phone" placeholder="(803) 555-0100" type="tel" autocomplete="tel"></div>
@@ -649,6 +694,15 @@
         <div class="form-row full">
           <div class="f-field"><label class="f-label">Email</label><input class="f-inp" id="ff-email" name="your-email" placeholder="john@email.com" type="email" autocomplete="email"></div>
         </div>
+
+        <!-- In-home: customer address -->
+        <div class="form-row full" id="row-address" style="display:none;">
+          <div class="f-field">
+            <label class="f-label">Your Address <span class="f-req">*</span></label>
+            <input class="f-inp" id="ff-address" placeholder="123 Main St, Columbia, SC 29201">
+          </div>
+        </div>
+
         <div class="form-row">
           <div class="f-field">
             <label class="f-label">Preferred Date <span class="f-req">*</span></label>
@@ -668,21 +722,21 @@
         </div>
         <div class="form-row full">
           <div class="f-field">
-            <label class="f-label">What are you looking for? <span class="f-req">*</span></label>
+            <label class="f-label">What are you interested in? <span class="f-req">*</span></label>
             <select class="f-sel" id="ff-project" name="your-project">
-              <option value="">— Select a project type —</option>
+              <option value="">— Select a product/service —</option>
               <option>Kitchen Cabinets</option><option>Bathroom Cabinets</option>
               <option>Quartz Countertops</option><option>Full Kitchen Remodel</option>
-              <option>Vinyl Flooring</option><option>Other</option>
+              <option>Vinyl Flooring</option><option>Marble / Wall Panels</option><option>Other</option>
             </select>
           </div>
         </div>
         <div class="form-row full" style="margin-bottom:20px;">
-          <div class="f-field"><label class="f-label">Additional Notes</label><textarea class="f-ta" id="ff-notes" name="your-message" placeholder="Tell us about your project, style preferences, dimensions, or any questions…"></textarea></div>
+          <div class="f-field"><label class="f-label">Additional Notes</label><textarea class="f-ta" id="ff-notes" name="your-message" placeholder="Tell us about your project — dimensions, style preferences, colors you liked, any questions…"></textarea></div>
         </div>
         <div class="consent-row">🔒 By submitting you consent to receive calls and emails from CP Cabinets &amp; Quartz. <a href="/privacy-cp-cabinets.html" target="_blank">Privacy Policy</a> · <a href="/terms-cp-cabinets.html" target="_blank">Terms</a></div>
         <div class="f-error" id="ferror">Something went wrong. Please call us directly at <strong>(803) 373-8191</strong>.</div>
-        <button class="f-submit" id="submit-btn" onclick="submitForm()">Request My Free Visit →</button>
+        <button class="f-submit" id="submit-btn" onclick="submitForm()">Request My Free Estimate →</button>
       </div>
       <div class="success-box" id="fsuccess">
         <div class="suc-ico">✓</div>
@@ -730,6 +784,18 @@
     document.getElementById('estimate').scrollIntoView({ behavior: 'smooth' });
   }
 
+  var selectedVisitType = '';
+  function selectVisitType(type) {
+    selectedVisitType = type;
+    document.getElementById('opt-inhome').classList.toggle('selected', type === 'inhome');
+    document.getElementById('opt-showroom').classList.toggle('selected', type === 'showroom');
+    document.getElementById('row-address').style.display   = type === 'inhome'   ? 'flex' : 'none';
+    document.getElementById('showroom-hint').style.display = type === 'showroom' ? 'block' : 'none';
+    var btn = document.getElementById('submit-btn');
+    if (type === 'inhome')   btn.textContent = 'Request In-Home Estimate →';
+    if (type === 'showroom') btn.textContent = 'Book My Showroom Visit →';
+  }
+
   // Modal com foto real
   function openModal(collection, name, desc, imgUrl, catalogLink) {
     document.getElementById('modal-collection').textContent = collection;
@@ -767,12 +833,23 @@
     var dateVal = document.getElementById('ff-date').value;
     var time    = document.getElementById('ff-time').value;
     var project = document.getElementById('ff-project').value;
+    var address = (document.getElementById('ff-address') ? document.getElementById('ff-address').value.trim() : '');
+
+    if (!selectedVisitType) {
+      document.getElementById('ferror').textContent = 'Please select a visit type — In-Home Estimate or Showroom Visit.';
+      document.getElementById('ferror').style.display = 'block'; return;
+    }
 
     var valid = true;
     [['ff-name',name],['ff-phone',phone],['ff-date',dateVal],['ff-time',time],['ff-project',project]].forEach(function(p){
       var el = document.getElementById(p[0]);
       if (!p[1]) { el.classList.add('err'); valid = false; } else el.classList.remove('err');
     });
+    if (selectedVisitType === 'inhome' && !address) {
+      document.getElementById('ff-address').classList.add('err'); valid = false;
+    } else if (document.getElementById('ff-address')) {
+      document.getElementById('ff-address').classList.remove('err');
+    }
     if (!valid) return;
 
     if (dateVal && new Date(dateVal + 'T12:00:00').getDay() === 0) {
@@ -784,6 +861,12 @@
     var btn = document.getElementById('submit-btn');
     btn.disabled = true; btn.textContent = 'Sending…';
 
+    var visitLabel = selectedVisitType === 'inhome' ? 'In-Home Estimate' : 'Showroom Visit';
+    var notes = document.getElementById('ff-notes').value.trim();
+    var msgParts = ['Visit Type: ' + visitLabel];
+    if (selectedVisitType === 'inhome' && address) msgParts.push('Customer Address: ' + address);
+    if (notes) msgParts.push(notes);
+
     var params = new URLSearchParams();
     params.append('your-name',    name);
     params.append('your-phone',   phone);
@@ -791,7 +874,7 @@
     params.append('your-date',    dateVal);
     params.append('your-subject', time);
     params.append('your-project', project);
-    params.append('your-message', document.getElementById('ff-notes').value.trim());
+    params.append('your-message', msgParts.join(' | '));
 
     try {
       var res = await fetch('https://leads.btechsouto.shop/webhook/cf7?clientId=5221cab9-a741-4ddc-a752-2359826fba95', {
@@ -801,13 +884,13 @@
         var json = await res.json().catch(function(){ return {}; });
         document.getElementById('ferror').textContent = json.message || 'This time slot is already booked. Please choose another.';
         document.getElementById('ferror').style.display = 'block';
-        btn.disabled = false; btn.textContent = 'Request My Free Visit →'; return;
+        btn.disabled = false; btn.textContent = selectedVisitType === 'showroom' ? 'Book My Showroom Visit →' : 'Request In-Home Estimate →'; return;
       }
       if (!res.ok) throw new Error('server');
     } catch(err) {
       document.getElementById('ferror').textContent = 'Something went wrong. Please call us at (803) 373-8191.';
       document.getElementById('ferror').style.display = 'block';
-      btn.disabled = false; btn.textContent = 'Request My Free Visit →'; return;
+      btn.disabled = false; btn.textContent = selectedVisitType === 'showroom' ? 'Book My Showroom Visit →' : 'Request In-Home Estimate →'; return;
     }
 
     document.getElementById('fbody').style.display = 'none';
