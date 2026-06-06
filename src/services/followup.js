@@ -525,7 +525,47 @@ async function sendGoogleReviewEmail(conv) {
   logger.info('followup', `google review email sent to ${conv.lead_email} conv=${conv.id}`);
 }
 
+// ── NEW LEAD ALERT (HTML) para o dono ─────────────────────────────────────────
+
+function buildNewLeadAlertEmail({ leadName, leadPhone, serviceType, agentName, businessName, logoUrl, cityState, addressDisplay, contactPhone }) {
+  const service = (serviceType || 'general').replace(/_/g, ' ');
+  return {
+    subject: `🔔 New Lead — ${businessName}`,
+    html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    ${logoUrl ? `<img src="${logoUrl}" alt="${businessName}" style="max-height:48px;max-width:200px;margin-bottom:10px;display:block;margin-left:auto;margin-right:auto">` : ''}
+    <h1>${businessName}</h1>
+    <p>${cityState || ''}</p>
+  </div>
+  <div class="hero">
+    <h2>🔔 New Lead Received!</h2>
+    <p>${agentName || 'Your agent'} is calling them now.</p>
+  </div>
+  <div class="body">
+    <div class="info">
+      <p>
+        👤 <strong>Name:</strong> ${leadName}<br>
+        📞 <strong>Phone:</strong> +${leadPhone}<br>
+        🔧 <strong>Service:</strong> ${service}
+      </p>
+    </div>
+    <p>Log into your dashboard to track this lead and manage your pipeline.</p>
+  </div>
+  <div class="footer">
+    <p>© 2026 ${businessName}</p>
+    ${addressDisplay ? `<p>${addressDisplay}</p>` : ''}
+    ${contactPhone ? `<p>${contactPhone}</p>` : ''}
+  </div>
+</div>
+</body></html>`,
+  };
+}
+
 module.exports = {
+  clientBranding,
+  buildNewLeadAlertEmail,
   sendLeadConfirmationEmail,
   sendImmediateFollowUp,
   runFollowUpCron,

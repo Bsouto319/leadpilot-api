@@ -54,11 +54,10 @@ function fastParseDate(speech, tz) {
   return null; // GPT fallback para casos complexos
 }
 
-// Helper: returns <Play> ElevenLabs if configured, otherwise <Say alice> fallback.
-// The /audio endpoint handles on-demand generation if phrase not yet cached.
+// Helper: returns <Play> ElevenLabs if phrase is cached, otherwise <Say alice> fallback.
 function el(client, phraseKey, fallbackText) {
   const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
-  if (client.elevenlabs_greeting_url) {
+  if (elevenlabs.hasPhrase(client.id, phraseKey)) {
     return `<Play>${elevenlabs.phraseUrl(BASE, client.id, phraseKey)}</Play>`;
   }
   return `<Say voice="alice" language="en-US">${fallbackText}</Say>`;
@@ -506,14 +505,21 @@ async function processSms(body) {
     }
   }
 
-  // 9. Notify owner via email
+  // 9. Notify owner via email (HTML)
   if (client.owner_email) {
-    sendEmail({
-      from: `${client.business_name} <noreply@btechsouto.shop>`,
-      to: client.owner_email,
-      subject: `🔔 New Lead — ${client.business_name}`,
-      body: `New lead incoming!\n\nName: ${leadName}\nPhone: +${leadPhone}\nService: ${serviceType.replace(/_/g, ' ')}\n\n${client.agent_name || 'Lexy'} is calling them now.${client.website_url ? '\n' + client.website_url : ''}\n\n${client.business_name}`,
-    }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
+    const { buildNewLeadAlertEmail, clientBranding } = require('../services/followup');
+    const branding = clientBranding(client);
+    const { subject: alertSubject, html: alertHtml } = buildNewLeadAlertEmail({
+      leadName, leadPhone, serviceType,
+      agentName: client.agent_name,
+      businessName: client.business_name,
+      ...branding,
+    });
+    const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
+    for (const to of alertRecipients) {
+      sendEmail({ from: `${client.business_name} <noreply@btechsouto.shop>`, to, subject: alertSubject, html: alertHtml })
+        .catch(err => logger.warn('webhook', `owner email notify failed ${to}: ${err.message}`));
+    }
   }
 
   // Log first message + any media to history
@@ -985,14 +991,15 @@ async function startVoiceIntake(req, res) {
 </Response>`);
   }
 
-  // Responde IMEDIATAMENTE — usa <Play> (ElevenLabs pré-gerado) se disponível, senão Alice (Twilio)
-  // Se o áudio não está em cache (ex: restart Docker), aciona regen em background para próxima ligação
-  const greetingTwiml = client.elevenlabs_greeting_url
-    ? `<Play>${client.elevenlabs_greeting_url}</Play>`
+  // Responde IMEDIATAMENTE — usa <Play> ElevenLabs se frase em cache, senão <Say> TTS
+  const hasGreetingIn = elevenlabs.hasPhrase(client.id, 'greeting');
+  const BASE_IN = process.env.BASE_URL || 'https://leads.btechsouto.shop';
+  const greetingTwiml = hasGreetingIn
+    ? `<Play>${elevenlabs.phraseUrl(BASE_IN, client.id, 'greeting')}</Play>`
     : `<Say voice="alice" language="en-US">Hi! Thanks for calling ${client.business_name}. What's your first name?</Say>`;
 
-  // Warmup cache in background if cold (so /audio serves from memory on next call)
-  if (client.elevenlabs_greeting_url && !elevenlabs.hasPhrase(client.id, 'greeting')) {
+  // Warmup cache in background if cold
+  if (client.elevenlabs_voice_id && !hasGreetingIn) {
     elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope', client.agent_name)
       .catch(err => logger.warn('webhook', `bg regen all phrases failed: ${err.message}`));
   }
@@ -1824,12 +1831,14 @@ async function startOutboundVoiceIntake(req, res) {
     }).catch(() => {});
   }
 
-  const greetingTwimlOut = client.elevenlabs_greeting_url
-    ? `<Play>${client.elevenlabs_greeting_url}</Play>`
+  const BASE_OUT = process.env.BASE_URL || 'https://leads.btechsouto.shop';
+  const hasGreetingOut = elevenlabs.hasPhrase(client.id, 'greeting');
+  const greetingTwimlOut = hasGreetingOut
+    ? `<Play>${elevenlabs.phraseUrl(BASE_OUT, client.id, 'greeting')}</Play>`
     : `<Say voice="alice" language="en-US">Hi! Thanks for answering. This is ${client.business_name}. What's your first name?</Say>`;
 
   // Warmup cache in background if cold
-  if (client.elevenlabs_greeting_url && !elevenlabs.hasPhrase(client.id, 'greeting')) {
+  if (client.elevenlabs_voice_id && !hasGreetingOut) {
     elevenlabs.generateAllClientPhrases(client.id, client.business_name, client.elevenlabs_voice_id || 'hope', client.agent_name)
       .catch(err => logger.warn('webhook', `outbound bg regen all phrases failed: ${err.message}`));
   }
