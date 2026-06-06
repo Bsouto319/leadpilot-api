@@ -57,6 +57,7 @@
       animation: kenburns 20s ease-in-out infinite;
       transform-origin: center center;
       will-change: transform;
+      filter: saturate(1.5) brightness(1.1);
     }
     .hero-bg.loaded { opacity: 1; }
     .hero-overlay {
@@ -263,7 +264,7 @@
       <div class="modal-sub" id="modal-sub"></div>
       <div class="modal-actions">
         <button class="modal-btn-primary" onclick="scrollToForm();closeModal()">Book Free Showroom Visit →</button>
-        <a class="modal-btn-secondary" id="modal-link" href="https://cpcabinets.com/kitchen-cabinets/" target="_blank" rel="noopener">See Full Catalog ↗</a>
+        <button class="modal-btn-secondary" onclick="closeModal()">✕ Close</button>
       </div>
     </div>
   </div>
@@ -279,11 +280,12 @@
     </div>
   </div>
   <div class="nav-links">
-    <a class="nav-link" href="https://cpcabinets.com/#about" target="_blank" rel="noopener">About Us</a>
+    <a class="nav-link" href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Home</a>
+    <a class="nav-link" href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">About Us</a>
     <a class="nav-link" href="#catalog" onclick="document.getElementById('catalog').scrollIntoView({behavior:'smooth'});return false;">Kitchen Cabinets</a>
     <a class="nav-link" href="#flooring" onclick="document.getElementById('flooring').scrollIntoView({behavior:'smooth'});return false;">Vinyl Flooring</a>
     <a class="nav-link" href="#improvements" onclick="document.getElementById('improvements').scrollIntoView({behavior:'smooth'});return false;">Home Improvements</a>
-    <a class="nav-link" href="https://cpcabinets.com/portfolio/" target="_blank" rel="noopener">Portfolio</a>
+    <a class="nav-link" href="#showroom" onclick="document.getElementById('showroom').scrollIntoView({behavior:'smooth'});return false;">Portfolio</a>
     <a class="nav-link" href="#estimate" onclick="scrollToForm(event)">Contact</a>
     <a class="nav-cta" href="#estimate" onclick="scrollToForm(event)">Book Free Visit</a>
   </div>
@@ -608,7 +610,7 @@
 </div>
 
 <!-- SHOWROOM INFO -->
-<div class="section" style="background:var(--white);">
+<div class="section" style="background:var(--white);" id="showroom">
   <div class="section-inner">
     <div class="showroom-grid">
       <div>
@@ -743,7 +745,7 @@
         <div class="form-row full" style="margin-bottom:20px;">
           <div class="f-field"><label class="f-label">Additional Notes</label><textarea class="f-ta" id="ff-notes" name="your-message" placeholder="Tell us about your project — dimensions, style preferences, colors you liked, any questions…"></textarea></div>
         </div>
-        <div class="consent-row">🔒 By submitting you consent to receive calls and emails from CP Cabinets &amp; Quartz. <a href="/privacy-cp-cabinets.html" target="_blank">Privacy Policy</a> · <a href="/terms-cp-cabinets.html" target="_blank">Terms</a></div>
+        <div class="consent-row">🔒 By submitting you consent to receive calls and emails from CP Cabinets &amp; Quartz. <a href="#" onclick="document.getElementById('privacy-modal').style.display='block';return false;">Privacy Policy</a></div>
         <div class="f-error" id="ferror">Something went wrong. Please call us directly at <strong>(803) 373-8191</strong>.</div>
         <button class="f-submit" id="submit-btn" onclick="submitForm()">Request My Free Estimate →</button>
       </div>
@@ -761,7 +763,7 @@
   <div class="footer-name">CP Cabinets &amp; Quartz</div>
   <div class="footer-info">
     1085 Lake Murray Blvd Suite E, Irmo SC 29063 · (803) 373-8191 · <a href="mailto:contact@cpcabinets.com">contact@cpcabinets.com</a><br>
-    © 2026 CP Cabinets &amp; Quartz · <a href="https://cpcabinets.com" target="_blank" rel="noopener">cpcabinets.com</a> · <a href="/privacy-cp-cabinets.html">Privacy</a> · <a href="/terms-cp-cabinets.html">Terms</a>
+    © 2026 CP Cabinets &amp; Quartz · <a href="https://cpcabinets.com" target="_blank" rel="noopener">cpcabinets.com</a> · <a href="#" onclick="document.getElementById('privacy-modal').style.display='block';return false;">Privacy Policy</a>
   </div>
 </footer>
 
@@ -911,5 +913,48 @@
     el.addEventListener('change', function(){ el.classList.remove('err'); });
   });
 </script>
+
+<!-- BACK TO TOP -->
+<button id="back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Back to top" style="
+  position:fixed;bottom:28px;right:28px;z-index:999;
+  width:46px;height:46px;border-radius:50%;border:none;
+  background:var(--accent2);color:#fff;font-size:20px;cursor:pointer;
+  box-shadow:0 4px 18px rgba(232,98,26,0.45);
+  opacity:0;transition:opacity .3s;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+">↑</button>
+<script>
+  window.addEventListener('scroll',function(){
+    var b=document.getElementById('back-top');
+    if(window.scrollY>400){b.style.opacity='1';b.style.pointerEvents='auto';}
+    else{b.style.opacity='0';b.style.pointerEvents='none';}
+  });
+</script>
+
+<!-- PRIVACY POLICY MODAL -->
+<div id="privacy-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);overflow-y:auto;padding:40px 16px;">
+  <div style="max-width:680px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 36px;position:relative;">
+    <button onclick="document.getElementById('privacy-modal').style.display='none'" style="position:absolute;top:16px;right:20px;border:none;background:none;font-size:22px;cursor:pointer;color:#666;">✕</button>
+    <h2 style="font-family:'Playfair Display',serif;font-size:26px;margin-bottom:8px;">Privacy Policy</h2>
+    <p style="font-size:12px;color:#888;margin-bottom:24px;">CP Cabinets &amp; Quartz · Last updated: June 2026</p>
+
+    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">Information We Collect</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;">When you submit a quote request, we collect your name, phone number, email address, and project details. This information is used solely to respond to your inquiry and schedule your consultation.</p>
+
+    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">How We Use Your Information</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;">We use your contact information to: (1) respond to your quote request, (2) schedule an in-home estimate or showroom visit, (3) follow up about your project. We do not sell or share your information with third parties for marketing purposes.</p>
+
+    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">Communications</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;">By submitting this form, you consent to receive calls, SMS messages, and emails from CP Cabinets &amp; Quartz regarding your request. You may opt out at any time by replying STOP to any SMS or emailing us directly.</p>
+
+    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">Data Security</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;">Your information is stored securely and accessed only by CP Cabinets staff. We do not store payment information through this form.</p>
+
+    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">Contact</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;">Questions? Contact us at <strong>(803) 373-8191</strong> or visit us at 1085 Lake Murray Blvd, Suite E, Irmo, SC 29063.</p>
+
+    <button onclick="document.getElementById('privacy-modal').style.display='none'" style="margin-top:28px;padding:12px 32px;background:#e8621a;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;">Close</button>
+  </div>
+</div>
 </body>
 </html>
