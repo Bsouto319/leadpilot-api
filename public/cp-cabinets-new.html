@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="CP Cabinets & Quartz — Premium all-plywood kitchen cabinets, quartz countertops & vinyl flooring. Visit our showroom in Irmo, SC. Free personalized quote." />
+  <title>CP Cabinets & Quartz | Premium Kitchens · Irmo, South Carolina</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,700;1,800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --stone: #f7f5f0;
+      --dark:  #1c1917;
+      --dark2: #292524;
+      --accent: #c95210;
+      --accent2: #e8621a;
+      --accent-pale: #fef3ee;
+      --text: #1c1917;
+      --muted: #78716c;
+      --muted2: #a8a29e;
+      --white: #ffffff;
+      --border: #e7e2d8;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--stone); color: var(--text); }
+    a { text-decoration: none; color: inherit; }
+
+    /* NAV */
+    .nav {
+      background: rgba(28,25,23,0.93);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 0 40px; height: 68px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      border-bottom: 1px solid rgba(201,82,16,0.2);
+    }
+    .nav-logo { display: flex; align-items: center; gap: 12px; }
+    .nav-logo img { height: 44px; object-fit: contain; }
+    .nav-name { font-weight: 600; font-size: 15px; color: #fff; line-height: 1.2; }
+    .nav-sub  { font-size: 11px; color: rgba(232,98,26,0.8); letter-spacing: 1px; }
+    .nav-actions { display: flex; align-items: center; gap: 10px; }
+    .nav-site {
+      padding: 8px 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+      font-size: 13px; color: rgba(255,255,255,0.7); transition: all .2s;
+    }
+    .nav-site:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .nav-cta {
+      padding: 10px 20px; background: var(--accent2); border: none; border-radius: 8px;
+      font-size: 14px; font-weight: 700; color: #fff; cursor: pointer; transition: all .2s;
+      text-decoration: none;
+    }
+    .nav-cta:hover { background: var(--accent); transform: translateY(-1px); }
+
+    /* HERO */
+    .hero {
+      position: relative; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 120px 40px 80px; overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #2d1a0a 0%, #3d2010 40%, #1a0d04 100%);
+      background-size: cover; background-position: center;
+    }
+    .hero-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom,rgba(15,8,3,0.65) 0%,rgba(15,8,3,0.5) 50%,rgba(15,8,3,0.8) 100%);
+    }
+    .hero-content { position: relative; z-index: 2; max-width: 760px; }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase;
+      color: rgba(232,98,26,0.9); margin-bottom: 24px;
+      padding: 7px 18px; border: 1px solid rgba(232,98,26,0.4); border-radius: 20px;
+      background: rgba(232,98,26,0.1); backdrop-filter: blur(4px);
+    }
+    .hero-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 60px; font-weight: 800; color: #fff;
+      line-height: 1.08; margin-bottom: 14px;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+    }
+    .hero-title em { color: rgba(232,98,26,0.9); font-style: italic; display: block; }
+    .hero-sub {
+      font-size: 17px; color: rgba(255,255,255,0.75);
+      line-height: 1.7; max-width: 540px; margin: 0 auto 36px;
+    }
+    .hero-badges {
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 44px;
+    }
+    .badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border: 1px solid rgba(255,255,255,0.18); border-radius: 20px;
+      font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.85);
+      background: rgba(255,255,255,0.08); backdrop-filter: blur(6px);
+    }
+    .hero-cta {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 16px 36px; background: var(--accent2); border: none; border-radius: 10px;
+      font-size: 16px; font-weight: 700; color: #fff; cursor: pointer; transition: all .25s;
+      box-shadow: 0 8px 32px rgba(232,98,26,0.45); text-decoration: none;
+    }
+    .hero-cta:hover { background: var(--accent); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(232,98,26,0.5); }
+    .scroll-hint {
+      position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      color: rgba(255,255,255,0.35); font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+      animation: bob 2s ease-in-out infinite;
+    }
+    @keyframes bob {
+      0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(6px)}
+    }
+    .scroll-arrow {
+      width: 20px; height: 20px;
+      border-right: 1.5px solid rgba(255,255,255,0.3);
+      border-bottom: 1.5px solid rgba(255,255,255,0.3);
+      transform: rotate(45deg);
+    }
+
+    /* SECTIONS */
+    .section { padding: 72px 40px; }
+    .section-inner { max-width: 1060px; margin: 0 auto; }
+    .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--accent2); margin-bottom: 10px; }
+    .section-title { font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 800; color: var(--dark); margin-bottom: 8px; line-height: 1.2; }
+    .section-sub { font-size: 15px; color: var(--muted); line-height: 1.7; max-width: 520px; }
+
+    /* COLLECTIONS */
+    .collections-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; }
+    .collection-card {
+      background: var(--white); border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+      transition: all .25s; position: relative;
+    }
+    .collection-card::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--accent2); transform: scaleX(0); transition: transform .25s;
+    }
+    .collection-card:hover { border-color: var(--accent2); transform: translateY(-4px); box-shadow: 0 10px 32px rgba(232,98,26,0.12); }
+    .collection-card:hover::after { transform: scaleX(1); }
+    .collection-img {
+      width: 100%; height: 200px; object-fit: cover;
+      background: linear-gradient(135deg, #e8e4dc, #d5cfc4);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 40px; color: #b0a898;
+    }
+    .collection-img img { width: 100%; height: 200px; object-fit: cover; display: block; }
+    .collection-body { padding: 20px; }
+    .collection-name { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
+    .collection-desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 14px; }
+    .color-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+    .swatch {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      cursor: pointer; transition: transform .15s;
+    }
+    .swatch:hover { transform: scale(1.1); }
+    .swatch-circle {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 2px solid rgba(0,0,0,0.08); box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+      transition: box-shadow .15s;
+    }
+    .swatch:hover .swatch-circle { box-shadow: 0 3px 10px rgba(0,0,0,0.2); }
+    .swatch-label { font-size: 9px; color: var(--muted2); font-weight: 600; text-align: center; max-width: 36px; line-height: 1.2; }
+    .collection-link {
+      display: inline-flex; align-items: center; gap: 5px; margin-top: 14px;
+      font-size: 12px; font-weight: 700; color: var(--accent2); letter-spacing: .5px;
+      text-transform: uppercase; border-bottom: 1px solid transparent; transition: border-color .15s;
+    }
+    .collection-link:hover { border-color: var(--accent2); }
+
+    /* PHOTO MODAL */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: var(--white); border-radius: 16px; max-width: 600px; width: 100%;
+      overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,0.5);
+      animation: popIn .25s ease;
+    }
+    @keyframes popIn { from{transform:scale(0.9);opacity:0} to{transform:scale(1);opacity:1} }
+    .modal-img { width: 100%; height: 360px; object-fit: cover; background: #e8e4dc; display: block; }
+    .modal-body { padding: 24px; }
+    .modal-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
+    .modal-sub { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+    .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .modal-btn-primary {
+      flex: 1; padding: 12px; background: var(--accent2); border: none; border-radius: 8px;
+      font-size: 14px; font-weight: 700; color: #fff; cursor: pointer; transition: all .2s;
+    }
+    .modal-btn-primary:hover { background: var(--accent); }
+    .modal-btn-secondary {
+      padding: 12px 20px; background: none; border: 1.5px solid var(--border); border-radius: 8px;
+      font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; transition: all .2s;
+    }
+    .modal-btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+    .modal-close {
+      position: absolute; top: 16px; right: 16px; z-index: 10;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(0,0,0,0.5); border: none; color: #fff;
+      font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+
+    /* SERVICES */
+    .services-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 40px; }
+    .service-card {
+      background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px 22px;
+      transition: all .2s; position: relative; overflow: hidden;
+    }
+    .service-card::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--accent2); transform: scaleX(0); transition: transform .25s;
+    }
+    .service-card:hover { border-color: var(--accent2); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(232,98,26,0.1); }
+    .service-card:hover::after { transform: scaleX(1); }
+    .svc-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--accent-pale); display: flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 14px; }
+    .svc-title { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
+    .svc-desc { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+    /* STATS */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-top: 48px; }
+    .stat-box { background: var(--white); padding: 28px 20px; text-align: center; }
+    .stat-val { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 800; color: var(--accent2); line-height: 1; margin-bottom: 6px; }
+    .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; letter-spacing: .5px; }
+
+    /* SHOWROOM */
+    .showroom-grid { display: grid; grid-template-columns: 1fr 380px; gap: 32px; margin-top: 40px; align-items: start; }
+    .info-block { background: var(--white); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+    .info-head { background: linear-gradient(135deg, var(--accent2), var(--accent)); padding: 22px 28px; }
+    .info-head-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 800; color: #fff; }
+    .info-head-sub { font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 4px; }
+    .info-rows { padding: 20px 28px; }
+    .info-row { display: flex; align-items: flex-start; gap: 14px; padding: 12px 0; border-bottom: 1px solid #f5f2ef; }
+    .info-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .info-icon { width: 38px; height: 38px; border-radius: 10px; background: var(--accent-pale); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .info-lbl { font-size: 10px; color: var(--muted2); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+    .info-val { font-size: 14px; color: var(--dark); font-weight: 600; margin-top: 2px; line-height: 1.5; }
+    .info-val a { color: var(--accent2); }
+
+    .hours-block { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 24px 28px; margin-top: 16px; }
+    .block-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent2); margin-bottom: 16px; }
+    .hours-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #f5f2ef; font-size: 14px; }
+    .hours-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .hours-day { color: var(--muted); font-weight: 500; }
+    .hours-time { color: var(--dark); font-weight: 600; }
+    .hours-na { color: var(--muted2); font-weight: 400; }
+
+    .cert-block { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 24px 28px; margin-top: 16px; }
+    .cert-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .cert-item { background: var(--stone); border: 1px solid var(--border); border-radius: 10px; padding: 14px 10px; text-align: center; }
+    .cert-item .c-icon  { font-size: 20px; display: block; margin-bottom: 5px; }
+    .cert-item .c-label { font-size: 11px; color: var(--muted); font-weight: 600; line-height: 1.3; }
+
+    .why-block { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 24px 28px; }
+    .why-list { list-style: none; }
+    .why-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: #444; line-height: 1.5; padding: 9px 0; border-bottom: 1px solid #f5f2ef; }
+    .why-list li:first-child { padding-top: 0; }
+    .why-list li:last-child { border-bottom: none; padding-bottom: 0; }
+    .why-check { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, var(--accent2), var(--accent)); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+
+    /* FORM */
+    .form-section { background: var(--dark2); padding: 80px 40px; }
+    .form-inner { max-width: 760px; margin: 0 auto; }
+    .form-card { background: var(--white); border-radius: 20px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.35); }
+    .form-head { background: linear-gradient(135deg, var(--accent2) 0%, var(--accent) 100%); padding: 32px 36px; }
+    .form-head-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 3px; color: rgba(255,255,255,0.6); text-transform: uppercase; margin-bottom: 8px; }
+    .form-head-title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+    .form-head-sub { font-size: 13px; color: rgba(255,255,255,0.75); }
+    .form-body { padding: 32px 36px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .form-row.full { grid-template-columns: 1fr; }
+    .f-field { display: flex; flex-direction: column; gap: 6px; }
+    .f-label { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
+    .f-req { color: var(--accent2); }
+    .f-inp {
+      background: #f9f7f4; border: 1.5px solid var(--border); border-radius: 9px;
+      padding: 11px 14px; font-size: 14px; color: var(--text);
+      font-family: 'DM Sans', sans-serif; outline: none; width: 100%;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .f-inp:focus { border-color: var(--accent2); background: #fff; box-shadow: 0 0 0 3px rgba(232,98,26,0.1); }
+    .f-inp::placeholder { color: var(--muted2); }
+    .f-inp.err { border-color: #dc2626; background: #fff8f8; }
+    .f-sel {
+      background: #f9f7f4; border: 1.5px solid var(--border); border-radius: 9px;
+      padding: 11px 14px; font-size: 14px; color: var(--text);
+      font-family: 'DM Sans', sans-serif; outline: none; cursor: pointer; width: 100%;
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2'%3E%3Cpolyline points='6,9 12,15 18,9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 13px center; background-color: #f9f7f4;
+      transition: border-color .2s;
+    }
+    .f-sel:focus { border-color: var(--accent2); background-color: #fff; }
+    .f-sel.err { border-color: #dc2626; background-color: #fff8f8; }
+    .f-ta {
+      background: #f9f7f4; border: 1.5px solid var(--border); border-radius: 9px;
+      padding: 11px 14px; font-size: 14px; color: var(--text);
+      font-family: 'DM Sans', sans-serif; outline: none; resize: vertical; min-height: 90px; width: 100%;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .f-ta:focus { border-color: var(--accent2); background: #fff; box-shadow: 0 0 0 3px rgba(232,98,26,0.1); }
+    .f-ta::placeholder { color: var(--muted2); }
+    .sunday-msg { display: none; font-size: 12px; color: var(--accent); margin-top: 4px; font-weight: 500; }
+    .consent-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 12px 14px; background: #f9f7f4; border-radius: 9px;
+      margin-bottom: 20px; font-size: 11px; color: var(--muted); line-height: 1.6;
+    }
+    .consent-row a { color: var(--accent2); }
+    .f-error {
+      display: none; background: #fef2f2; border: 1px solid #fecaca;
+      border-radius: 9px; padding: 12px 14px;
+      font-size: 13px; color: #dc2626; text-align: center; margin-bottom: 12px;
+    }
+    .f-submit {
+      width: 100%; padding: 15px; border: none; border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 700; color: #fff;
+      cursor: pointer; transition: all .2s; box-shadow: 0 6px 20px rgba(232,98,26,0.35);
+    }
+    .f-submit:hover:not(:disabled) { opacity: .92; transform: translateY(-1px); box-shadow: 0 8px 28px rgba(232,98,26,0.45); }
+    .f-submit:disabled { opacity: .6; cursor: not-allowed; }
+    .success-box {
+      display: none; flex-direction: column; align-items: center;
+      text-align: center; padding: 56px 36px;
+    }
+    .suc-ico {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; color: #fff; margin-bottom: 18px;
+      box-shadow: 0 8px 24px rgba(232,98,26,0.38);
+    }
+    .suc-title { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 800; color: var(--dark); margin-bottom: 8px; }
+    .suc-sub { font-size: 14px; color: var(--muted); line-height: 1.7; max-width: 320px; }
+    .suc-address {
+      display: inline-block; margin-top: 20px; padding: 14px 24px;
+      border: 1.5px solid rgba(232,98,26,0.3); border-radius: 10px;
+      font-size: 13px; color: var(--accent2); font-weight: 600; line-height: 1.7;
+      background: var(--accent-pale);
+    }
+
+    /* FOOTER */
+    .footer { background: var(--dark); padding: 32px 40px; text-align: center; }
+    .footer-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .footer-info { font-size: 12px; color: var(--muted2); line-height: 1.8; }
+    .footer-info a { color: rgba(232,98,26,0.7); }
+    .footer-info a:hover { color: var(--accent2); }
+
+    /* RESPONSIVE */
+    @media (max-width: 900px) {
+      .showroom-grid { grid-template-columns: 1fr; }
+      .collections-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 768px) {
+      .nav { padding: 0 20px; }
+      .hero { padding: 100px 24px 60px; }
+      .hero-title { font-size: 36px; }
+      .section { padding: 48px 24px; }
+      .services-grid { grid-template-columns: 1fr 1fr; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .form-section { padding: 48px 20px; }
+      .form-body { padding: 24px 20px; }
+      .form-head { padding: 24px 20px; }
+      .form-row { grid-template-columns: 1fr; }
+      .nav-site { display: none; }
+    }
+    @media (max-width: 480px) {
+      .hero-title { font-size: 28px; }
+      .collections-grid { grid-template-columns: 1fr; }
+      .services-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .hero-badges { gap: 7px; }
+      .badge { font-size: 11px; padding: 6px 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box" style="position:relative;">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <img class="modal-img" id="modal-img" src="" alt="" />
+      <div class="modal-body">
+        <div class="modal-title" id="modal-title"></div>
+        <div class="modal-sub" id="modal-sub"></div>
+        <div class="modal-actions">
+          <button class="modal-btn-primary" onclick="scrollToForm();closeModal()">Book Free Showroom Visit →</button>
+          <a class="modal-btn-secondary" id="modal-link" href="https://cpcabinets.com" target="_blank" rel="noopener">View Full Catalog</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-logo">
+      <img src="/cp-cabinets-logo.png" alt="CP Cabinets & Quartz" onerror="this.style.display='none'" />
+      <div>
+        <div class="nav-name">CP Cabinets &amp; Quartz</div>
+        <div class="nav-sub">Premium Kitchens · Irmo, SC</div>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <a class="nav-site" href="https://cpcabinets.com" target="_blank" rel="noopener">← cpcabinets.com</a>
+      <a class="nav-cta" href="#estimate" onclick="scrollToForm(event)">Book Free Visit</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-bg" id="hero-bg"></div>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <div class="hero-eyebrow">📍 Irmo, South Carolina</div>
+      <h1 class="hero-title">
+        Your Dream Kitchen
+        <em>Starts With One Visit</em>
+      </h1>
+      <p class="hero-sub">See and touch our premium all-plywood cabinet collections in person. Free personalized quote on the spot — no pressure, no obligation.</p>
+      <div class="hero-badges">
+        <div class="badge">🪵 All-Plywood Construction</div>
+        <div class="badge">🏆 TSCA VI &amp; KCMA Certified</div>
+        <div class="badge">🔲 Custom Quartz Countertops</div>
+        <div class="badge">✨ Vinyl Flooring</div>
+      </div>
+      <a href="#estimate" class="hero-cta" onclick="scrollToForm(event)">
+        Book Your Free Showroom Visit →
+      </a>
+    </div>
+    <div class="scroll-hint">
+      <div class="scroll-arrow"></div>
+    </div>
+  </div>
+
+  <!-- COLLECTIONS -->
+  <div class="section" style="background: var(--white);" id="catalog">
+    <div class="section-inner">
+      <div class="eyebrow">Cabinet Collections</div>
+      <h2 class="section-title">Choose Your Style &amp; Color</h2>
+      <p class="section-sub">Click any color to preview the cabinet — or visit our showroom to see them in person.</p>
+
+      <div class="collections-grid">
+
+        <!-- Shaker -->
+        <div class="collection-card">
+          <div class="collection-img">
+            <img src="https://cpcabinets.com/wp-content/uploads/shaker-white.jpg"
+                 onerror="this.parentElement.style.background='linear-gradient(135deg,#f0ebe3,#e8e0d5)';this.style.display='none'"
+                 alt="Shaker Collection" />
+          </div>
+          <div class="collection-body">
+            <div class="collection-name">Shaker Collection</div>
+            <div class="collection-desc">Classic recessed-panel door. All-plywood box. Soft-close hinges &amp; dovetail drawers. KCMA certified.</div>
+            <div class="color-swatches">
+              <div class="swatch" onclick="openModal('Shaker — Brilliant White','All-plywood construction · Soft-close hinges · Dovetail drawers','#f8f5f0','https://cpcabinets.com/shaker-white')">
+                <div class="swatch-circle" style="background:#f8f5f0;border-color:#e0d8cc;"></div>
+                <div class="swatch-label">Brilliant White</div>
+              </div>
+              <div class="swatch" onclick="openModal('Shaker — Antique White','All-plywood construction · Soft-close hinges · Dovetail drawers','#f0e8d5','https://cpcabinets.com/shaker-antique-white')">
+                <div class="swatch-circle" style="background:#f0e8d5;"></div>
+                <div class="swatch-label">Antique White</div>
+              </div>
+              <div class="swatch" onclick="openModal('Shaker — Dove Gray','All-plywood construction · Soft-close hinges · Dovetail drawers','#c0bab4','https://cpcabinets.com/shaker-gray')">
+                <div class="swatch-circle" style="background:#c0bab4;"></div>
+                <div class="swatch-label">Dove Gray</div>
+              </div>
+              <div class="swatch" onclick="openModal('Shaker — Graphite','All-plywood construction · Soft-close hinges · Dovetail drawers','#4a4a4a','https://cpcabinets.com/shaker-graphite')">
+                <div class="swatch-circle" style="background:#4a4a4a;"></div>
+                <div class="swatch-label">Graphite</div>
+              </div>
+              <div class="swatch" onclick="openModal('Shaker — Navy Blue','All-plywood construction · Soft-close hinges · Dovetail drawers','#2c3e6b','https://cpcabinets.com/shaker-navy')">
+                <div class="swatch-circle" style="background:#2c3e6b;"></div>
+                <div class="swatch-label">Navy Blue</div>
+              </div>
+              <div class="swatch" onclick="openModal('Shaker — Sage Green','All-plywood construction · Soft-close hinges · Dovetail drawers','#7a9b80','https://cpcabinets.com/shaker-sage')">
+                <div class="swatch-circle" style="background:#7a9b80;"></div>
+                <div class="swatch-label">Sage Green</div>
+              </div>
+            </div>
+            <a class="collection-link" href="https://cpcabinets.com" target="_blank" rel="noopener">See full collection →</a>
+          </div>
+        </div>
+
+        <!-- Slim Shaker -->
+        <div class="collection-card">
+          <div class="collection-img">
+            <img src="https://cpcabinets.com/wp-content/uploads/slim-shaker.jpg"
+                 onerror="this.parentElement.style.background='linear-gradient(135deg,#e8e0d5,#ddd5c5)';this.style.display='none'"
+                 alt="Slim Shaker Collection" />
+          </div>
+          <div class="collection-body">
+            <div class="collection-name">Slim Shaker Collection</div>
+            <div class="collection-desc">Modern thin-rail shaker profile. Clean lines, minimalist aesthetic. Available in matte &amp; gloss finishes.</div>
+            <div class="color-swatches">
+              <div class="swatch" onclick="openModal('Slim Shaker — Matte White','Modern thin-rail profile · Matte finish · All-plywood construction','#f4f2ef','https://cpcabinets.com/slim-shaker-white')">
+                <div class="swatch-circle" style="background:#f4f2ef;border-color:#ddd5c5;"></div>
+                <div class="swatch-label">Matte White</div>
+              </div>
+              <div class="swatch" onclick="openModal('Slim Shaker — Light Gray','Modern thin-rail profile · Matte finish · All-plywood construction','#d0cbc4','https://cpcabinets.com/slim-shaker-gray')">
+                <div class="swatch-circle" style="background:#d0cbc4;"></div>
+                <div class="swatch-label">Light Gray</div>
+              </div>
+              <div class="swatch" onclick="openModal('Slim Shaker — Espresso','Modern thin-rail profile · Matte finish · All-plywood construction','#3a2518','https://cpcabinets.com/slim-shaker-espresso')">
+                <div class="swatch-circle" style="background:#3a2518;"></div>
+                <div class="swatch-label">Espresso</div>
+              </div>
+              <div class="swatch" onclick="openModal('Slim Shaker — Charcoal','Modern thin-rail profile · Matte finish · All-plywood construction','#2e2e2e','https://cpcabinets.com/slim-shaker-charcoal')">
+                <div class="swatch-circle" style="background:#2e2e2e;"></div>
+                <div class="swatch-label">Charcoal</div>
+              </div>
+              <div class="swatch" onclick="openModal('Slim Shaker — Warm Walnut','Modern thin-rail profile · Matte finish · All-plywood construction','#8b6340','https://cpcabinets.com/slim-shaker-walnut')">
+                <div class="swatch-circle" style="background:#8b6340;"></div>
+                <div class="swatch-label">Warm Walnut</div>
+              </div>
+              <div class="swatch" onclick="openModal('Slim Shaker — Two-Tone','Upper cabinets in one color, lower in another. Custom combinations available.','linear-gradient(135deg,#f4f2ef 50%,#2e2e2e 50%)','https://cpcabinets.com/slim-shaker-twotone')">
+                <div class="swatch-circle" style="background:linear-gradient(135deg,#f4f2ef 50%,#2e2e2e 50%);"></div>
+                <div class="swatch-label">Two-Tone</div>
+              </div>
+            </div>
+            <a class="collection-link" href="https://cpcabinets.com" target="_blank" rel="noopener">See full collection →</a>
+          </div>
+        </div>
+
+        <!-- European Frameless -->
+        <div class="collection-card">
+          <div class="collection-img">
+            <img src="https://cpcabinets.com/wp-content/uploads/euro-frameless.jpg"
+                 onerror="this.parentElement.style.background='linear-gradient(135deg,#e0dcd6,#d0cbc2)';this.style.display='none'"
+                 alt="European Frameless Collection" />
+          </div>
+          <div class="collection-body">
+            <div class="collection-name">European Frameless</div>
+            <div class="collection-desc">Full-access frameless box. Sleek, handle-free options. Maximum interior storage &amp; modern European design.</div>
+            <div class="color-swatches">
+              <div class="swatch" onclick="openModal('Euro Frameless — Super Matte White','Full-access frameless · Handle-free · Soft-close everywhere','#f2f0ec','https://cpcabinets.com/euro-white')">
+                <div class="swatch-circle" style="background:#f2f0ec;border-color:#ddd;"></div>
+                <div class="swatch-label">Super Matte White</div>
+              </div>
+              <div class="swatch" onclick="openModal('Euro Frameless — High Gloss White','Full-access frameless · Handle-free · Soft-close everywhere','#fafafa','https://cpcabinets.com/euro-gloss-white')">
+                <div class="swatch-circle" style="background:#fafafa;border:2px solid #ddd;box-shadow:inset 0 0 8px rgba(255,255,255,0.8),0 2px 6px rgba(0,0,0,0.12);"></div>
+                <div class="swatch-label">High Gloss White</div>
+              </div>
+              <div class="swatch" onclick="openModal('Euro Frameless — Light Gray Matte','Full-access frameless · Handle-free · Soft-close everywhere','#c8c3bc','https://cpcabinets.com/euro-gray')">
+                <div class="swatch-circle" style="background:#c8c3bc;"></div>
+                <div class="swatch-label">Gray Matte</div>
+              </div>
+              <div class="swatch" onclick="openModal('Euro Frameless — Dark Woodgrain','Full-access frameless · Natural woodgrain texture · Soft-close','#5c3d20','https://cpcabinets.com/euro-woodgrain')">
+                <div class="swatch-circle" style="background:linear-gradient(135deg,#6b4a2a,#4a2f14);"></div>
+                <div class="swatch-label">Dark Woodgrain</div>
+              </div>
+              <div class="swatch" onclick="openModal('Euro Frameless — Midnight Black','Full-access frameless · Handle-free · Bold statement finish','#1a1a1a','https://cpcabinets.com/euro-black')">
+                <div class="swatch-circle" style="background:#1a1a1a;"></div>
+                <div class="swatch-label">Midnight Black</div>
+              </div>
+              <div class="swatch" onclick="openModal('Euro Frameless — Concrete Gray','Full-access frameless · Industrial concrete texture finish','#8a8680','https://cpcabinets.com/euro-concrete')">
+                <div class="swatch-circle" style="background:#8a8680;"></div>
+                <div class="swatch-label">Concrete Gray</div>
+              </div>
+            </div>
+            <a class="collection-link" href="https://cpcabinets.com" target="_blank" rel="noopener">See full collection →</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- SERVICES -->
+  <div class="section" style="background: var(--stone);">
+    <div class="section-inner">
+      <div class="eyebrow">What We Offer</div>
+      <h2 class="section-title">More Than Just Cabinets</h2>
+      <p class="section-sub">One showroom, everything you need for your complete kitchen &amp; bath remodel.</p>
+      <div class="services-grid">
+        <div class="service-card">
+          <div class="svc-icon">🍳</div>
+          <div class="svc-title">Kitchen Cabinets</div>
+          <div class="svc-desc">All-plywood boxes with soft-close hinges and dovetail drawer construction. Built to last a lifetime.</div>
+        </div>
+        <div class="service-card">
+          <div class="svc-icon">🛁</div>
+          <div class="svc-title">Bathroom Vanities</div>
+          <div class="svc-desc">Matching bathroom cabinet collections from the same premium all-plywood line as your kitchen.</div>
+        </div>
+        <div class="service-card">
+          <div class="svc-icon">🔲</div>
+          <div class="svc-title">Quartz Countertops</div>
+          <div class="svc-desc">Custom quartz countertops measured and cut to fit. Paired perfectly with your new cabinets.</div>
+        </div>
+        <div class="service-card">
+          <div class="svc-icon">🏠</div>
+          <div class="svc-title">Full Kitchen Remodel</div>
+          <div class="svc-desc">Cabinets + countertops + flooring — handled in one visit, one team, one quote. No runaround.</div>
+        </div>
+        <div class="service-card">
+          <div class="svc-icon">✨</div>
+          <div class="svc-title">Vinyl Flooring</div>
+          <div class="svc-desc">Luxury vinyl plank flooring to complete your kitchen or bath renovation — waterproof &amp; durable.</div>
+        </div>
+        <div class="service-card">
+          <div class="svc-icon">📐</div>
+          <div class="svc-title">Free Design Quote</div>
+          <div class="svc-desc">Walk in with your dimensions, walk out with a detailed personalized quote — no pressure, no obligation.</div>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-box"><div class="stat-val">3</div><div class="stat-label">Cabinet Collections</div></div>
+        <div class="stat-box"><div class="stat-val">20+</div><div class="stat-label">Color Options</div></div>
+        <div class="stat-box"><div class="stat-val">KCMA</div><div class="stat-label">Certified Build</div></div>
+        <div class="stat-box"><div class="stat-val">Free</div><div class="stat-label">Showroom Quote</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHOWROOM INFO + FORM -->
+  <div class="section" style="background: var(--white);">
+    <div class="section-inner">
+      <div class="showroom-grid">
+        <div>
+          <div class="eyebrow">Visit Us</div>
+          <h2 class="section-title">Come See It In Person</h2>
+          <p class="section-sub" style="margin-bottom:24px;">Touch the doors, open the drawers, compare the colors under real light. There's no better way to decide.</p>
+          <div class="why-block">
+            <div class="block-title">Why Visit Our Showroom</div>
+            <ul class="why-list">
+              <li><div class="why-check">✓</div> See &amp; feel cabinet samples before deciding</li>
+              <li><div class="why-check">✓</div> Free personalized quote on the spot</li>
+              <li><div class="why-check">✓</div> All-plywood — engineered to last a lifetime</li>
+              <li><div class="why-check">✓</div> Shaker, Slim Shaker &amp; European Frameless collections</li>
+              <li><div class="why-check">✓</div> Quartz countertops &amp; vinyl flooring in one visit</li>
+              <li><div class="why-check">✓</div> No pressure — honest advice, every time</li>
+            </ul>
+          </div>
+        </div>
+        <div>
+          <div class="info-block">
+            <div class="info-head">
+              <div class="info-head-title">CP Cabinets &amp; Quartz</div>
+              <div class="info-head-sub">Showroom · Irmo, South Carolina</div>
+            </div>
+            <div class="info-rows">
+              <div class="info-row">
+                <div class="info-icon">📍</div>
+                <div>
+                  <div class="info-lbl">Address</div>
+                  <div class="info-val">1085 Lake Murray Blvd, Suite E<br>Irmo, SC 29063</div>
+                </div>
+              </div>
+              <div class="info-row">
+                <div class="info-icon">📞</div>
+                <div>
+                  <div class="info-lbl">Phone</div>
+                  <div class="info-val"><a href="tel:+18033738191">(803) 373-8191</a></div>
+                </div>
+              </div>
+              <div class="info-row">
+                <div class="info-icon">✉️</div>
+                <div>
+                  <div class="info-lbl">Email</div>
+                  <div class="info-val"><a href="mailto:contact@cpcabinets.com">contact@cpcabinets.com</a></div>
+                </div>
+              </div>
+              <div class="info-row">
+                <div class="info-icon">🌐</div>
+                <div>
+                  <div class="info-lbl">Website</div>
+                  <div class="info-val"><a href="https://cpcabinets.com" target="_blank" rel="noopener">cpcabinets.com</a></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hours-block">
+            <div class="block-title">Showroom Hours</div>
+            <div class="hours-row"><span class="hours-day">Mon – Fri</span><span class="hours-time">9:00 AM – 4:00 PM</span></div>
+            <div class="hours-row"><span class="hours-day">Saturday</span><span class="hours-time hours-na">By appointment</span></div>
+            <div class="hours-row"><span class="hours-day">Sunday</span><span class="hours-time hours-na">Closed</span></div>
+          </div>
+          <div class="cert-block">
+            <div class="block-title">Quality &amp; Certifications</div>
+            <div class="cert-grid">
+              <div class="cert-item"><span class="c-icon">🏆</span><div class="c-label">TSCA VI Certified</div></div>
+              <div class="cert-item"><span class="c-icon">✅</span><div class="c-label">KCMA Certified</div></div>
+              <div class="cert-item"><span class="c-icon">🪵</span><div class="c-label">All-Plywood Build</div></div>
+              <div class="cert-item"><span class="c-icon">🇺🇸</span><div class="c-label">Locally Operated</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FORM -->
+  <div class="form-section" id="estimate">
+    <div class="form-inner">
+      <div style="text-align:center;margin-bottom:32px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(232,98,26,0.8);margin-bottom:10px;">Free Showroom Visit</div>
+        <h2 style="font-family:'Playfair Display',serif;font-size:30px;font-weight:800;color:#fff;margin-bottom:8px;">Book Your Free Consultation</h2>
+        <p style="font-size:14px;color:#a8a29e;">Fill in the form — our team will call you to confirm your visit within 24h.</p>
+      </div>
+      <div class="form-card">
+        <div class="form-head">
+          <div class="form-head-eyebrow">CP Cabinets &amp; Quartz · Irmo, SC</div>
+          <div class="form-head-title">Schedule Your Showroom Visit</div>
+          <div class="form-head-sub">Free personalized quote · No obligation · Mon–Fri 9 AM – 4 PM</div>
+        </div>
+        <div class="form-body" id="fbody">
+          <div class="form-row">
+            <div class="f-field">
+              <label class="f-label">Full Name <span class="f-req">*</span></label>
+              <input class="f-inp" id="ff-name" name="your-name" placeholder="John Smith" autocomplete="name">
+            </div>
+            <div class="f-field">
+              <label class="f-label">Phone <span class="f-req">*</span></label>
+              <input class="f-inp" id="ff-phone" name="your-phone" placeholder="(803) 555-0100" type="tel" autocomplete="tel">
+            </div>
+          </div>
+          <div class="form-row full">
+            <div class="f-field">
+              <label class="f-label">Email</label>
+              <input class="f-inp" id="ff-email" name="your-email" placeholder="john@email.com" type="email" autocomplete="email">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="f-field">
+              <label class="f-label">Preferred Date <span class="f-req">*</span></label>
+              <input class="f-inp" id="ff-date" name="your-date" type="date">
+              <div class="sunday-msg" id="sundayMsg">Showroom is closed on Sundays. Please choose a weekday.</div>
+            </div>
+            <div class="f-field">
+              <label class="f-label">Preferred Time <span class="f-req">*</span></label>
+              <select class="f-sel" id="ff-time" name="your-subject">
+                <option value="">— Select a time —</option>
+                <option value="9:00 AM">9:00 AM</option>
+                <option value="9:30 AM">9:30 AM</option>
+                <option value="10:00 AM">10:00 AM</option>
+                <option value="10:30 AM">10:30 AM</option>
+                <option value="11:00 AM">11:00 AM</option>
+                <option value="11:30 AM">11:30 AM</option>
+                <option value="12:00 PM">12:00 PM</option>
+                <option value="12:30 PM">12:30 PM</option>
+                <option value="1:00 PM">1:00 PM</option>
+                <option value="1:30 PM">1:30 PM</option>
+                <option value="2:00 PM">2:00 PM</option>
+                <option value="2:30 PM">2:30 PM</option>
+                <option value="3:00 PM">3:00 PM</option>
+                <option value="3:30 PM">3:30 PM</option>
+                <option value="4:00 PM">4:00 PM</option>
+                <option value="4:30 PM">4:30 PM</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row full">
+            <div class="f-field">
+              <label class="f-label">What are you looking for? <span class="f-req">*</span></label>
+              <select class="f-sel" id="ff-project" name="your-project">
+                <option value="">— Select a project type —</option>
+                <option>Kitchen Cabinets</option>
+                <option>Bathroom Cabinets</option>
+                <option>Quartz Countertops</option>
+                <option>Full Kitchen Remodel</option>
+                <option>Vinyl Flooring</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row full" style="margin-bottom:20px;">
+            <div class="f-field">
+              <label class="f-label">Additional Notes</label>
+              <textarea class="f-ta" id="ff-notes" name="your-message" placeholder="Tell us about your project, style preferences, dimensions, or any questions…"></textarea>
+            </div>
+          </div>
+          <div class="consent-row">
+            🔒 By submitting you consent to receive calls and emails from CP Cabinets &amp; Quartz.
+            <a href="/privacy-cp-cabinets.html" target="_blank">Privacy Policy</a>&nbsp;·&nbsp;<a href="/terms-cp-cabinets.html" target="_blank">Terms</a>
+          </div>
+          <div class="f-error" id="ferror">Something went wrong. Please call us directly at <strong>(803) 373-8191</strong>.</div>
+          <button class="f-submit" id="submit-btn" onclick="submitForm()">Request My Free Visit →</button>
+        </div>
+        <div class="success-box" id="fsuccess">
+          <div class="suc-ico">✓</div>
+          <div class="suc-title">We'll Be in Touch Soon!</div>
+          <div class="suc-sub">Thank you! Our team will call you shortly to confirm your free showroom visit. Check your email for details.</div>
+          <div class="suc-address">📍 1085 Lake Murray Blvd, Suite E<br>Irmo, SC 29063<br><strong>(803) 373-8191</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-name">CP Cabinets &amp; Quartz</div>
+    <div class="footer-info">
+      1085 Lake Murray Blvd Suite E, Irmo SC 29063 · (803) 373-8191 · <a href="mailto:contact@cpcabinets.com">contact@cpcabinets.com</a><br>
+      © 2026 CP Cabinets &amp; Quartz ·
+      <a href="https://cpcabinets.com" target="_blank" rel="noopener">cpcabinets.com</a> ·
+      <a href="/privacy-cp-cabinets.html">Privacy Policy</a> ·
+      <a href="/terms-cp-cabinets.html">Terms of Service</a>
+    </div>
+  </footer>
+
+  <script>
+    // Hero bg
+    window.addEventListener('load', function() {
+      var bg = document.getElementById('hero-bg');
+      bg.style.backgroundImage = "url('https://cpcabinets.com/wp-content/uploads/hero-kitchen.jpg')";
+    });
+
+    // Min date = today, block Sundays
+    (function(){
+      var di = document.getElementById('ff-date');
+      if (!di) return;
+      di.min = new Date().toISOString().split('T')[0];
+      di.addEventListener('change', function() {
+        var msg = document.getElementById('sundayMsg');
+        if (this.value) {
+          var day = new Date(this.value + 'T12:00:00').getDay();
+          if (day === 0) { this.value = ''; msg.style.display = 'block'; }
+          else msg.style.display = 'none';
+        }
+      });
+    })();
+
+    // Scroll to form
+    function scrollToForm(e) {
+      if (e) e.preventDefault();
+      var el = document.getElementById('estimate');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Swatch modal
+    function openModal(title, sub, color, link) {
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-sub').textContent = sub;
+      document.getElementById('modal-link').href = link || 'https://cpcabinets.com';
+      var img = document.getElementById('modal-img');
+      img.src = link ? link.replace('https://cpcabinets.com', 'https://cpcabinets.com/wp-content/uploads') + '.jpg' : '';
+      img.onerror = function() {
+        this.style.display = 'none';
+        this.parentElement.querySelector('.modal-color-block') || (function(){
+          var div = document.createElement('div');
+          div.className = 'modal-color-block';
+          div.style.cssText = 'height:200px;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:48px;';
+          div.textContent = '🪵';
+          img.parentElement.insertBefore(div, img);
+        })();
+      };
+      img.style.display = 'block';
+      document.getElementById('modal').classList.add('active');
+    }
+    function closeModal() {
+      document.getElementById('modal').classList.remove('active');
+      var colorBlock = document.querySelector('.modal-color-block');
+      if (colorBlock) colorBlock.remove();
+      var img = document.getElementById('modal-img');
+      img.style.display = 'block';
+    }
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeModal(); });
+
+    // Phone mask
+    var phoneEl = document.getElementById('ff-phone');
+    if (phoneEl) {
+      phoneEl.addEventListener('input', function() {
+        var v = this.value.replace(/\D/g, '');
+        if (v.length >= 10) v = v.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+        else if (v.length >= 6) v = v.replace(/(\d{3})(\d{3})/, '($1) $2-');
+        else if (v.length >= 3) v = v.replace(/(\d{3})/, '($1) ');
+        this.value = v;
+      });
+    }
+
+    // Form submit
+    async function submitForm() {
+      var name    = document.getElementById('ff-name').value.trim();
+      var phone   = document.getElementById('ff-phone').value.trim();
+      var dateVal = document.getElementById('ff-date').value;
+      var time    = document.getElementById('ff-time').value;
+      var project = document.getElementById('ff-project').value;
+
+      // Validate required
+      var valid = true;
+      [['ff-name', name], ['ff-phone', phone], ['ff-date', dateVal], ['ff-time', time], ['ff-project', project]].forEach(function(pair){
+        var el = document.getElementById(pair[0]);
+        if (!pair[1]) { el.classList.add('err'); valid = false; }
+        else el.classList.remove('err');
+      });
+      if (!valid) return;
+
+      // Block Sunday
+      if (dateVal && new Date(dateVal + 'T12:00:00').getDay() === 0) {
+        document.getElementById('ferror').style.display = 'block';
+        document.getElementById('ferror').textContent = 'Showroom is closed on Sundays. Please choose a weekday.';
+        return;
+      }
+
+      document.getElementById('ferror').style.display = 'none';
+      var btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+
+      var email   = document.getElementById('ff-email').value.trim();
+      var notes   = document.getElementById('ff-notes').value.trim();
+
+      var params = new URLSearchParams();
+      params.append('your-name',    name);
+      params.append('your-phone',   phone);
+      params.append('your-email',   email);
+      params.append('your-date',    dateVal);
+      params.append('your-subject', time);
+      params.append('your-project', project);
+      params.append('your-message', notes);
+
+      try {
+        var res = await fetch('https://leads.btechsouto.shop/webhook/cf7?clientId=5221cab9-a741-4ddc-a752-2359826fba95', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        });
+
+        if (res.status === 409) {
+          var json = await res.json().catch(function(){ return {}; });
+          document.getElementById('ferror').textContent = json.message || 'This time slot is already booked. Please choose another date or time.';
+          document.getElementById('ferror').style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Request My Free Visit →';
+          return;
+        }
+
+        if (!res.ok) throw new Error('server');
+      } catch(err) {
+        document.getElementById('ferror').textContent = 'Something went wrong. Please call us at (803) 373-8191.';
+        document.getElementById('ferror').style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Request My Free Visit →';
+        return;
+      }
+
+      document.getElementById('fbody').style.display = 'none';
+      document.getElementById('fsuccess').style.display = 'flex';
+      document.getElementById('fsuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // Remove err on input
+    document.querySelectorAll('[id^="ff-"]').forEach(function(el) {
+      el.addEventListener('input',  function(){ el.classList.remove('err'); });
+      el.addEventListener('change', function(){ el.classList.remove('err'); });
+    });
+  </script>
+</body>
+</html>
