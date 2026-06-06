@@ -719,6 +719,7 @@
             <label class="f-label">Preferred Date <span class="f-req">*</span></label>
             <input class="f-inp" id="ff-date" name="your-date" type="date">
             <div class="sunday-msg" id="sundayMsg">Showroom is closed on Sundays. Please choose a weekday.</div>
+            <div class="sunday-msg" id="mondayMsg" style="display:none;">On Mondays we start at 1:00 PM — morning slots are unavailable.</div>
           </div>
           <div class="f-field">
             <label class="f-label">Preferred Time <span class="f-req">*</span></label>
@@ -745,7 +746,7 @@
         <div class="form-row full" style="margin-bottom:20px;">
           <div class="f-field"><label class="f-label">Additional Notes</label><textarea class="f-ta" id="ff-notes" name="your-message" placeholder="Tell us about your project — dimensions, style preferences, colors you liked, any questions…"></textarea></div>
         </div>
-        <div class="consent-row">🔒 By submitting you consent to receive calls and emails from CP Cabinets &amp; Quartz. <a href="#" onclick="document.getElementById('privacy-modal').style.display='block';return false;">Privacy Policy</a></div>
+        <div class="consent-row">🔒 By submitting this form, you agree to receive calls, SMS/text messages, and emails from CP Cabinets &amp; Quartz regarding your request. Message &amp; data rates may apply. Reply <strong>STOP</strong> to unsubscribe from texts at any time. See our <a href="#" onclick="document.getElementById('privacy-modal').style.display='block';return false;">Privacy Policy</a>.</div>
         <div class="f-error" id="ferror">Something went wrong. Please call us directly at <strong>(803) 373-8191</strong>.</div>
         <button class="f-submit" id="submit-btn" onclick="submitForm()">Request My Free Estimate →</button>
       </div>
@@ -774,18 +775,43 @@
     bg.style.backgroundImage = "url('https://cpcabinets.com/wp-content/uploads/2024/03/PHOTO-2023-10-05-12-34-17-2.jpg')";
   })();
 
-  // Min date = hoje, bloqueia domingo
+  // Min date = hoje, bloqueia domingo; segunda-feira só a partir de 1 PM
   (function(){
     var di = document.getElementById('ff-date');
     if (!di) return;
     di.min = new Date().toISOString().split('T')[0];
     di.addEventListener('change', function() {
       var msg = document.getElementById('sundayMsg');
-      if (this.value) {
-        var day = new Date(this.value + 'T12:00:00').getDay();
-        if (day === 0) { this.value = ''; msg.style.display = 'block'; }
-        else msg.style.display = 'none';
+      if (!this.value) return;
+      var day = new Date(this.value + 'T12:00:00').getDay();
+      if (day === 0) { this.value = ''; msg.style.display = 'block'; return; }
+      msg.style.display = 'none';
+      // Monday: filter time options — only 1 PM+
+      var sel = document.getElementById('ff-time');
+      var isMonday = day === 1;
+      for (var i = 0; i < sel.options.length; i++) {
+        var opt = sel.options[i];
+        if (!opt.value) continue; // keep placeholder
+        var match = opt.value.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+        if (!match) continue;
+        var h = parseInt(match[1]);
+        var isPM = /pm/i.test(match[3]);
+        var hour24 = isPM && h < 12 ? h + 12 : (!isPM && h === 12 ? 0 : h);
+        opt.disabled = isMonday && hour24 < 13;
+        opt.style.display = isMonday && hour24 < 13 ? 'none' : '';
       }
+      // If currently selected time is before 1 PM on Monday, reset
+      if (isMonday && sel.value) {
+        var cur = sel.value.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+        if (cur) {
+          var ch = parseInt(cur[1]); var cIsPM = /pm/i.test(cur[3]);
+          var ch24 = cIsPM && ch < 12 ? ch + 12 : (!cIsPM && ch === 12 ? 0 : ch);
+          if (ch24 < 13) sel.value = '';
+        }
+      }
+      // Show Monday note
+      var mondayMsg = document.getElementById('mondayMsg');
+      if (mondayMsg) mondayMsg.style.display = isMonday ? 'block' : 'none';
     });
   })();
 
@@ -866,6 +892,17 @@
       document.getElementById('ferror').textContent = 'Showroom is closed on Sundays. Please choose a weekday.';
       document.getElementById('ferror').style.display = 'block'; return;
     }
+    if (dateVal && time && new Date(dateVal + 'T12:00:00').getDay() === 1) {
+      var tmatch = time.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+      if (tmatch) {
+        var th = parseInt(tmatch[1]); var tPM = /pm/i.test(tmatch[3]);
+        var th24 = tPM && th < 12 ? th + 12 : (!tPM && th === 12 ? 0 : th);
+        if (th24 < 13) {
+          document.getElementById('ferror').textContent = 'On Mondays, our first available slot is 1:00 PM. Please select 1:00 PM or later.';
+          document.getElementById('ferror').style.display = 'block'; return;
+        }
+      }
+    }
 
     document.getElementById('ferror').style.display = 'none';
     var btn = document.getElementById('submit-btn');
@@ -933,28 +970,43 @@
 </script>
 
 <!-- PRIVACY POLICY MODAL -->
-<div id="privacy-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);overflow-y:auto;padding:40px 16px;">
+<div id="privacy-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.65);overflow-y:auto;padding:40px 16px;" onclick="if(event.target===this)this.style.display='none'">
   <div style="max-width:680px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 36px;position:relative;">
     <button onclick="document.getElementById('privacy-modal').style.display='none'" style="position:absolute;top:16px;right:20px;border:none;background:none;font-size:22px;cursor:pointer;color:#666;">✕</button>
-    <h2 style="font-family:'Playfair Display',serif;font-size:26px;margin-bottom:8px;">Privacy Policy</h2>
-    <p style="font-size:12px;color:#888;margin-bottom:24px;">CP Cabinets &amp; Quartz · Last updated: June 2026</p>
+    <h2 style="font-family:'Playfair Display',serif;font-size:26px;margin-bottom:4px;">Privacy Policy</h2>
+    <p style="font-size:12px;color:#888;margin-bottom:28px;">CP Cabinets &amp; Quartz · Last updated: June 2026</p>
 
-    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">Information We Collect</h3>
-    <p style="font-size:14px;color:#555;line-height:1.7;">When you submit a quote request, we collect your name, phone number, email address, and project details. This information is used solely to respond to your inquiry and schedule your consultation.</p>
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 8px;">1. Information We Collect</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;margin-bottom:18px;">When you submit a quote request through this website, we collect your name, phone number, email address, home address (if requesting an in-home estimate), and project details. This information is used solely to respond to your inquiry and schedule your free consultation.</p>
 
-    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">How We Use Your Information</h3>
-    <p style="font-size:14px;color:#555;line-height:1.7;">We use your contact information to: (1) respond to your quote request, (2) schedule an in-home estimate or showroom visit, (3) follow up about your project. We do not sell or share your information with third parties for marketing purposes.</p>
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 8px;">2. How We Use Your Information</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;margin-bottom:18px;">We use your contact information to: (1) respond to your quote request, (2) schedule an in-home estimate or showroom visit, (3) send appointment reminders and follow-up communications related to your project. We do not use your data for unrelated marketing campaigns.</p>
 
-    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">Communications</h3>
-    <p style="font-size:14px;color:#555;line-height:1.7;">By submitting this form, you consent to receive calls, SMS messages, and emails from CP Cabinets &amp; Quartz regarding your request. You may opt out at any time by replying STOP to any SMS or emailing us directly.</p>
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 8px;">3. SMS / Text Message Consent &amp; Terms</h3>
+    <div style="background:#fff8f3;border:1px solid #f5cba7;border-radius:10px;padding:16px 18px;margin-bottom:18px;">
+      <p style="font-size:14px;color:#444;line-height:1.7;margin:0 0 10px;">By submitting this form and providing your phone number, you expressly consent to receive SMS/text messages and phone calls from <strong>CP Cabinets &amp; Quartz</strong> (803-373-8191) regarding your quote request, appointment confirmation, and follow-up communications.</p>
+      <ul style="font-size:13px;color:#555;line-height:1.9;margin:0 0 0 18px;padding:0;">
+        <li><strong>Message frequency:</strong> Up to 5 messages per inquiry (confirmation, reminders, follow-up).</li>
+        <li><strong>Message &amp; data rates may apply</strong> depending on your carrier and plan.</li>
+        <li><strong>To opt out:</strong> Reply <strong>STOP</strong> to any text message at any time. You will receive one final confirmation and will receive no further messages.</li>
+        <li><strong>For help:</strong> Reply <strong>HELP</strong> or contact us at (803) 373-8191.</li>
+        <li>Consent to receive text messages is <strong>not</strong> a condition of purchase.</li>
+      </ul>
+    </div>
 
-    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">Data Security</h3>
-    <p style="font-size:14px;color:#555;line-height:1.7;">Your information is stored securely and accessed only by CP Cabinets staff. We do not store payment information through this form.</p>
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 8px;">4. No Third-Party Sharing</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;margin-bottom:18px;">We do <strong>not</strong> sell, rent, or share your personal information — including your phone number — with third parties for marketing purposes. Your information is shared only with service providers who assist us in operating our business (e.g., appointment scheduling, communication tools), all of whom are bound by confidentiality agreements.</p>
 
-    <h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">Contact</h3>
-    <p style="font-size:14px;color:#555;line-height:1.7;">Questions? Contact us at <strong>(803) 373-8191</strong> or visit us at 1085 Lake Murray Blvd, Suite E, Irmo, SC 29063.</p>
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 8px;">5. Data Security &amp; Retention</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;margin-bottom:18px;">Your information is stored securely using industry-standard encryption. We retain your data only as long as needed to fulfill your inquiry or as required by law. We do not store payment information through this form.</p>
 
-    <button onclick="document.getElementById('privacy-modal').style.display='none'" style="margin-top:28px;padding:12px 32px;background:#e8621a;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;">Close</button>
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 8px;">6. Your Rights</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;margin-bottom:18px;">You may request access to, correction of, or deletion of your personal data at any time by contacting us directly. To remove your information from our records, email <a href="mailto:contact@cpcabinets.com" style="color:#e8621a;">contact@cpcabinets.com</a> or call (803) 373-8191.</p>
+
+    <h3 style="font-size:15px;font-weight:700;margin:0 0 8px;">7. Contact</h3>
+    <p style="font-size:14px;color:#555;line-height:1.7;margin-bottom:28px;">CP Cabinets &amp; Quartz · 1085 Lake Murray Blvd, Suite E, Irmo, SC 29063 · <a href="tel:+18033738191" style="color:#e8621a;">(803) 373-8191</a> · <a href="mailto:contact@cpcabinets.com" style="color:#e8621a;">contact@cpcabinets.com</a></p>
+
+    <button onclick="document.getElementById('privacy-modal').style.display='none'" style="padding:12px 32px;background:#e8621a;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;">Close</button>
   </div>
 </div>
 </body>
