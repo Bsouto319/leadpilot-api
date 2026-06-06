@@ -527,10 +527,22 @@ async function sendGoogleReviewEmail(conv) {
 
 // ── NEW LEAD ALERT (HTML) para o dono ─────────────────────────────────────────
 
-function buildNewLeadAlertEmail({ leadName, leadPhone, serviceType, agentName, businessName, logoUrl, cityState, addressDisplay, contactPhone }) {
+function buildNewLeadAlertEmail({ leadName, leadPhone, leadEmail, serviceType, agentName, businessName, logoUrl, cityState, addressDisplay, contactPhone, score, tier, summary, signals, source }) {
   const service = (serviceType || 'general').replace(/_/g, ' ');
+  const scoreText = score != null ? `${score}/10` : null;
+  const tierLabel = tier === 'hot' ? '🔥 Hot' : tier === 'warm' ? '♨️ Warm' : tier ? `${tier}` : null;
+  const sourceLabel = source === 'website' ? '🌐 Website' : source === 'thumbtack' ? '🔨 Thumbtack' : source || 'Lead';
+  const qualBlock = (scoreText || tierLabel || summary) ? `
+    <div class="info" style="margin-top:16px">
+      <p style="font-weight:700;color:#1a1a2e;margin:0 0 8px">AI Qualification</p>
+      <p>
+        ${tierLabel ? `${tierLabel}` : ''}${tierLabel && scoreText ? ' · ' : ''}${scoreText ? `Score: <strong>${scoreText}</strong>` : ''}<br>
+        ${summary ? `<em>${summary}</em>` : ''}
+        ${signals?.length ? `<br><span style="color:#888;font-size:12px">${signals.join(' · ')}</span>` : ''}
+      </p>
+    </div>` : '';
   return {
-    subject: `🔔 New Lead — ${businessName}`,
+    subject: `${tierLabel ? tierLabel + ' ' : ''}Lead — ${leadName} | ${businessName}`,
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">${emailStyle()}</head>
 <body>
 <div class="wrap">
@@ -540,7 +552,7 @@ function buildNewLeadAlertEmail({ leadName, leadPhone, serviceType, agentName, b
     <p>${cityState || ''}</p>
   </div>
   <div class="hero">
-    <h2>🔔 New Lead Received!</h2>
+    <h2>🔔 New ${sourceLabel} Lead!</h2>
     <p>${agentName || 'Your agent'} is calling them now.</p>
   </div>
   <div class="body">
@@ -548,10 +560,12 @@ function buildNewLeadAlertEmail({ leadName, leadPhone, serviceType, agentName, b
       <p>
         👤 <strong>Name:</strong> ${leadName}<br>
         📞 <strong>Phone:</strong> +${leadPhone}<br>
+        ${leadEmail ? `📧 <strong>Email:</strong> ${leadEmail}<br>` : ''}
         🔧 <strong>Service:</strong> ${service}
       </p>
     </div>
-    <p>Log into your dashboard to track this lead and manage your pipeline.</p>
+    ${qualBlock}
+    <p style="margin-top:20px">Log into your dashboard to track this lead and manage your pipeline.</p>
   </div>
   <div class="footer">
     <p>© 2026 ${businessName}</p>

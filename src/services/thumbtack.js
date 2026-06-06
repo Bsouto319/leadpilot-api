@@ -5,6 +5,7 @@ const openaiSvc  = require('./openai');
 const { makeNotifyCall } = require('./twilio');
 const { sendEmail } = require('./gmail');
 const { handleError } = require('../middleware/alerting');
+const { buildNewLeadAlertEmail, clientBranding } = require('./followup');
 
 function normalizePhone(raw) {
   return (raw || '').replace(/\D/g, '');
@@ -296,35 +297,25 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }
   }
 
-  // Notify owner via email (immediate — with AI insight)
+  // Notify owner via email HTML (immediate — with AI insight)
   if (client.owner_email) {
-    const emailBody = [
-      `New ${sourceLabel} lead received!`,
-      ``,
-      `Name: ${name}`,
-      `Phone: +${leadPhone}`,
-      leadEmail ? `Email: ${leadEmail}` : '',
-      `Service: ${serviceType.replace(/_/g, ' ')}`,
-      `Request: ${message}`,
-      ``,
-      `── AI Qualification ──`,
-      `Score: ${scoreText}  |  Tier: ${tierLabel}  |  Est. Job Value: ${valueText}`,
-      qualification.summary ? `Insight: ${qualification.summary}` : '',
-      qualification.signals?.length ? `Signals: ${qualification.signals.join(', ')}` : '',
-      ``,
-      `${agentName} is calling them now.`,
-      ``,
-      client.website_url ? `Website: ${client.website_url}` : '',
-      ``,
-      client.business_name,
-    ].filter(Boolean).join('\n');
-
+    const branding = clientBranding(client);
+    const { subject: alertSubject, html: alertHtml } = buildNewLeadAlertEmail({
+      leadName: name, leadPhone, leadEmail,
+      serviceType, agentName, businessName: client.business_name,
+      source: sourceLabel,
+      score: qualification.score,
+      tier: qualification.tier,
+      summary: qualification.summary,
+      signals: qualification.signals,
+      ...branding,
+    });
     const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
     sendEmail({
       from: `${client.business_name} <noreply@btechsouto.shop>`,
       to: alertRecipients,
-      subject: `${tierLabel} Lead ${scoreText} — ${name} | ${client.business_name}`,
-      body: emailBody,
+      subject: alertSubject,
+      html: alertHtml,
     }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
   }
 
