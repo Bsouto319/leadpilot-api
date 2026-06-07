@@ -117,6 +117,7 @@ app.get('/cp-cabinets-logo.jpg', (req, res) => res.sendFile(path.join(__dirname,
 app.get('/cp-cabinets', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'cp-cabinets-new.html')));
 
 // ── JF TILE ─────────────────────────────────────────────────────────────────
+app.get('/jf-tile-favicon.svg', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'jf-tile-favicon.svg')));
 app.get('/schedule/jf-tile', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'schedule-jf-tile.html')));
 app.get('/jf-tile-logo.jpg', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'jf-tile-logo.jpg')));
 app.get('/jf-tile/:img', (req, res) => {
