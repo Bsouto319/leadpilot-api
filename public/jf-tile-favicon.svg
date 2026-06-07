@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Fundo quadrado arredondado dark -->
+  <rect width="32" height="32" rx="7" fill="#1c1917"/>
+  <!-- Detalhe tile grid sutil -->
+  <line x1="16" y1="2" x2="16" y2="30" stroke="#a07940" stroke-width="0.5" opacity="0.4"/>
+  <line x1="2" y1="16" x2="30" y2="16" stroke="#a07940" stroke-width="0.5" opacity="0.4"/>
+  <!-- Letras JF em dourado -->
+  <text x="16" y="22" text-anchor="middle" font-family="Georgia, serif" font-weight="800" font-size="15" fill="#a07940" letter-spacing="-1">JF</text>
+</svg>
