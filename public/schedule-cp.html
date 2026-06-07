@@ -719,12 +719,13 @@
             <div class="field">
               <label>Preferred Date</label>
               <input type="date" name="your-date" id="dateInput" />
-              <p id="sundayMsg" style="display:none;color:#c95210;font-size:0.78rem;margin-top:5px;font-weight:500">Showroom is closed on Sundays. Please choose a weekday.</p>
+              <p id="sundayMsg"  style="display:none;color:#c95210;font-size:0.78rem;margin-top:5px;font-weight:500">Showroom is closed on Sundays. Please choose a weekday.</p>
+              <p id="mondayMsg" style="display:none;color:#c95210;font-size:0.78rem;margin-top:5px;font-weight:500">On Mondays we start at 1:00 PM — morning slots are unavailable.</p>
             </div>
             <div class="field">
               <label>Preferred Time</label>
               <div class="sel-wrap">
-                <select name="your-subject">
+                <select name="your-subject" id="timeSelect">
                   <option value="">— Select a time —</option>
                   <option value="9:00 AM">9:00 AM</option>
                   <option value="9:30 AM">9:30 AM</option>
@@ -894,15 +895,38 @@
   if (di) {
     di.min = new Date().toISOString().split('T')[0];
     di.addEventListener('change', function () {
-      const sundayMsg = document.getElementById('sundayMsg');
-      if (this.value) {
-        // Use noon to avoid timezone shifts flipping the day
-        const day = new Date(this.value + 'T12:00:00').getDay();
-        if (day === 0) {
-          this.value = '';
-          sundayMsg.style.display = 'block';
-        } else {
-          sundayMsg.style.display = 'none';
+      const sundayMsg  = document.getElementById('sundayMsg');
+      const mondayMsg  = document.getElementById('mondayMsg');
+      const timeSelect = document.getElementById('timeSelect');
+      if (!this.value) return;
+      const day = new Date(this.value + 'T12:00:00').getDay();
+      if (day === 0) {
+        this.value = '';
+        sundayMsg.style.display = 'block';
+        mondayMsg.style.display = 'none';
+        return;
+      }
+      sundayMsg.style.display = 'none';
+      const isMonday = day === 1;
+      mondayMsg.style.display = isMonday ? 'block' : 'none';
+      // Filter time options on Monday — only 1 PM+
+      for (let i = 0; i < timeSelect.options.length; i++) {
+        const opt = timeSelect.options[i];
+        if (!opt.value) continue;
+        const m = opt.value.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+        if (!m) continue;
+        const h = parseInt(m[1]); const isPM = /pm/i.test(m[3]);
+        const h24 = isPM && h < 12 ? h + 12 : (!isPM && h === 12 ? 0 : h);
+        opt.disabled = isMonday && h24 < 13;
+        opt.style.display = isMonday && h24 < 13 ? 'none' : '';
+      }
+      // Reset selected time if it's before 1 PM on Monday
+      if (isMonday && timeSelect.value) {
+        const cm = timeSelect.value.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+        if (cm) {
+          const ch = parseInt(cm[1]); const cPM = /pm/i.test(cm[3]);
+          const ch24 = cPM && ch < 12 ? ch + 12 : (!cPM && ch === 12 ? 0 : ch);
+          if (ch24 < 13) timeSelect.value = '';
         }
       }
     });
@@ -925,12 +949,25 @@
       return;
     }
 
-    // Block Sunday on submit as well
+    // Block Sunday and Monday before 1 PM on submit
     const dateVal = this.querySelector('[name="your-date"]').value;
+    const timeVal = this.querySelector('[name="your-subject"]').value;
     if (dateVal && new Date(dateVal + 'T12:00:00').getDay() === 0) {
       err.textContent = 'Showroom is closed on Sundays. Please choose a weekday.';
       err.style.display = 'block';
       return;
+    }
+    if (dateVal && timeVal && new Date(dateVal + 'T12:00:00').getDay() === 1) {
+      const tm = timeVal.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+      if (tm) {
+        const th = parseInt(tm[1]); const tPM = /pm/i.test(tm[3]);
+        const th24 = tPM && th < 12 ? th + 12 : (!tPM && th === 12 ? 0 : th);
+        if (th24 < 13) {
+          err.textContent = 'On Mondays, our first available slot is 1:00 PM. Please select 1:00 PM or later.';
+          err.style.display = 'block';
+          return;
+        }
+      }
     }
 
     err.style.display = 'none';
