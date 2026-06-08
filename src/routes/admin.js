@@ -31,6 +31,16 @@ function getOAuthClient() {
   );
 }
 
+// base64url helpers — compatible with all Node versions
+function toBase64url(str) {
+  return Buffer.from(str).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+function fromBase64url(b64url) {
+  const b64 = (b64url || '').replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  return Buffer.from(b64 + pad, 'base64').toString('utf8');
+}
+
 // GET /api/admin/google-callback?code=...&state=...
 // Called by Google after authorization — NO auth middleware (browser redirect from Google)
 router.get('/google-callback', async (req, res) => {
@@ -45,7 +55,7 @@ router.get('/google-callback', async (req, res) => {
 
   let parsed;
   try {
-    parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+    parsed = JSON.parse(fromBase64url(state));
   } catch {
     return res.status(400).send('<h2>Invalid state parameter</h2>');
   }
@@ -66,7 +76,8 @@ router.get('/google-callback', async (req, res) => {
     }
 
     const field = tokenType === 'calendar' ? 'google_refresh_token' : 'gmail_refresh_token';
-    const { error: dbErr } = await db.supabase
+    const supabase = db.supabaseClient();
+    const { error: dbErr } = await supabase
       .from('clients')
       .update({ [field]: tokens.refresh_token })
       .eq('id', clientId);
@@ -77,7 +88,7 @@ router.get('/google-callback', async (req, res) => {
 
     res.send(`
       <html><body style="font-family:sans-serif;padding:40px;max-width:600px">
-        <h2 style="color:#16a34a">✅ Google re-auth successful!</h2>
+        <h2 style="color:#16a34a">&#10003; Google re-auth successful!</h2>
         <p><strong>Client ID:</strong> ${clientId}</p>
         <p><strong>Token type:</strong> ${field}</p>
         <p><strong>Refresh token saved.</strong> The cron picks it up on the next run (within 10 min).</p>
@@ -105,11 +116,11 @@ router.get('/google-auth', async (req, res) => {
         'https://www.googleapis.com/auth/gmail.readonly',
       ];
 
-  const state = Buffer.from(JSON.stringify({
+  const state = toBase64url(JSON.stringify({
     adminKey: process.env.ADMIN_KEY,
     clientId,
     tokenType,
-  })).toString('base64url');
+  }));
 
   const oauth2 = getOAuthClient();
   const url = oauth2.generateAuthUrl({
