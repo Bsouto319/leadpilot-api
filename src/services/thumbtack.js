@@ -215,34 +215,25 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       }).catch(err => logger.warn('thumbtack', `office notify call failed: ${err.message}`));
     }
 
-    // Confirmation call to lead — always call (lead just submitted the form, they're active)
-    // Only skip if it's between midnight and 7 AM in the lead's timezone
-    const tz        = client.timezone       || 'America/New_York';
-    const nowHour   = parseInt(new Date().toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }));
-    const isDeepNight = nowHour >= 0 && nowHour < 7;
-
-    if (!isDeepNight) {
-      try {
-        const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
-        const call = await twilioSvc.makeCall({
-          to: `+${leadPhone}`,
-          from: client.twilio_number,
-          voiceScript: confirmScript,
-          statusCallbackUrl: `${BASE}/webhook/call-status`,
-          intakeUrl: `${BASE}/webhook/voice-outbound-intake?conversationId=${conversation.id}&clientId=${client.id}`,
-          credentials: clientCredentials(client),
-        });
-        await db.updateConversation(conversation.id, {
-          call_sid: call.sid,
-          call_status: call.status,
-          call_attempted_at: new Date().toISOString(),
-        });
-        logger.info('thumbtack', `confirmation call placed conv=${conversation.id} sid=${call.sid}`);
-      } catch (err) {
-        await handleError('twilio', err);
-      }
-    } else {
-      logger.info('thumbtack', `deep night (${nowHour}h ${tz}) — confirmation call skipped to avoid disturbing lead`);
+    // Confirmation call to lead — always call immediately (lead just submitted form)
+    try {
+      const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
+      const call = await twilioSvc.makeCall({
+        to: `+${leadPhone}`,
+        from: client.twilio_number,
+        voiceScript: confirmScript,
+        statusCallbackUrl: `${BASE}/webhook/call-status`,
+        intakeUrl: `${BASE}/webhook/voice-outbound-intake?conversationId=${conversation.id}&clientId=${client.id}`,
+        credentials: clientCredentials(client),
+      });
+      await db.updateConversation(conversation.id, {
+        call_sid: call.sid,
+        call_status: call.status,
+        call_attempted_at: new Date().toISOString(),
+      });
+      logger.info('thumbtack', `confirmation call placed conv=${conversation.id} sid=${call.sid}`);
+    } catch (err) {
+      await handleError('twilio', err);
     }
 
     db.appendMessage(conversation.id, 'lead', message).catch(() => {});
@@ -259,22 +250,12 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     ...(qualification.summary    ? { summary: qualification.summary } : {}),
   }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
 
-  // Outbound call to lead — call if not deep night (0-7 AM)
-  const tz        = client.timezone || 'America/New_York';
-  const nowHour   = parseInt(new Date().toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }));
-  const isDeepNight = nowHour >= 0 && nowHour < 7;
-
-  if (isDeepNight) {
-    logger.info('thumbtack', `deep night (${nowHour}h in ${tz}) — skipping outbound call`);
-  }
-
+  // Outbound call to lead — always call immediately (no hour restrictions)
   const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
   let convFresh;
   try { convFresh = await db.getConversationById(conversation.id); } catch {}
   if (convFresh?.call_sid && activeCallStatuses.includes(convFresh.call_status)) {
     logger.info('thumbtack', `skipping outbound call — active call already exists sid=${convFresh.call_sid}`);
-  } else if (isDeepNight) {
-    // Already logged above — do not call during deep night
   } else {
     try {
       const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
