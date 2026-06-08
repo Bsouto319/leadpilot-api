@@ -141,7 +141,8 @@ async function fetchThumbtackLeads(refreshToken) {
 }
 
 // Send an email via Resend (replaces Gmail OAuth — never expires).
-async function sendEmail({ to, subject, body, html, from }) {
+// Retries once after 3s on transient failure; stores persistent failure in DB errors table.
+async function sendEmail({ to, subject, body, html, from }, _attempt = 1) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     logger.warn('gmail', 'sendEmail skipped — RESEND_API_KEY not set');
@@ -159,8 +160,20 @@ async function sendEmail({ to, subject, body, html, from }) {
     subject,
     ...(html ? { html, text: body || '' } : { text: body }),
   });
-  if (error) throw new Error(error.message);
-  logger.info('gmail', `email sent via Resend to=${to} subject="${subject}"`);
+  if (error) {
+    if (_attempt < 2) {
+      logger.warn('gmail', `sendEmail attempt ${_attempt} failed (${error.message}) — retrying in 3s`);
+      await new Promise(r => setTimeout(r, 3000));
+      return sendEmail({ to, subject, body, html, from }, _attempt + 1);
+    }
+    // Persistent failure — store in DB so it shows in /api/admin/errors
+    try {
+      const db = require('./supabase');
+      await db.saveError('resend', 'WARNING', `sendEmail failed after 2 attempts: ${error.message}`, `to=${JSON.stringify(to)} subject="${subject}"`);
+    } catch (_) {}
+    throw new Error(error.message);
+  }
+  logger.info('gmail', `email sent via Resend to=${JSON.stringify(to)} subject="${subject}"`);
 }
 
 module.exports = { fetchThumbtackLeads, sendEmail };

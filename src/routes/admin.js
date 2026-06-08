@@ -1,8 +1,9 @@
-const express = require('express');
-const crypto  = require('crypto');
-const router  = express.Router();
-const db      = require('../services/supabase');
-const logger  = require('../utils/logger');
+const express  = require('express');
+const crypto   = require('crypto');
+const router   = express.Router();
+const db       = require('../services/supabase');
+const logger   = require('../utils/logger');
+const { google } = require('googleapis');
 
 function timingSafeEqual(a, b) {
   try {
@@ -13,7 +14,7 @@ function timingSafeEqual(a, b) {
 }
 
 function authMiddleware(req, res, next) {
-  const key      = req.headers['x-admin-key'] || '';
+  const key      = req.headers['x-admin-key'] || req.query.adminKey || '';
   const expected = process.env.ADMIN_KEY || '';
   if (!key || !expected || !timingSafeEqual(key, expected)) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -21,7 +22,105 @@ function authMiddleware(req, res, next) {
   next();
 }
 
+function getOAuthClient() {
+  const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    `${BASE}/api/admin/google-callback`
+  );
+}
+
+// GET /api/admin/google-callback?code=...&state=...
+// Called by Google after authorization — NO auth middleware (browser redirect from Google)
+router.get('/google-callback', async (req, res) => {
+  const { code, state, error: oauthError } = req.query;
+
+  if (oauthError) {
+    return res.status(400).send(`<h2>Authorization failed: ${oauthError}</h2>`);
+  }
+  if (!code || !state) {
+    return res.status(400).send('<h2>Missing code or state parameter</h2>');
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+  } catch {
+    return res.status(400).send('<h2>Invalid state parameter</h2>');
+  }
+
+  const expected = process.env.ADMIN_KEY || '';
+  if (!parsed.adminKey || !timingSafeEqual(parsed.adminKey, expected)) {
+    return res.status(401).send('<h2>Unauthorized state</h2>');
+  }
+
+  const { clientId, tokenType } = parsed;
+
+  try {
+    const oauth2 = getOAuthClient();
+    const { tokens } = await oauth2.getToken(code);
+
+    if (!tokens.refresh_token) {
+      return res.status(400).send('<h2>No refresh_token returned — revoke app access at myaccount.google.com/permissions and re-authorize.</h2>');
+    }
+
+    const field = tokenType === 'calendar' ? 'google_refresh_token' : 'gmail_refresh_token';
+    const { error: dbErr } = await db.supabase
+      .from('clients')
+      .update({ [field]: tokens.refresh_token })
+      .eq('id', clientId);
+
+    if (dbErr) throw new Error(dbErr.message);
+
+    logger.info('admin', `google re-auth success clientId=${clientId} tokenType=${tokenType}`);
+
+    res.send(`
+      <html><body style="font-family:sans-serif;padding:40px;max-width:600px">
+        <h2 style="color:#16a34a">✅ Google re-auth successful!</h2>
+        <p><strong>Client ID:</strong> ${clientId}</p>
+        <p><strong>Token type:</strong> ${field}</p>
+        <p><strong>Refresh token saved.</strong> The cron picks it up on the next run (within 10 min).</p>
+        <p style="color:#64748b;font-size:13px">You can close this tab.</p>
+      </body></html>
+    `);
+  } catch (err) {
+    logger.warn('admin', `google-callback error: ${err.message}`);
+    res.status(500).send(`<h2>Error: ${err.message}</h2>`);
+  }
+});
+
 router.use(authMiddleware);
+
+// GET /api/admin/google-auth?adminKey=...&clientId=...&tokenType=gmail|calendar
+// Returns { url } — open that URL in browser to re-authorize Google access
+router.get('/google-auth', async (req, res) => {
+  const { clientId, tokenType = 'gmail' } = req.query;
+  if (!clientId) return res.status(400).json({ error: 'clientId is required' });
+
+  const scopes = tokenType === 'calendar'
+    ? ['https://www.googleapis.com/auth/calendar']
+    : [
+        'https://www.googleapis.com/auth/gmail.modify',
+        'https://www.googleapis.com/auth/gmail.readonly',
+      ];
+
+  const state = Buffer.from(JSON.stringify({
+    adminKey: process.env.ADMIN_KEY,
+    clientId,
+    tokenType,
+  })).toString('base64url');
+
+  const oauth2 = getOAuthClient();
+  const url = oauth2.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: scopes,
+    state,
+  });
+
+  res.json({ url, message: 'Open this URL in your browser to authorize. Token will be saved automatically.' });
+});
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
@@ -1076,6 +1175,61 @@ router.post('/run-competitor-intel', async (req, res) => {
   } catch (err) {
     logger.warn('admin', `competitor intel job failed: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── PROSPECTOR CONFIG — GET ───────────────────────────────────────────────────
+router.get('/prospector-config/:clientId', async (req, res) => {
+  try {
+    const { data, error } = await db.supabaseClient()
+      .from('prospector_configs')
+      .select('*')
+      .eq('client_id', req.params.clientId)
+      .maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data)  return res.status(404).json({ error: 'No prospector config found for this client' });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PROSPECTOR CONFIG — UPSERT ────────────────────────────────────────────────
+router.put('/prospector-config/:clientId', async (req, res) => {
+  try {
+    const editable = [
+      'active', 'niche', 'business_description', 'website_url', 'min_project_value',
+      'target_cities', 'service_zones', 'reddit_subreddits', 'buy_keywords',
+      'discard_keywords', 'forum_searches', 'craigslist_cities',
+      'digest_recipients', 'digest_hours_et', 'zip_codes',
+    ];
+    const payload = { client_id: req.params.clientId, updated_at: new Date().toISOString() };
+    for (const f of editable) {
+      if (req.body[f] !== undefined) payload[f] = req.body[f];
+    }
+    const { data, error } = await db.supabaseClient()
+      .from('prospector_configs')
+      .upsert(payload, { onConflict: 'client_id' })
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── LIST ALL PROSPECTOR CONFIGS ───────────────────────────────────────────────
+router.get('/prospector-configs', async (req, res) => {
+  try {
+    const { data, error } = await db.supabaseClient()
+      .from('prospector_configs')
+      .select('*, clients(business_name, owner_email)')
+      .order('created_at', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

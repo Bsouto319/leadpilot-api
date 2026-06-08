@@ -242,8 +242,42 @@ app.get('/', (req, res) => res.redirect('/dashboard'));
 
 app.use(errorHandler);
 
+function validateEnvVars() {
+  const required = [
+    'RESEND_API_KEY',
+    'OPENAI_API_KEY',
+    'TWILIO_ACCOUNT_SID',
+    'TWILIO_AUTH_TOKEN',
+    'SUPABASE_URL',
+    'SUPABASE_ANON_KEY',
+    'ADMIN_KEY',
+  ];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length === 0) {
+    logger.info('server', `ENV OK — all ${required.length} critical vars present`);
+    return;
+  }
+  const msg = `MISSING ENV VARS: ${missing.join(', ')}`;
+  logger.error('server', `[CRITICAL] ${msg}`);
+  // SMS alert to Bruno via Twilio master account
+  try {
+    const twilio = require('twilio');
+    const sid   = process.env.TWILIO_ACCOUNT_SID;
+    const token = process.env.TWILIO_AUTH_TOKEN;
+    const from  = process.env.TWILIO_FROM_ALERT || process.env.ALERT_FROM;
+    const to    = process.env.ALERT_PHONE;
+    if (sid && token && from && to) {
+      twilio(sid, token).messages.create({
+        to, from,
+        body: `⚠️ LeadPilot boot: ${msg}`,
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+
 app.listen(PORT, () => {
   logger.info('server', `LeadPilot API running on port ${PORT}`);
+  validateEnvVars();
   startCronJobs();
   // Pre-warm client cache so first inbound call has zero DB latency
   db.preWarmClientCache().catch(err => logger.warn('server', `cache pre-warm failed: ${err.message}`));
@@ -408,12 +442,12 @@ function startCronJobs() {
     try { await runRedditProspectorCron(); } catch (err) { handleError('cron-reddit-prospector', err).catch(() => {}); }
   });
 
-  // Every Sunday at 10pm ET — competitor intelligence report for all active clients
+  // Every Sunday at 7pm ET — competitor intelligence report for all active clients
   const { runCompetitorIntelCron } = require('./services/competitorIntel');
-  cron.schedule('0 22 * * 0', async () => {
+  cron.schedule('0 19 * * 0', async () => {
     logger.info('cron', 'running competitor intelligence report');
     try { await runCompetitorIntelCron(); } catch (err) { handleError('cron-competitor-intel', err).catch(() => {}); }
   }, { timezone: 'America/New_York' });
 
-  logger.info('server', 'cron jobs scheduled: appt-reminder@9am, 2h-reminder@every30min, call-retry@every30min, weekly-report@mon8am, thumbtack-poll@every10min, followup-emails@every12h, competitor-intel@sun10pm');
+  logger.info('server', 'cron jobs scheduled: appt-reminder@9am, 2h-reminder@every30min, call-retry@every30min, weekly-report@mon8am, thumbtack-poll@every10min, followup-emails@every12h, competitor-intel@sun7pm');
 }
