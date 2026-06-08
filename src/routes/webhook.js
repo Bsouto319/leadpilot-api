@@ -10,6 +10,7 @@ const { processThumbtackLead } = require('../services/thumbtack');
 const elevenlabs = require('../services/elevenlabs');
 const { sendEmail } = require('../services/gmail');
 const { makeNotifyCall } = require('../services/twilio');
+const { triggerZipQualifier } = require('../services/zipQualifier');
 
 // Parser rápido de data por regex — cobre ~90% dos casos sem chamar OpenAI.
 // Retorna ISO string ou null (fallback para GPT).
@@ -506,7 +507,7 @@ async function processSms(body) {
   }
 
   // 9. Notify owner via email (HTML)
-  if (client.owner_email) {
+  if (client.owner_email || client.admin_email) {
     const { buildNewLeadAlertEmail, clientBranding } = require('../services/followup');
     const branding = clientBranding(client);
     const { subject: alertSubject, html: alertHtml } = buildNewLeadAlertEmail({
@@ -515,7 +516,7 @@ async function processSms(body) {
       businessName: client.business_name,
       ...branding,
     });
-    const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
+    const alertRecipients = [...new Set([client.owner_email, client.secondary_email, client.admin_email].filter(Boolean))];
     for (const to of alertRecipients) {
       sendEmail({ from: `${client.business_name} <noreply@btechsouto.shop>`, to, subject: alertSubject, html: alertHtml })
         .catch(err => logger.warn('webhook', `owner email notify failed ${to}: ${err.message}`));
@@ -568,6 +569,8 @@ async function processAddressReply({ client, conversation, message }) {
       last_response_at: new Date().toISOString(),
     });
 
+    triggerZipQualifier(conversation.id, client.id, address).catch(() => {});
+
     // Update calendar event with address
     if (client.google_refresh_token && client.google_calendar_id) {
       try {
@@ -583,13 +586,16 @@ async function processAddressReply({ client, conversation, message }) {
       }
     }
 
-    if (client.owner_email) {
-      sendEmail({
-        from: `${client.business_name} <noreply@btechsouto.shop>`,
-        to: client.owner_email,
-        subject: `✅ Appointment Confirmed — ${client.business_name}`,
-        body: `Address received — visit is confirmed!\n\nName: ${conversation.lead_name}\nPhone: +${conversation.lead_phone}\nDate: ${formatted}\nAddress: ${address}`,
-      }).catch(() => {});
+    if (client.owner_email || client.admin_email) {
+      const confirmRecipients = [...new Set([client.owner_email, client.admin_email].filter(Boolean))];
+      for (const to of confirmRecipients) {
+        sendEmail({
+          from: `${client.business_name} <noreply@btechsouto.shop>`,
+          to,
+          subject: `✅ Appointment Confirmed — ${client.business_name}`,
+          body: `Address received — visit is confirmed!\n\nName: ${conversation.lead_name}\nPhone: +${conversation.lead_phone}\nDate: ${formatted}\nAddress: ${address}`,
+        }).catch(() => {});
+      }
     }
     if (client.owner_phone) {
       makeNotifyCall({
@@ -722,13 +728,16 @@ async function processSchedulingReply({ client, conversation, message }) {
     }
 
     // Notify owner of pending appointment (awaiting address)
-    if (client.owner_email) {
-      sendEmail({
-        from: `${client.business_name} <noreply@btechsouto.shop>`,
-        to: client.owner_email,
-        subject: `📅 Appointment Pending Address — ${client.business_name}`,
-        body: `Visit scheduled — waiting for address.\n\nName: ${conversation.lead_name || 'Customer'}\nPhone: +${conversation.lead_phone}\nService: ${(conversation.service_type || '').replace(/_/g, ' ')}\nDate: ${formatted}\n\nWaiting for lead to confirm address...`,
-      }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
+    if (client.owner_email || client.admin_email) {
+      const pendingRecipients = [...new Set([client.owner_email, client.admin_email].filter(Boolean))];
+      for (const to of pendingRecipients) {
+        sendEmail({
+          from: `${client.business_name} <noreply@btechsouto.shop>`,
+          to,
+          subject: `📅 Appointment Pending Address — ${client.business_name}`,
+          body: `Visit scheduled — waiting for address.\n\nName: ${conversation.lead_name || 'Customer'}\nPhone: +${conversation.lead_phone}\nService: ${(conversation.service_type || '').replace(/_/g, ' ')}\nDate: ${formatted}\n\nWaiting for lead to confirm address...`,
+        }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
+      }
     }
 
     logger.info('webhook', `scheduled lead ${conversation.lead_phone} for ${isoDate}`);
@@ -920,12 +929,15 @@ async function processGather({ speech, conversationId, clientId }) {
       conv.summary ? `Insight: ${conv.summary}` : '',
     ].filter(Boolean).join('\n');
 
-    sendEmail({
-      from: `${client.business_name} <noreply@btechsouto.shop>`,
-      to: client.owner_email,
-      subject: `${tierEmojiV} Scheduled via Voice — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
-      body: emailBody,
-    }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
+    const voiceRecipients = [...new Set([client.owner_email, client.admin_email].filter(Boolean))];
+    for (const to of voiceRecipients) {
+      sendEmail({
+        from: `${client.business_name} <noreply@btechsouto.shop>`,
+        to,
+        subject: `${tierEmojiV} Scheduled via Voice — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
+        body: emailBody,
+      }).catch(err => logger.warn('webhook', `owner email notify failed: ${err.message}`));
+    }
   }
   if (conv.lead_email) {
     sendEmail({
@@ -1276,6 +1288,8 @@ async function processVoiceIntake(req, res) {
       collected_data: { ...cd, voice_stage: 'asking_email', no_input_count: 0 },
     }).catch(() => {});
 
+    triggerZipQualifier(id, conv.client_id, address).catch(() => {});
+
     const askEmail = `Perfect! And lastly — could I get your email address? We'll send you a quick form with details about your project and keep everything on file for you. Just say it slowly, like: "john at gmail dot com".`;
     db.appendMessage(id, 'ai', askEmail).catch(() => {});
     res.set('Content-Type', 'text/xml');
@@ -1404,12 +1418,15 @@ async function processVoiceIntake(req, res) {
           ``,
           client.business_name,
         ].filter(Boolean).join('\n');
-        sendEmail({
-          from: `${client.business_name} <noreply@btechsouto.shop>`,
-          to: client.owner_email,
-          subject: `${tierEmoji} Appointment Confirmed${scoreLabel} — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
-          body: emailBody,
-        }).catch(() => {});
+        const apptRecipients1 = [...new Set([client.owner_email, client.admin_email].filter(Boolean))];
+        for (const to of apptRecipients1) {
+          sendEmail({
+            from: `${client.business_name} <noreply@btechsouto.shop>`,
+            to,
+            subject: `${tierEmoji} Appointment Confirmed${scoreLabel} — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
+            body: emailBody,
+          }).catch(() => {});
+        }
       }
 
       const notifyMsg = `Hey! ${agentName} just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`;
@@ -1513,12 +1530,15 @@ async function processVoiceIntake(req, res) {
           ``,
           client.business_name,
         ].filter(Boolean).join('\n');
-        sendEmail({
-          from: `${client.business_name} <noreply@btechsouto.shop>`,
-          to: client.owner_email,
-          subject: `${tierEmoji} Appointment Confirmed${scoreLabel} — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
-          body: emailBody,
-        }).catch(() => {});
+        const apptRecipients2 = [...new Set([client.owner_email, client.admin_email].filter(Boolean))];
+        for (const to of apptRecipients2) {
+          sendEmail({
+            from: `${client.business_name} <noreply@btechsouto.shop>`,
+            to,
+            subject: `${tierEmoji} Appointment Confirmed${scoreLabel} — ${conv.lead_name || 'Lead'} | ${client.business_name}`,
+            body: emailBody,
+          }).catch(() => {});
+        }
       }
 
       if (emailRaw) {
