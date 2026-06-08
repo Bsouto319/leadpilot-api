@@ -1,0 +1,25 @@
+{
+  "name": "LeadPilot",
+  "short_name": "LeadPilot",
+  "description": "Lead management dashboard",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e1f4a",
+  "theme_color": "#1a3564",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
