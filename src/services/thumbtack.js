@@ -6,6 +6,7 @@ const { makeNotifyCall } = require('./twilio');
 const { sendEmail } = require('./gmail');
 const { handleError } = require('../middleware/alerting');
 const { buildNewLeadAlertEmail, clientBranding } = require('./followup');
+const { triggerZipQualifier } = require('./zipQualifier');
 
 function normalizePhone(raw) {
   return (raw || '').replace(/\D/g, '');
@@ -107,6 +108,11 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     return;
   }
 
+  // ZIP VIP qualifier — fires async, non-blocking
+  if (leadAddress) {
+    triggerZipQualifier(conversation.id, client.id, leadAddress).catch(() => {});
+  }
+
   // Confirmation email to lead immediately after capture (before call)
   if (leadEmail) {
     const { sendLeadConfirmationEmail } = require('./followup');
@@ -164,7 +170,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
 
     // Owner email notification — HTML
-    if (client.owner_email) {
+    if (client.owner_email || client.admin_email) {
       const branding = clientBranding(client);
       const vLabel   = client.visit_label || 'scheduled visit';
       const { subject: alertSubject, html: alertHtml } = buildNewLeadAlertEmail({
@@ -180,7 +186,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
         leadAddress: leadAddress || null,
         ...branding,
       });
-      const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
+      const alertRecipients = [...new Set([client.owner_email, client.secondary_email, client.admin_email].filter(Boolean))];
       sendEmail({
         from: `${client.business_name} <noreply@btechsouto.shop>`,
         to: alertRecipients,
@@ -209,14 +215,13 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       }).catch(err => logger.warn('thumbtack', `office notify call failed: ${err.message}`));
     }
 
-    // Confirmation call to lead (within business hours)
+    // Confirmation call to lead — always call (lead just submitted the form, they're active)
+    // Only skip if it's between midnight and 7 AM in the lead's timezone
     const tz        = client.timezone       || 'America/New_York';
-    const startHour = client.call_start_hour ?? 9;
-    const endHour   = client.call_end_hour   ?? 17;
     const nowHour   = parseInt(new Date().toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }));
-    const withinHours = nowHour >= startHour && nowHour < endHour;
+    const isDeepNight = nowHour >= 0 && nowHour < 7;
 
-    if (withinHours) {
+    if (!isDeepNight) {
       try {
         const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
         const call = await twilioSvc.makeCall({
@@ -237,7 +242,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
         await handleError('twilio', err);
       }
     } else {
-      logger.info('thumbtack', `outside business hours (${nowHour}h) — confirmation call skipped`);
+      logger.info('thumbtack', `deep night (${nowHour}h ${tz}) — confirmation call skipped to avoid disturbing lead`);
     }
 
     db.appendMessage(conversation.id, 'lead', message).catch(() => {});
@@ -254,15 +259,13 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     ...(qualification.summary    ? { summary: qualification.summary } : {}),
   }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
 
-  // Outbound call to lead — only within business hours
-  const tz        = client.timezone       || 'America/New_York';
-  const startHour = client.call_start_hour ?? 9;
-  const endHour   = client.call_end_hour   ?? 17;
+  // Outbound call to lead — call if not deep night (0-7 AM)
+  const tz        = client.timezone || 'America/New_York';
   const nowHour   = parseInt(new Date().toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }));
-  const withinHours = nowHour >= startHour && nowHour < endHour;
+  const isDeepNight = nowHour >= 0 && nowHour < 7;
 
-  if (!withinHours) {
-    logger.info('thumbtack', `outside business hours (${nowHour}h in ${tz}, window ${startHour}-${endHour}) — skipping call`);
+  if (isDeepNight) {
+    logger.info('thumbtack', `deep night (${nowHour}h in ${tz}) — skipping outbound call`);
   }
 
   const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
@@ -270,8 +273,8 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
   try { convFresh = await db.getConversationById(conversation.id); } catch {}
   if (convFresh?.call_sid && activeCallStatuses.includes(convFresh.call_status)) {
     logger.info('thumbtack', `skipping outbound call — active call already exists sid=${convFresh.call_sid}`);
-  } else if (!withinHours) {
-    // Already logged above — do not call outside hours
+  } else if (isDeepNight) {
+    // Already logged above — do not call during deep night
   } else {
     try {
       const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
@@ -294,7 +297,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
   }
 
   // Notify owner via email HTML (immediate — with AI insight)
-  if (client.owner_email) {
+  if (client.owner_email || client.admin_email) {
     const branding = clientBranding(client);
     const { subject: alertSubject, html: alertHtml } = buildNewLeadAlertEmail({
       leadName: name, leadPhone, leadEmail,
@@ -307,7 +310,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       leadAddress: leadAddress || null,
       ...branding,
     });
-    const alertRecipients = [client.owner_email, client.secondary_email].filter(Boolean);
+    const alertRecipients = [...new Set([client.owner_email, client.secondary_email, client.admin_email].filter(Boolean))];
     sendEmail({
       from: `${client.business_name} <noreply@btechsouto.shop>`,
       to: alertRecipients,
