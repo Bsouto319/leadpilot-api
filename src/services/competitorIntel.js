@@ -137,16 +137,48 @@ async function runCompetitorIntelCron() {
         await new Promise(r => setTimeout(r, 500));
       }
 
+      const recipients = [
+        'brunosouto1108@gmail.com',
+        client.owner_email,
+        client.secondary_email,
+        client.admin_email,
+      ].filter(Boolean);
+
+      const date = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
       if (!competitors.length) {
-        logger.info('competitorIntel', `no competitors found for ${client.business_name} — skipping email`);
+        logger.info('competitorIntel', `no competitors found for ${client.business_name} — sending fallback email`);
+        const fallbackHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="max-width:640px;margin:0 auto;padding:24px 16px">
+  <div style="background:#1e3a5f;border-radius:12px 12px 0 0;padding:28px 32px;text-align:center">
+    <p style="margin:0 0 4px;color:rgba(255,255,255,0.55);font-size:11px;text-transform:uppercase;letter-spacing:1px">Weekly Intelligence · ${date}</p>
+    <h1 style="margin:0 0 4px;color:#fff;font-size:22px;font-weight:800">Competitor Intel Report</h1>
+    <p style="margin:0;color:rgba(255,255,255,0.7);font-size:13px">${client.business_name} · ZIP ${client.zip_code}</p>
+  </div>
+  <div style="background:#fff;padding:24px 28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;text-align:center">
+    <p style="font-size:40px;margin:0 0 12px">🔍</p>
+    <p style="font-size:16px;font-weight:700;color:#111827;margin:0 0 8px">No competitor data available this week</p>
+    <p style="font-size:14px;color:#6b7280;margin:0 0 16px">Google Places returned zero results for ZIP ${client.zip_code}. This may be a temporary API issue or coverage gap in the area.</p>
+    <p style="font-size:12px;color:#9ca3af;margin:0">✅ Cron ran normally · System is healthy</p>
+  </div>
+  <p style="text-align:center;font-size:11px;color:#9ca3af;margin:16px 0 0">LeadPilot · Competitive Intelligence</p>
+</div></body></html>`;
+        for (const to of recipients) {
+          try {
+            await sendEmail({ to, subject: `🔍 Competitor Intel — No Data · ${client.business_name} (${date})`, html: fallbackHtml });
+            logger.info('competitorIntel', `fallback report sent to ${to}`);
+          } catch (emailErr) {
+            logger.warn('competitorIntel', `fallback email failed for ${to}: ${emailErr.message}`);
+          }
+        }
         continue;
       }
       logger.info('competitorIntel', `found ${competitors.length} competitors for ${client.business_name}`);
 
-      const report      = await generateReport(competitors, client.business_name);
-      const negCount    = competitors.reduce((n, c) => n + (c.reviews || []).filter(r => r.rating <= 2).length, 0);
-      const avgRating   = (competitors.reduce((s, c) => s + (c.rating || 0), 0) / competitors.length).toFixed(1);
-      const date        = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const report    = await generateReport(competitors, client.business_name);
+      const negCount  = competitors.reduce((n, c) => n + (c.reviews || []).filter(r => r.rating <= 2).length, 0);
+      const avgRating = (competitors.reduce((s, c) => s + (c.rating || 0), 0) / competitors.length).toFixed(1);
 
       const negReviewCards = competitors
         .filter(c => (c.reviews || []).some(r => r.rating <= 2))
@@ -200,13 +232,6 @@ async function runCompetitorIntelCron() {
   <p style="text-align:center;font-size:11px;color:#9ca3af;margin:16px 0 0">LeadPilot · Competitive Intelligence · Powered by Google Places + GPT</p>
 </div>
 </body></html>`;
-
-      const recipients = [
-        'brunosouto1108@gmail.com', // BTechSouto admin — sempre primeiro
-        client.owner_email,
-        client.secondary_email,
-        client.admin_email,
-      ].filter(Boolean);
 
       for (const to of recipients) {
         try {

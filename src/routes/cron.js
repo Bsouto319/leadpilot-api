@@ -135,4 +135,39 @@ router.post('/noshows', async (req, res) => {
   }
 });
 
+// POST /cron/prospect-test — dispara web miner + digest manualmente (override de destinatários)
+router.post('/prospect-test', async (req, res) => {
+  const override = req.body?.recipients || null;
+  res.json({ ok: true, job: 'prospect-test', recipients: override });
+  try {
+    const { runRedditProspectorTest } = require('../services/redditProspector');
+    await runRedditProspectorTest(override);
+  } catch (err) {
+    handleError('cron-prospect-test', err).catch(() => {});
+  }
+});
+
+// POST /cron/prospect-digest — envia apenas o digest com prospects pendentes (sem scraping)
+router.post('/prospect-digest', async (req, res) => {
+  const override = req.body?.recipients || null;
+  res.json({ ok: true, job: 'prospect-digest', recipients: override });
+  try {
+    const { sendPendingDigest } = require('../services/redditProspector');
+    await sendPendingDigest(override);
+  } catch (err) {
+    handleError('cron-prospect-digest', err).catch(() => {});
+  }
+});
+
+// POST /cron/competitor-intel — dispara competitor intel manualmente
+router.post('/competitor-intel', async (req, res) => {
+  res.json({ ok: true, job: 'competitor-intel' });
+  try {
+    const { runCompetitorIntelCron } = require('../services/competitorIntel');
+    await runCompetitorIntelCron();
+  } catch (err) {
+    handleError('cron-competitor-intel-manual', err).catch(() => {});
+  }
+});
+
 module.exports = router;

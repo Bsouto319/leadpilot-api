@@ -244,12 +244,20 @@ function businessLabel(config) {
   return config.clients?.business_name || 'LeadPilot';
 }
 
+function resolveRecipients(config, overrideRecipients) {
+  if (overrideRecipients) return overrideRecipients;
+  const base = config.digest_recipients;
+  const list = Array.isArray(base) ? base : (base ? [base] : []);
+  if (!list.includes('brunosouto1108@gmail.com')) list.unshift('brunosouto1108@gmail.com');
+  return list.length ? list : 'brunosouto1108@gmail.com';
+}
+
 async function sendEmptyDigestEmail(config, overrideRecipients) {
   const name   = businessLabel(config);
   const date   = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' });
   const hourET = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
   const slot   = hourET <= 10 ? 'Morning' : 'Afternoon';
-  const to     = overrideRecipients || config.digest_recipients;
+  const to     = resolveRecipients(config, overrideRecipients);
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
@@ -287,7 +295,7 @@ async function sendDigestEmail(prospects, config, overrideRecipients) {
   const high   = prospects.filter(p => p.intent_score >= 8);
   const medium = prospects.filter(p => p.intent_score >= 6 && p.intent_score < 8);
   const low    = prospects.filter(p => p.intent_score < 6);
-  const to     = overrideRecipients || config.digest_recipients;
+  const to     = resolveRecipients(config, overrideRecipients);
 
   function makeCard(p) {
     const scoreColor  = p.intent_score >= 8 ? '#16a34a' : p.intent_score >= 6 ? '#d97706' : '#6b7280';
