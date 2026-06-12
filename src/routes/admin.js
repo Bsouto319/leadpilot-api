@@ -127,7 +127,7 @@ router.get('/google-auth', async (req, res) => {
     state,
   });
 
-  res.json({ url, message: 'Open this URL in your browser to authorize. Token will be saved automatically.' });
+  res.redirect(url);
 });
 
 router.get('/health', (req, res) => {
