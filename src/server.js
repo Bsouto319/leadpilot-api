@@ -35,6 +35,7 @@ app.use(helmet({
 // ── CORS — only allow Vercel dashboard + same-origin ─────────────────────────
 const ALLOWED_ORIGINS = [
   'https://leadpilot-dashboard-mu.vercel.app',
+  'https://app.contatobtech.com.br',
   'https://cpcabinets.com',
   'https://www.cpcabinets.com',
   process.env.DASHBOARD_URL,
