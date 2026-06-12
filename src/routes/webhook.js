@@ -394,6 +394,12 @@ async function processSms(body) {
       await processAddressReply({ client, conversation: existingConv, message });
       return;
     }
+    if (existingConv.stage === 'form_filled') {
+      // Lead already has address from form — treat SMS reply as date/scheduling response
+      logger.info('webhook', `form_filled lead ${leadPhone} replied — routing to scheduling`);
+      await processSchedulingReply({ client, conversation: { ...existingConv, stage: 'ai_responded' }, message });
+      return;
+    }
     if (existingConv.stage === 'ai_responded') {
       logger.info('webhook', `scheduling reply from ${leadPhone} — processing date`);
       await processSchedulingReply({ client, conversation: existingConv, message });
@@ -770,14 +776,14 @@ router.post('/call-status', async (req, res) => {
     handleError('supabase', err).catch(() => {});
   }
 
-  // Move stage from new_lead → ai_responded once any call has been attempted
+  // Move stage → ai_responded once any call has been attempted
   const terminalStatuses = ['completed', 'no-answer', 'busy', 'failed'];
   if (terminalStatuses.includes(CallStatus)) {
     try {
       const convForStage = await db.getConversationByCallSid(CallSid);
-      if (convForStage && convForStage.stage === 'new_lead') {
+      if (convForStage && (convForStage.stage === 'new_lead' || convForStage.stage === 'form_filled')) {
         await db.updateConversation(convForStage.id, { stage: 'ai_responded' });
-        logger.info('webhook', `stage new_lead→ai_responded for conv=${convForStage.id} after call ${CallStatus}`);
+        logger.info('webhook', `stage ${convForStage.stage}→ai_responded for conv=${convForStage.id} after call ${CallStatus}`);
       }
     } catch (err) {
       logger.warn('webhook', `stage update after call failed: ${err.message}`);

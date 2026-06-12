@@ -241,9 +241,12 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     return;
   }
 
-  // Save voice script + AI qualification to DB
+  // Save voice script + AI qualification to DB.
+  // form_filled leads keep their stage — address already captured, just waiting for date.
+  // All other leads advance to ai_responded to signal Sofia has reached out.
+  const nextStage = conversation.stage === 'form_filled' ? 'form_filled' : 'ai_responded';
   await db.updateConversation(conversation.id, {
-    stage: 'ai_responded',
+    stage: nextStage,
     ai_response: voiceScript,
     last_response_at: new Date().toISOString(),
     ...(qualification.score != null ? { score: qualification.score } : {}),

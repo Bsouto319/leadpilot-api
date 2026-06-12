@@ -134,10 +134,12 @@ async function checkDuplicate(clientId, leadPhone, minutes = 60) {
 
 async function saveLead({ clientId, leadPhone, leadName = 'Customer', source, serviceType, message, thumbtackLeadId = null, leadEmail = null, scheduledAt = null, leadAddress = null }) {
   // Stage logic:
-  // - no scheduledAt  → new_lead (Alice will call)
+  // - website form + address + no date → form_filled (high-intent, has address, needs date)
+  // - no scheduledAt (other sources) → new_lead (will call)
   // - scheduledAt + no address → awaiting_address (visit booked, still need address)
   // - scheduledAt + address   → scheduled (fully confirmed)
-  const stage = !scheduledAt ? 'new_lead'
+  const stage = !scheduledAt
+    ? (source === 'website' && leadAddress ? 'form_filled' : 'new_lead')
     : leadAddress ? 'scheduled'
     : 'awaiting_address';
 
