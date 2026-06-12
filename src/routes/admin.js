@@ -829,12 +829,12 @@ router.post('/audio-call-preview', async (req, res) => {
   const elevenlabs = require('../services/elevenlabs');
   const AUDIO_DIR  = path.join('/tmp', 'leadpilot-audio');
 
-  // ElevenLabs voice IDs — female: Hope, male: Adam (free tier)
+  // ElevenLabs voice names (resolved to IDs in elevenlabs.js VOICE_IDS)
   const VOICE_FEMALE = 'hope';
-  const VOICE_MALE   = 'pNInz6obpgDQGcFmaJgB'; // Adam — free multilingual ElevenLabs voice
+  const VOICE_MALE   = 'adam';
 
   // Target language name for translation prompt
-  const TARGET_LANG_NAMES: Record<string, string> = {
+  const TARGET_LANG_NAMES = {
     en: 'clear, natural American English',
     es: 'clear, natural Spanish',
     pt: 'clear, natural Brazilian Portuguese',
@@ -856,7 +856,7 @@ router.post('/audio-call-preview', async (req, res) => {
 
     let transcription;
     try {
-      const whisperParams: any = { model: 'whisper-1', file: fs.createReadStream(tmpFile) };
+      const whisperParams = { model: 'whisper-1', file: fs.createReadStream(tmpFile) };
       if (sourceLang) whisperParams.language = sourceLang;
       const result = await openai.audio.transcriptions.create(whisperParams);
       transcription = result.text;

@@ -5,8 +5,9 @@ const logger = require('../utils/logger');
 
 // ── Voice catalogue ───────────────────────────────────────────────────────────
 const VOICE_IDS = {
-  hope:    'zGjIP4SZlMnY9m93k97r', // Hope - Clear, Relatable and Charismatic (default)
+  hope:    'zGjIP4SZlMnY9m93k97r', // Hope - Clear, Relatable and Charismatic (default female)
   hope2:   'OYTbf65OHHFELVut7v2H', // Hope - Natural, Clear and Calm
+  adam:    'pNInz6obpgDQGcFmaJgB', // Adam - male, deep and natural
   rachel:  '21m00Tcm4TlvDq8ikWAM',
   aria:    '9BWtsMINqrJLrRacOk9x',
   jessica: 'cgSgspJ2msm6clMCkdW9',
