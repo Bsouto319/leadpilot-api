@@ -52,10 +52,10 @@ function clientBranding(client) {
 
 function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, step, logoUrl, cityState, addressDisplay, contactPhone }) {
   const firstName = (leadName || 'there').split(' ')[0];
-  logoUrl       = logoUrl       || 'https://leads.btechsouto.shop/cp-cabinets-logo.png';
-  cityState     = cityState     || 'Irmo, South Carolina';
-  addressDisplay= addressDisplay|| '1085 Lake Murray Blvd, Suite E, Irmo, SC 29063';
-  contactPhone  = contactPhone  || '(803) 373-8191';
+  logoUrl       = logoUrl       || '';
+  cityState     = cityState     || '';
+  addressDisplay= addressDisplay|| '';
+  contactPhone  = contactPhone  || '';
   const subjects = {
     1: `We received your request — ${businessName} will call you shortly!`,
     2: `Still interested? — ${businessName}`,
@@ -149,10 +149,10 @@ function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, st
 
 function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleUrl, websiteUrl, scheduledAt, agentName, timezone, logoUrl, cityState, addressDisplay, contactPhone, visitLabel }) {
   visitLabel = visitLabel || 'scheduled visit';
-  logoUrl        = logoUrl        || 'https://leads.btechsouto.shop/cp-cabinets-logo.png';
-  cityState      = cityState      || 'Irmo, South Carolina';
-  addressDisplay = addressDisplay || '1085 Lake Murray Blvd, Suite E, Irmo, SC 29063';
-  contactPhone   = contactPhone   || '(803) 373-8191';
+  logoUrl        = logoUrl        || '';
+  cityState      = cityState      || '';
+  addressDisplay = addressDisplay || '';
+  contactPhone   = contactPhone   || '';
   const firstName = (leadName || 'there').split(' ')[0];
   const serviceLabel = serviceType && serviceType !== 'general' && serviceType !== 'free_estimate'
     ? serviceType.replace(/_/g, ' ')
