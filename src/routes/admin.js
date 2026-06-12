@@ -802,8 +802,11 @@ router.get('/test-qualify', async (req, res) => {
 // Body: raw audio blob (Content-Type: audio/webm or audio/ogg)
 // Returns: { msgId, transcription, translation }
 router.post('/audio-call-preview', async (req, res) => {
-  const clientId = req.query.clientId;
-  const audioBuffer = req.body;  // Buffer from express.raw()
+  const clientId  = req.query.clientId;
+  const sourceLang = req.query.sourceLang || '';       // e.g. 'pt', 'es', '' = auto
+  const targetLang = req.query.targetLang || 'en';     // e.g. 'en', 'es', 'pt'
+  const voiceParam = req.query.voice || 'female';      // 'female' or 'male'
+  const audioBuffer = req.body;
 
   if (!Buffer.isBuffer(audioBuffer) || audioBuffer.length === 0) {
     return res.status(400).json({ error: 'No audio received' });
@@ -826,6 +829,24 @@ router.post('/audio-call-preview', async (req, res) => {
   const elevenlabs = require('../services/elevenlabs');
   const AUDIO_DIR  = path.join('/tmp', 'leadpilot-audio');
 
+  // ElevenLabs voice IDs — female: Hope, male: Adam (free tier)
+  const VOICE_FEMALE = 'hope';
+  const VOICE_MALE   = 'pNInz6obpgDQGcFmaJgB'; // Adam — free multilingual ElevenLabs voice
+
+  // Target language name for translation prompt
+  const TARGET_LANG_NAMES: Record<string, string> = {
+    en: 'clear, natural American English',
+    es: 'clear, natural Spanish',
+    pt: 'clear, natural Brazilian Portuguese',
+    fr: 'clear, natural French',
+    de: 'clear, natural German',
+    it: 'clear, natural Italian',
+    zh: 'clear, natural Mandarin Chinese',
+    ja: 'clear, natural Japanese',
+    ko: 'clear, natural Korean',
+  };
+  const targetLangName = TARGET_LANG_NAMES[targetLang] || 'clear, natural English';
+
   try {
     const mimetype = (req.get('content-type') || 'audio/webm').split(';')[0].trim();
     const ext      = mimetype.split('/')[1] || 'webm';
@@ -835,10 +856,9 @@ router.post('/audio-call-preview', async (req, res) => {
 
     let transcription;
     try {
-      const result = await openai.audio.transcriptions.create({
-        model: 'whisper-1',
-        file:  fs.createReadStream(tmpFile),
-      });
+      const whisperParams: any = { model: 'whisper-1', file: fs.createReadStream(tmpFile) };
+      if (sourceLang) whisperParams.language = sourceLang;
+      const result = await openai.audio.transcriptions.create(whisperParams);
       transcription = result.text;
     } finally {
       try { fs.unlinkSync(tmpFile); } catch {}
@@ -854,19 +874,20 @@ router.post('/audio-call-preview', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'Translate the following to clear, natural American English suitable for a phone call. Under 300 characters. Output ONLY the translated text — no quotes, no labels.',
+          content: `Translate the following to ${targetLangName} suitable for a phone call. Under 300 characters. Output ONLY the translated text — no quotes, no labels.`,
         },
         { role: 'user', content: transcription },
       ],
     });
     const translatedText = translateRes.choices[0].message.content.trim().slice(0, 300);
 
-    const msgId   = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const mp3Buf  = await elevenlabs.generateMp3(translatedText, 'hope');
-    const mp3Path = path.join(AUDIO_DIR, `vmsg-${msgId}.mp3`);
+    const msgId    = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const voiceId  = voiceParam === 'male' ? VOICE_MALE : VOICE_FEMALE;
+    const mp3Buf   = await elevenlabs.generateMp3(translatedText, voiceId);
+    const mp3Path  = path.join(AUDIO_DIR, `vmsg-${msgId}.mp3`);
     fs.writeFileSync(mp3Path, mp3Buf);
 
-    logger.info('admin', `audio-preview msgId=${msgId} pt="${transcription.slice(0,60)}" en="${translatedText.slice(0,60)}"`);
+    logger.info('admin', `audio-preview msgId=${msgId} src=${sourceLang||'auto'} tgt=${targetLang} voice=${voiceParam} orig="${transcription.slice(0,60)}" trans="${translatedText.slice(0,60)}"`);
     res.json({ msgId, transcription, translation: translatedText });
   } catch (err) {
     require('../utils/logger').error('admin', `audio-preview error: ${err.message}`);
