@@ -560,9 +560,13 @@ async function runRedditProspectorCron() {
   for (const config of configs) {
     try {
       await scrapeForClient(supabase, config);
+    } catch (err) {
+      logger.warn('webMiner', `scrape error for ${config.client_id}: ${err.message}`);
+    }
+    try {
       await fetchAndSendDigest(supabase, config);
     } catch (err) {
-      logger.warn('webMiner', `error for client ${config.client_id}: ${err.message}`);
+      logger.warn('webMiner', `digest error for ${config.client_id}: ${err.message}`);
     }
   }
 }
