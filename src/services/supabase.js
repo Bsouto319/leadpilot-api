@@ -668,6 +668,7 @@ async function checkSlotConflict(clientId, scheduledAt, bufferMinutes = 30) {
 }
 
 module.exports = {
+  adminSupabaseClient: () => adminSupabase,
   getClientByTwilioNumber,
   preWarmClientCache,
   getClientById,
