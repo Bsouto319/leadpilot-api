@@ -1161,6 +1161,28 @@ async function processVoiceIntake(req, res) {
 
   // ── STEP: name ────────────────────────────────────────────────────────────
   if (step === 'name') {
+    // Detect voicemail automated messages — discard speech and hang up silently
+    const voicemailPhrases = [
+      /not able to connect/i,
+      /please leave a (message|voicemail)/i,
+      /leave a message after the (beep|tone)/i,
+      /you.ve reached the voicemail/i,
+      /no one is (available|here) to take your call/i,
+      /unable to take your call/i,
+      /press \d (to|for)/i,
+      /currently (not available|unavailable)/i,
+      /call cannot be completed/i,
+      /our (business )?hours are/i,
+      /voicemail (box|system|greeting)/i,
+      /at the (beep|tone), please/i,
+      /try (your call again|again later)/i,
+    ];
+    if (voicemailPhrases.some(p => p.test(speech))) {
+      logger.info('webhook', `voicemail detected for conv=${id} — discarding and hanging up`);
+      res.set('Content-Type', 'text/xml');
+      return res.send(`<Response><Hangup/></Response>`);
+    }
+
     // Extrai primeiro nome sem chamar GPT — remove prefixos comuns
     const cleaned = speech
       .replace(/^(my name is|i'm|i am|it's|this is|hey|hi|hello)\s+/i, '')
@@ -1825,6 +1847,12 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   }
 
   res.sendStatus(200);
+
+  // Detect showroom visit — no home address needed when lead is coming to the showroom
+  const allFormText = [serviceType, additionalNotes, bestTime].filter(Boolean).join(' ');
+  const isShowroomVisit = !leadAddress && /\bshowroom\b/i.test(allFormText);
+  const effectiveAddress = leadAddress || (isShowroomVisit ? 'Showroom visit' : null);
+
   processThumbtackLead({
     clientId,
     leadPhone: rawPhone,
@@ -1834,7 +1862,7 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
     serviceType: serviceType || undefined,
     source: 'website',
     scheduledAt,
-    leadAddress: leadAddress || null,
+    leadAddress: effectiveAddress,
   }).catch(err => handleError('cf7', err));
 });
 
@@ -1960,6 +1988,25 @@ async function parseVoiceDate(req, res) {
   }
 
   const formatted = new Date(isoDate).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  // If address already collected (showroom visit or prior form submission), skip to email
+  if (conv.lead_address) {
+    await updateConv({
+      scheduled_at: isoDate,
+      stage: 'awaiting_address',
+      collected_data: { ...cd, voice_stage: 'asking_email', date_iso: isoDate, date_raw: speech, no_input_count: 0 },
+    });
+    const confirmMsg = `${formatted} — perfect! Last step: could I get your email address so we can send you a written confirmation?`;
+    db.appendMessage(id, 'ai', confirmMsg).catch(() => {});
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response>
+  <Gather input="speech" speechTimeout="auto" timeout="12" action="${BASE}/webhook/voice-intake?convId=${id}&amp;step=email" method="POST">
+    ${el(client, 'ask_email_suffix', confirmMsg)}
+  </Gather>
+  <Redirect method="POST">${BASE}/webhook/voice-intake?convId=${id}&amp;step=email&amp;noInput=1</Redirect>
+</Response>`);
+  }
+
   await updateConv({
     scheduled_at: isoDate,
     stage: 'awaiting_address',
