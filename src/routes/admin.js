@@ -76,12 +76,13 @@ router.get('/google-callback', async (req, res) => {
     }
 
     const field = tokenType === 'calendar' ? 'google_refresh_token' : 'gmail_refresh_token';
-    // Service role bypasses RLS — required because this is a server-side callback (no user JWT)
-    const supabaseAdmin = db.adminSupabaseClient() || db.supabaseClient();
-    const { error: dbErr } = await supabaseAdmin
-      .from('clients')
-      .update({ [field]: tokens.refresh_token })
-      .eq('id', clientId);
+    // save_oauth_token() runs SECURITY DEFINER — bypasses RLS without needing service role key
+    const supabase = db.supabaseClient();
+    const { error: dbErr } = await supabase.rpc('save_oauth_token', {
+      p_client_id: clientId,
+      p_field: field,
+      p_token: tokens.refresh_token,
+    });
 
     if (dbErr) throw new Error(dbErr.message);
 
