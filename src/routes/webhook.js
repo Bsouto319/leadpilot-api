@@ -1084,6 +1084,90 @@ router.post('/voice-intake', (req, res) => {
   });
 });
 
+// ── VOICEMAIL FALLBACK ────────────────────────────────────────────────────────
+// Quando Alice cai na caixa postal de um lead que já preencheu o form com data,
+// lê o conteúdo do form via GPT e envia email personalizado de confirmação.
+// SMS está comentado — descomentar após aprovação A2P do número do cliente.
+async function sendVoicemailFollowUp(conv, client) {
+  if (!conv.scheduled_at) return;
+
+  const tz         = client.timezone || 'America/New_York';
+  const agentName  = client.agent_name || 'Alice';
+  const firstName  = (conv.lead_name || 'there').split(' ')[0];
+  const visitLabel = client.visit_label || 'visit';
+  const serviceRaw = (conv.service_type || '').replace(/_/g, ' ') || 'your project';
+  const formContent = conv.email_body || '';
+
+  const formatted = new Date(conv.scheduled_at).toLocaleString('en-US', {
+    timeZone: tz, weekday: 'long', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  // GPT lê o form e gera mensagem personalizada de 2-3 frases
+  let personalNote = null;
+  if (formContent && process.env.OPENAI_API_KEY) {
+    try {
+      const OpenAI = require('openai');
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 150,
+        messages: [
+          {
+            role: 'system',
+            content: `You are ${agentName}, scheduling assistant for ${client.business_name}. The lead filled a contact form and we couldn't reach them by phone. Write 2-3 warm, professional sentences that: acknowledge something specific from their message, confirm the ${visitLabel} date, and show genuine enthusiasm. Body text only — no greeting, no signature, no subject line. Max 100 words.`,
+          },
+          {
+            role: 'user',
+            content: `Lead: ${firstName}\nForm message: "${formContent}"\nVisit confirmed for: ${formatted}\nService: ${serviceRaw}`,
+          },
+        ],
+      });
+      personalNote = completion.choices[0].message.content.trim();
+    } catch (err) {
+      logger.warn('webhook', `voicemail GPT personalization failed: ${err.message}`);
+    }
+  }
+
+  const fallbackNote = `We tried calling to confirm — no worries! Your ${visitLabel} is all set for ${formatted}. We're excited to help with ${serviceRaw} and can't wait to see you!`;
+  const bodyText = personalNote || fallbackNote;
+
+  // ── Email de confirmação ──────────────────────────────────────────────────
+  if (conv.lead_email) {
+    const subject = `Your ${visitLabel} is confirmed — ${client.business_name}`;
+    const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#222">
+<h2 style="color:#1a1a2e">Hi ${firstName}! 👋</h2>
+<p>${bodyText}</p>
+<div style="background:#f5f5f5;border-radius:8px;padding:16px;margin:20px 0">
+  <p style="margin:0"><strong>📅 Date:</strong> ${formatted}</p>
+  <p style="margin:8px 0 0"><strong>🔨 Service:</strong> ${serviceRaw}</p>
+  ${client.website_url ? `<p style="margin:8px 0 0"><strong>🌐</strong> <a href="${client.website_url}">${client.website_url}</a></p>` : ''}
+</div>
+<p style="color:#666;font-size:13px">Questions? Just reply to this email or give us a call.</p>
+<p style="color:#999;font-size:11px">— ${agentName} · ${client.business_name}</p>
+</body></html>`;
+    sendEmail({
+      from: `${client.business_name} <noreply@btechsouto.shop>`,
+      to: conv.lead_email,
+      subject,
+      html,
+    }).then(() => logger.info('webhook', `voicemail email sent to ${conv.lead_email} conv=${conv.id}`))
+      .catch(err => logger.warn('webhook', `voicemail email failed: ${err.message}`));
+  }
+
+  // ── SMS de confirmação — descomentar após aprovação A2P ───────────────────
+  // if (client.twilio_number && conv.lead_phone) {
+  //   const smsBody = `Hi ${firstName}! ${bodyText}\n\nReply STOP to opt out.`;
+  //   twilioSvc.sendSms({
+  //     to: `+${conv.lead_phone}`,
+  //     from: client.twilio_number,
+  //     body: smsBody,
+  //     credentials: clientCredentials(client),
+  //   }).then(() => logger.info('webhook', `voicemail SMS sent to ${conv.lead_phone} conv=${conv.id}`))
+  //     .catch(err => logger.warn('webhook', `voicemail SMS failed: ${err.message}`));
+  // }
+}
+
 async function processVoiceIntake(req, res) {
   const { convId, callSid, step, noInput } = req.query;
   const speech = (req.body.SpeechResult || '').trim();
@@ -1179,6 +1263,11 @@ async function processVoiceIntake(req, res) {
     ];
     if (voicemailPhrases.some(p => p.test(speech))) {
       logger.info('webhook', `voicemail detected for conv=${id} — discarding and hanging up`);
+      if (conv.scheduled_at) {
+        sendVoicemailFollowUp(conv, client).catch(err =>
+          logger.warn('webhook', `voicemail followup failed: ${err.message}`)
+        );
+      }
       res.set('Content-Type', 'text/xml');
       return res.send(`<Response><Hangup/></Response>`);
     }
