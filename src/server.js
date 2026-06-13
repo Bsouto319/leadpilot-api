@@ -43,7 +43,13 @@ const ALLOWED_ORIGINS = [
 
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
-  if (ALLOWED_ORIGINS.includes(origin)) {
+  // Public webhook routes accept submissions from any website (CF7, landing pages, etc.)
+  const isPublicWebhook = /^\/webhook\/(cf7|thumbtack)/.test(req.path);
+  if (isPublicWebhook) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  } else if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-key');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
