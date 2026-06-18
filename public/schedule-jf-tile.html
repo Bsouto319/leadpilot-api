@@ -517,6 +517,20 @@
   </footer>
 
   <script>
+    // Detecta cidade do visitante via IP (silencioso)
+    var _visitorGeo = { city: '', region: '', country: '', ip: '' };
+    (async function() {
+      try {
+        var geo = await fetch('https://ipapi.co/json/').then(function(r){ return r.json(); });
+        if (geo && !geo.error) {
+          _visitorGeo.city    = geo.city            || '';
+          _visitorGeo.region  = geo.region          || '';
+          _visitorGeo.country = geo.country_name    || '';
+          _visitorGeo.ip      = geo.ip              || '';
+        }
+      } catch (_) {}
+    })();
+
     // Hero background
     (function() {
       document.getElementById('hero-bg').style.backgroundImage = "url('/jf-tile/gallery1.jpg')";
@@ -568,14 +582,18 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name:         (fname + ' ' + lname).trim(),
-            phone:        phone,
-            email:        email || '',
-            service_type: type,
-            date:         date,
-            time:         time,
-            address:      address || '',
-            notes:        notes  || '',
+            name:            (fname + ' ' + lname).trim(),
+            phone:           phone,
+            email:           email || '',
+            service_type:    type,
+            date:            date,
+            time:            time,
+            address:         address || '',
+            notes:           notes  || '',
+            'visitor-city':    _visitorGeo.city,
+            'visitor-region':  _visitorGeo.region,
+            'visitor-country': _visitorGeo.country,
+            'visitor-ip':      _visitorGeo.ip,
           }),
         });
         if (!res.ok) throw new Error('server ' + res.status);
