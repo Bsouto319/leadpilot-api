@@ -890,7 +890,8 @@
 </footer>
 
 <script>
-  // Lock past dates + block Sundays
+  // Lock past dates + block Sundays + blocked date ranges
+  const BLOCKED_DATES = ['2026-06-19','2026-06-20','2026-06-21','2026-06-22'];
   const di = document.getElementById('dateInput');
   if (di) {
     di.min = new Date().toISOString().split('T')[0];
@@ -899,6 +900,22 @@
       const mondayMsg  = document.getElementById('mondayMsg');
       const timeSelect = document.getElementById('timeSelect');
       if (!this.value) return;
+      // Block specific dates (vacation / closed)
+      if (BLOCKED_DATES.includes(this.value)) {
+        this.value = '';
+        sundayMsg.style.display = 'none';
+        mondayMsg.style.display = 'none';
+        if (!document.getElementById('blockedMsg')) {
+          const m = document.createElement('p');
+          m.id = 'blockedMsg';
+          m.style.cssText = 'color:#c95210;font-size:0.78rem;margin-top:5px;font-weight:500';
+          m.textContent = 'Showroom is closed on this date. Please choose another day.';
+          this.parentNode.appendChild(m);
+        }
+        document.getElementById('blockedMsg').style.display = 'block';
+        return;
+      }
+      if (document.getElementById('blockedMsg')) document.getElementById('blockedMsg').style.display = 'none';
       const day = new Date(this.value + 'T12:00:00').getDay();
       if (day === 0) {
         this.value = '';
