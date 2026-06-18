@@ -780,6 +780,11 @@
           <a href="https://leads.btechsouto.shop/terms/cp-cabinets" target="_blank">Terms of Service</a>
         </div>
 
+        <input type="hidden" name="visitor-city"    id="visitorCity" />
+        <input type="hidden" name="visitor-region"  id="visitorRegion" />
+        <input type="hidden" name="visitor-country" id="visitorCountry" />
+        <input type="hidden" name="visitor-ip"      id="visitorIp" />
+
         <button type="submit" class="btn-submit" id="submitBtn">
           <span id="btnText">Request My Free Visit →</span>
         </button>
@@ -890,6 +895,19 @@
 </footer>
 
 <script>
+  // Detecta cidade do visitante via IP (silencioso, sem pedir permissão)
+  (async () => {
+    try {
+      const geo = await fetch('https://ipapi.co/json/').then(r => r.json());
+      if (geo && !geo.error) {
+        document.getElementById('visitorCity').value    = geo.city    || '';
+        document.getElementById('visitorRegion').value  = geo.region  || '';
+        document.getElementById('visitorCountry').value = geo.country_name || '';
+        document.getElementById('visitorIp').value      = geo.ip      || '';
+      }
+    } catch (_) {}
+  })();
+
   // Lock past dates + block Sundays + blocked date ranges
   const BLOCKED_DATES = ['2026-06-19','2026-06-20','2026-06-21','2026-06-22'];
   const di = document.getElementById('dateInput');

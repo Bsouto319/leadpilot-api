@@ -1836,18 +1836,25 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   const serviceType     = getField(body, 'your-project', 'your-service', 'service', 'service-type', 'project', 'project-type', 'service_type');
   const additionalNotes = getField(body, 'your-message', 'message', 'additional-notes', 'notes', 'comments');
   const leadAddress     = getField(body, 'address', 'lead-address', 'your-address', 'street-address') || null;
+  const visitorCity     = getField(body, 'visitor-city', 'visitor_city') || null;
+  const visitorRegion   = getField(body, 'visitor-region', 'visitor_region') || null;
+  const visitorCountry  = getField(body, 'visitor-country', 'visitor_country') || null;
+  const visitorIp       = getField(body, 'visitor-ip', 'visitor_ip') || null;
 
   if (!rawPhone) {
     logger.warn('cf7', `missing phone field — body keys: ${Object.keys(body).join(', ')}`);
     return res.sendStatus(200);
   }
 
+  const visitorLocation = [visitorCity, visitorRegion, visitorCountry].filter(Boolean).join(', ');
   const serviceNote = [
     serviceType      && `Service: ${serviceType}`,
     visitDate        && `Preferred visit date: ${visitDate}`,
     bestTime         && `Best time: ${bestTime}`,
     leadAddress      && `Address: ${leadAddress}`,
     additionalNotes  && `Notes: ${additionalNotes}`,
+    visitorLocation  && `Location: ${visitorLocation}`,
+    visitorIp        && `IP: ${visitorIp}`,
   ].filter(Boolean).join(' | ') || 'Website contact form';
 
   // Convert visitDate + bestTime into scheduledAt ISO in the client's timezone
