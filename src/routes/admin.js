@@ -1027,7 +1027,7 @@ router.post('/send-audio-call', express.json({ limit: '10mb' }), async (req, res
 
     // 4. Generate ElevenLabs TTS with selected voice
     const msgId  = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const mp3Buf = await elevenlabs.generateMp3(translatedText, voiceId);
+    const mp3Buf = await elevenlabs.generateMp3(translatedText, voiceId, targetLang);
     const mp3Path = path.join(AUDIO_DIR, `vmsg-${msgId}.mp3`);
     fs.writeFileSync(mp3Path, mp3Buf);
     logger.info('admin', `audio-call mp3 ready msgId=${msgId} bytes=${mp3Buf.length}`);
