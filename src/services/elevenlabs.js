@@ -126,7 +126,7 @@ function phraseUrl(baseUrl, clientId, phraseKey) {
 }
 
 // ── ElevenLabs API call ───────────────────────────────────────────────────────
-async function generateMp3(text, voiceId) {
+async function generateMp3(text, voiceId, language = 'en') {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) throw new Error('ELEVENLABS_API_KEY not set');
 
@@ -134,10 +134,12 @@ async function generateMp3(text, voiceId) {
     throw new Error(`Phrase too long: ${text.length} chars (max ${MAX_CHARS_PER_PHRASE}). Shorten it.`);
   }
 
-  const vid  = VOICE_IDS[voiceId] || voiceId || VOICE_IDS[DEFAULT_VOICE];
+  const vid     = VOICE_IDS[voiceId] || voiceId || VOICE_IDS[DEFAULT_VOICE];
+  // eleven_monolingual_v1 = English only; use multilingual_v2 for any other language
+  const modelId = language === 'en' ? 'eleven_monolingual_v1' : 'eleven_multilingual_v2';
   const body = JSON.stringify({
     text,
-    model_id: 'eleven_monolingual_v1',
+    model_id: modelId,
     voice_settings: { stability: 0.52, similarity_boost: 0.75, style: 0.25, use_speaker_boost: true },
   });
 

@@ -882,7 +882,7 @@ router.post('/audio-call-preview', async (req, res) => {
 
     const msgId    = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const voiceId  = voiceParam === 'male' ? VOICE_MALE : VOICE_FEMALE;
-    const mp3Buf   = await elevenlabs.generateMp3(translatedText, voiceId);
+    const mp3Buf   = await elevenlabs.generateMp3(translatedText, voiceId, targetLang);
     const mp3Path  = path.join(AUDIO_DIR, `vmsg-${msgId}.mp3`);
     fs.writeFileSync(mp3Path, mp3Buf);
 
