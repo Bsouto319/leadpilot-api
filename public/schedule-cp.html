@@ -628,6 +628,27 @@
     .footer-links a { color: rgba(232,98,26,0.7); text-decoration: none; margin: 0 7px; }
     .footer-links a:hover { color: var(--orange); }
 
+    /* ─── VISIT TYPE SELECTOR ─────────────────────── */
+    .visit-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+    .visit-opt {
+      border: 2px solid var(--border); border-radius: 12px; padding: 16px 14px;
+      cursor: pointer; transition: all .2s; text-align: center; background: #f9f7f4;
+      position: relative;
+    }
+    .visit-opt:hover { border-color: var(--orange); background: var(--white); }
+    .visit-opt.selected { border-color: var(--orange); background: rgba(232,98,26,0.07); box-shadow: 0 0 0 3px rgba(232,98,26,0.1); }
+    .visit-opt-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+    .visit-opt-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+    .visit-opt-sub { font-size: 11px; color: var(--light); line-height: 1.4; }
+    .visit-opt-check {
+      position: absolute; top: 10px; right: 10px;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--orange); display: none;
+      align-items: center; justify-content: center;
+      font-size: 10px; color: #fff; font-weight: 800;
+    }
+    .visit-opt.selected .visit-opt-check { display: flex; }
+
     /* ─── ANIMATIONS ──────────────────────────────── */
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(18px); }
@@ -690,6 +711,29 @@
 
       <form id="scheduleForm" novalidate>
 
+        <!-- VISIT TYPE -->
+        <div class="f-section">
+          <div class="f-section-label">How Would You Like to Meet?</div>
+          <div class="visit-selector">
+            <div class="visit-opt" id="opt-inhome" onclick="selectVisitType('inhome')">
+              <div class="visit-opt-check">✓</div>
+              <span class="visit-opt-icon">🏠</span>
+              <div class="visit-opt-title">In-Home Estimate</div>
+              <div class="visit-opt-sub">Our specialist comes to you — measures your space and gives a quote on the spot</div>
+            </div>
+            <div class="visit-opt" id="opt-showroom" onclick="selectVisitType('showroom')">
+              <div class="visit-opt-check">✓</div>
+              <span class="visit-opt-icon">🏪</span>
+              <div class="visit-opt-title">Visit Our Showroom</div>
+              <div class="visit-opt-sub">Come see our full collections in person — touch doors, compare colors, get a free quote</div>
+            </div>
+          </div>
+          <div id="showroom-hint" style="display:none;background:#f9f7f4;border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:13px;color:var(--muted);margin-top:4px;">
+            📍 <strong style="color:var(--navy);">1085 Lake Murray Blvd, Suite E — Irmo, SC 29063</strong><br>Mon–Fri 9:00 AM – 4:00 PM · Saturday by appointment
+          </div>
+          <input type="hidden" name="visit-type" id="visitTypeInput" />
+        </div>
+
         <!-- CONTACT INFO -->
         <div class="f-section">
           <div class="f-section-label">Contact Info</div>
@@ -707,6 +751,14 @@
             <div class="field">
               <label>Email</label>
               <input type="email" name="your-email" placeholder="john@email.com" autocomplete="email" />
+            </div>
+          </div>
+
+          <!-- In-home: customer address (shown only when In-Home is selected) -->
+          <div class="row2" id="row-address" style="display:none;">
+            <div class="field" style="grid-column:1/-1;">
+              <label>Your Home Address <span class="req">*</span></label>
+              <input type="text" name="your-address" id="addressInput" placeholder="123 Main St, Columbia, SC 29201" autocomplete="street-address" />
             </div>
           </div>
         </div>
@@ -900,6 +952,20 @@
 </footer>
 
 <script>
+  var selectedVisitType = '';
+  function selectVisitType(type) {
+    selectedVisitType = type;
+    document.getElementById('opt-inhome').classList.toggle('selected', type === 'inhome');
+    document.getElementById('opt-showroom').classList.toggle('selected', type === 'showroom');
+    document.getElementById('row-address').style.display   = type === 'inhome'   ? 'flex' : 'none';
+    document.getElementById('showroom-hint').style.display = type === 'showroom' ? 'block' : 'none';
+    document.getElementById('visitTypeInput').value = type;
+    var btn = document.getElementById('btnText');
+    if (btn) {
+      btn.textContent = type === 'inhome' ? 'Request In-Home Estimate →' : 'Book My Showroom Visit →';
+    }
+  }
+
   // Detecta cidade do visitante via IP (silencioso, sem pedir permissão)
   (async () => {
     try {
@@ -1000,6 +1066,22 @@
     const btnText = document.getElementById('btnText');
     const err     = document.getElementById('errorMsg');
 
+    // Visit type validation
+    if (!selectedVisitType) {
+      err.textContent = 'Please select a visit type — In-Home Estimate or Showroom Visit.';
+      err.style.display = 'block';
+      return;
+    }
+
+    // In-home address validation
+    const addrInput = document.getElementById('addressInput');
+    if (selectedVisitType === 'inhome' && addrInput && !addrInput.value.trim()) {
+      err.textContent = 'Please enter your home address for the in-home estimate.';
+      err.style.display = 'block';
+      addrInput.focus();
+      return;
+    }
+
     // Basic validation
     const name  = this.querySelector('[name="your-name"]').value.trim();
     const phone = this.querySelector('[name="your-phone"]').value.trim();
@@ -1043,24 +1125,31 @@
         body: data.toString(),
       });
 
+      const visitLabel = selectedVisitType === 'inhome' ? 'Request In-Home Estimate →' : 'Book My Showroom Visit →';
+
       if (res.status === 409) {
         const json = await res.json().catch(() => ({}));
         err.textContent = json.message || 'This time slot is already booked. Please choose a different date or time.';
         err.style.display = 'block';
         btn.disabled = false;
-        btnText.textContent = 'Request My Free Visit →';
+        btnText.textContent = visitLabel;
         return;
       }
 
       if (!res.ok) throw new Error('server');
 
       this.style.display = 'none';
-      document.getElementById('successMsg').style.display = 'block';
+      const successEl = document.getElementById('successMsg');
+      if (selectedVisitType === 'inhome') {
+        successEl.querySelector('p').textContent = 'Thank you! Our specialist will contact you shortly to confirm your in-home estimate. Check your email for details.';
+      }
+      successEl.style.display = 'block';
     } catch {
+      const visitLabel = selectedVisitType === 'inhome' ? 'Request In-Home Estimate →' : 'Book My Showroom Visit →';
       err.textContent = 'Something went wrong. Please call us directly at (803) 373-8191.';
       err.style.display = 'block';
       btn.disabled = false;
-      btnText.textContent = 'Request My Free Visit →';
+      btnText.textContent = visitLabel;
     }
   });
 </script>
