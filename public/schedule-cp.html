@@ -1030,8 +1030,8 @@
           m.style.cssText = 'color:#c95210;font-size:0.78rem;margin-top:5px;font-weight:500';
           const isJuneteenth = ['2026-06-19','2026-06-20','2026-06-21','2026-06-22'].includes(this.value);
           m.textContent = isJuneteenth
-            ? 'We're closed June 19–22 for the Juneteenth holiday. We'll be back on Tuesday, June 23.'
-            : 'Showroom is closed on this date. Please choose another day.';
+            ? "We're closed June 19–22 for the Juneteenth holiday. We'll be back on Tuesday, June 23."
+            : "Showroom is closed on this date. Please choose another day.";
           this.parentNode.appendChild(m);
         }
         document.getElementById('blockedMsg').style.display = 'block';
