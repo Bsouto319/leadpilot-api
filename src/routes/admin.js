@@ -951,7 +951,9 @@ router.post('/audio-call-send', express.json(), async (req, res) => {
 // Flow: Whisper transcription → GPT translate to English → ElevenLabs Hope TTS
 //       → store MP3 → Twilio outbound call with <Play>
 router.post('/send-audio-call', express.json({ limit: '10mb' }), async (req, res) => {
-  const { audioBase64, audioMimetype, phone, clientId } = req.body || {};
+  const { audioBase64, audioMimetype, phone, clientId, targetLang: targetLangParam, voice: voiceParam } = req.body || {};
+  const targetLang = targetLangParam || 'en';
+  const voiceId    = voiceParam === 'male' ? 'adam' : 'hope';
   if (!audioBase64 || !phone || !clientId) {
     return res.status(400).json({ error: 'audioBase64, phone and clientId are required' });
   }
@@ -996,24 +998,36 @@ router.post('/send-audio-call', express.json({ limit: '10mb' }), async (req, res
     }
     logger.info('admin', `audio-call transcription: "${transcription.slice(0, 120)}"`);
 
-    // 3. Translate to natural English via GPT (handles PT, ES, or already-EN)
+    // 3. Translate via GPT to the requested target language
+    const TARGET_LANG_NAMES = {
+      en: 'clear, natural American English',
+      es: 'clear, natural Spanish',
+      pt: 'clear, natural Brazilian Portuguese',
+      fr: 'clear, natural French',
+      de: 'clear, natural German',
+      it: 'clear, natural Italian',
+      zh: 'clear, natural Mandarin Chinese',
+      ja: 'clear, natural Japanese',
+      ko: 'clear, natural Korean',
+    };
+    const targetLangName = TARGET_LANG_NAMES[targetLang] || 'clear, natural American English';
     const translateRes = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       max_tokens: 200,
       messages: [
         {
           role: 'system',
-          content: 'You are a professional translator. Translate the following message to clear, natural American English suitable for a phone call. Keep it under 300 characters. Output ONLY the translated text — no quotes, no labels, nothing else.',
+          content: `You are a professional translator. Translate the following message to ${targetLangName} suitable for a phone call. Keep it under 300 characters. Output ONLY the translated text — no quotes, no labels, nothing else.`,
         },
         { role: 'user', content: transcription },
       ],
     });
     const translatedText = translateRes.choices[0].message.content.trim().slice(0, 300);
-    logger.info('admin', `audio-call translation: "${translatedText}"`);
+    logger.info('admin', `audio-call translation tgt=${targetLang}: "${translatedText}"`);
 
-    // 4. Generate ElevenLabs Hope TTS
+    // 4. Generate ElevenLabs TTS with selected voice
     const msgId  = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const mp3Buf = await elevenlabs.generateMp3(translatedText, 'hope');
+    const mp3Buf = await elevenlabs.generateMp3(translatedText, voiceId);
     const mp3Path = path.join(AUDIO_DIR, `vmsg-${msgId}.mp3`);
     fs.writeFileSync(mp3Path, mp3Buf);
     logger.info('admin', `audio-call mp3 ready msgId=${msgId} bytes=${mp3Buf.length}`);
