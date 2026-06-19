@@ -922,7 +922,19 @@
   const BLOCKED_DATES = ['2026-06-19','2026-06-20','2026-06-21','2026-06-22'];
   const di = document.getElementById('dateInput');
   if (di) {
-    di.min = new Date().toISOString().split('T')[0];
+    // Calcula min date pulando feriados e domingo
+    (() => {
+      let d = new Date();
+      let day = d.toISOString().split('T')[0];
+      for (let i = 0; i < 30; i++) {
+        const dow = new Date(day + 'T12:00:00').getDay();
+        if (!BLOCKED_DATES.includes(day) && dow !== 0) break;
+        const next = new Date(day + 'T12:00:00');
+        next.setDate(next.getDate() + 1);
+        day = next.toISOString().split('T')[0];
+      }
+      di.min = day;
+    })();
     di.addEventListener('change', function () {
       const sundayMsg  = document.getElementById('sundayMsg');
       const mondayMsg  = document.getElementById('mondayMsg');
