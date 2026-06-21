@@ -52,10 +52,10 @@ function clientBranding(client) {
 
 function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, step, logoUrl, cityState, addressDisplay, contactPhone }) {
   const firstName = (leadName || 'there').split(' ')[0];
-  logoUrl       = logoUrl       || '';
-  cityState     = cityState     || '';
-  addressDisplay= addressDisplay|| '';
-  contactPhone  = contactPhone  || '';
+  logoUrl        = logoUrl        || '';
+  cityState      = cityState      || '';
+  addressDisplay = addressDisplay || '';
+  contactPhone   = contactPhone   || '';
   const subjects = {
     1: `We received your request — ${businessName} will call you shortly!`,
     2: `Still interested? — ${businessName}`,
@@ -73,66 +73,32 @@ function buildCatalogEmail({ leadName, businessName, scheduleUrl, websiteUrl, st
 <body>
 <div class="wrap">
   <div class="header">
-    <img src="${logoUrl}" alt="${businessName}" style="max-width:200px;width:100%;height:auto;display:block;margin:0 auto 14px auto;" />
+    ${logoUrl ? `<img src="${logoUrl}" alt="${businessName}" style="max-width:200px;width:100%;height:auto;display:block;margin:0 auto 14px auto;" />` : ''}
     <h1>${businessName}</h1>
-    <p>${cityState}</p>
+    ${cityState ? `<p>${cityState}</p>` : ''}
   </div>
 
   <div class="hero">
-    <h2>Built to Last — All-Plywood Kitchen Cabinets</h2>
-    <p>No Particle Board. Just Premium Plywood and Solid Wood Quality.</p>
+    <h2>We're ready to help with your project!</h2>
+    <p>Quality work, professional service, free estimate.</p>
   </div>
 
   <div class="body">
     <p>${intros[step]}</p>
 
-    <div class="collections">
-
-      <div class="col-item">
-        <img class="col-img" src="https://cpcabinets.com/wp-content/uploads/2026/02/SAG_SWO2-2-500x500.jpg" alt="Shaker Collection" />
-        <div class="col-body">
-          <h3>🏠 Shaker Collection</h3>
-          <p>Timeless elegance with 5-piece solid wood doors, 3/4" solid wood frame, and 1/2" plywood box. Dovetail drawer construction with soft-close throughout.</p>
-          <div class="colors">Available in: Shaker White, Espresso, Navy Blue, Iron Black, Sage Breeze, Luna Grey + more</div>
-        </div>
-      </div>
-
-      <div class="col-item">
-        <img class="col-img" src="https://cpcabinets.com/wp-content/uploads/2026/02/Slim-Shaker-3.png" alt="Slim Shaker Collection" />
-        <div class="col-body">
-          <h3>✨ Slim Shaker Collection</h3>
-          <p>Modern minimalist design blending simplicity and sophistication. Premium all-plywood construction with a contemporary narrow frame.</p>
-          <div class="colors">Available in: Amber Oak, Aston Green, Dove White, High Gloss White, High Gloss Gray, Matt Black</div>
-        </div>
-      </div>
-
-      <div class="col-item">
-        <img class="col-img" src="https://cpcabinets.com/wp-content/uploads/2026/02/Frameless-1.jpg" alt="European Frameless Collection" />
-        <div class="col-body">
-          <h3>💎 European (Frameless) Collection</h3>
-          <p>Sleek, full-access cabinets with PET high-gloss slab doors and 3/4" plywood construction. The ultimate in modern luxury.</p>
-          <div class="colors">Available in: Crystal Glass, Midnight Glass, Oak Blonde, Oak Shade, Matt Black, Matt Ivory</div>
-        </div>
-      </div>
-
-    </div>
-
     <div class="cta-block">
-      <a href="${scheduleUrl}" class="cta">📅 Schedule My Free Showroom Visit</a>
+      <a href="${scheduleUrl}" class="cta">📅 Schedule My Free Estimate</a>
     </div>
 
     <div class="divider"></div>
 
-    <div class="info">
+    ${addressDisplay || contactPhone ? `<div class="info">
       <p>
-        📍 <strong>1085 Lake Murray Blvd, Suite E, Irmo, SC 29063</strong><br>
-        📞 <strong>(803) 373-8191</strong><br>
-        🕐 Mon–Fri, 9AM–4PM (by appointment)<br>
-        ✅ TSCA VI &amp; KCMA Certified
+        ${addressDisplay ? `📍 <strong>${addressDisplay}</strong><br>` : ''}
+        ${contactPhone   ? `📞 <strong>${contactPhone}</strong><br>`   : ''}
+        🕐 Mon–Fri, 9AM–5PM
       </p>
-    </div>
-
-    <p style="color:#888;font-size:13px;">We also offer <strong>quartz countertops</strong>, <strong>bathroom cabinets</strong>, and <strong>vinyl flooring</strong> — all in one showroom visit.</p>
+    </div>` : ''}
   </div>
 
   <div class="footer">
@@ -206,7 +172,7 @@ function buildConfirmationEmail({ leadName, businessName, serviceType, scheduleU
       <a href="${scheduleUrl}" class="cta">📅 Schedule My Free Visit</a>
     </div>` : ''}
 
-    <p style="color:#888;font-size:13px;">If you have any questions in the meantime, call us directly at (803) 373-8191.</p>
+    ${contactPhone ? `<p style="color:#888;font-size:13px;">If you have any questions in the meantime, call us directly at ${contactPhone}.</p>` : ''}
   </div>
   <div class="footer">
     <p>© 2026 ${businessName}</p>
