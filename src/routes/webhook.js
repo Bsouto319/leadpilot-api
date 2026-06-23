@@ -11,6 +11,7 @@ const elevenlabs = require('../services/elevenlabs');
 const { sendEmail } = require('../services/gmail');
 const { makeNotifyCall } = require('../services/twilio');
 const { triggerZipQualifier } = require('../services/zipQualifier');
+const { validateLead } = require('../utils/spamFilter');
 
 // Parser rápido de data por regex — cobre ~90% dos casos sem chamar OpenAI.
 // Retorna ISO string ou null (fallback para GPT).
@@ -1844,6 +1845,13 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   if (!rawPhone) {
     logger.warn('cf7', `missing phone field — body keys: ${Object.keys(body).join(', ')}`);
     return res.sendStatus(200);
+  }
+
+  // Spam / bot filter
+  const spamCheck = validateLead({ body: rawBody, phone: rawPhone, email: leadEmail });
+  if (!spamCheck.ok) {
+    logger.warn('cf7', `spam blocked clientId=${clientId} reason=${spamCheck.reason} name=${leadName} email=${leadEmail} phone=${rawPhone}`);
+    return res.sendStatus(200); // silent discard — don't tip off bots
   }
 
   const visitorLocation = [visitorCity, visitorRegion, visitorCountry].filter(Boolean).join(', ');
