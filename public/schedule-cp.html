@@ -821,7 +821,22 @@
           </div>
 
           <div class="field">
-            <label>Your City <span style="color:var(--light);font-weight:400;text-transform:none;letter-spacing:0">(optional — we already detect your area)</span></label>
+            <label>Your Service Area</label>
+            <div class="sel-wrap">
+              <select name="your-area" id="areaSelect" onchange="onAreaChange(this.value)">
+                <option value="">— Select your area —</option>
+                <option value="Irmo / Columbia, SC">Irmo / Columbia, SC (Midlands)</option>
+                <option value="Charleston, SC">Charleston, SC</option>
+                <option value="Other SC area">Other SC area</option>
+              </select>
+            </div>
+            <div id="charleston-hint" style="display:none;background:#f0faf4;border:1px solid #a3d9b5;border-radius:9px;padding:12px 14px;font-size:13px;color:#1a6b40;margin-top:8px;">
+              📍 <strong>We have a Local Sales Representative in Charleston, SC.</strong> They will come directly to you — no need to drive to Irmo!
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Your City <span style="color:var(--light);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
             <input type="text" name="your-city" id="cityInput" placeholder="e.g. Columbia, SC" autocomplete="address-level2" />
           </div>
 
@@ -953,6 +968,11 @@
 
 <script>
   var selectedVisitType = '';
+
+  function onAreaChange(val) {
+    var hint = document.getElementById('charleston-hint');
+    if (hint) hint.style.display = val === 'Charleston, SC' ? 'block' : 'none';
+  }
 
   function selectVisitType(type) {
     selectedVisitType = type;
