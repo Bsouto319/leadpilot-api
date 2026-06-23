@@ -48,21 +48,27 @@ router.post('/webhook/dialpad/:clientId', express.json(), async (req, res) => {
 
     if (upsertErr) logger.error('[Dialpad webhook] upsert error', upsertErr);
 
-    // If missed call → create conversation lead for follow-up
-    if (status === 'missed' && callerNum) {
+    // Every inbound call (missed OR answered) → create/update lead in Kanban
+    if (callerNum && direction === 'inbound') {
       const phone = callerNum.startsWith('1') ? callerNum : '1' + callerNum;
-      const exists = await db.checkDuplicate(clientId, phone, 120); // 2h window
+      const exists = await db.checkDuplicate(clientId, phone, 120); // 2h dedup window
       if (!exists) {
-        await db.saveLead({
-          clientId,
-          leadPhone:   phone,
-          leadName:    callerName,
-          source:      'dialpad_missed',
-          serviceType: 'unknown',
-          message:     `Missed call via Dialpad (${CP_DIALPAD_NUM}). Area: ${area}`,
-          stage:       'new_lead',
+        const isMissed = status === 'missed' || status === 'voicemail';
+        const leadStage = isMissed ? 'new_lead' : 'ai_responded';
+        const sourceTag = isMissed ? 'dialpad_missed' : 'dialpad_answered';
+        const areaLabel = area ? ` · Area: ${area}` : '';
+        const durLabel  = duration ? ` · ${duration}s` : '';
+        await db.supabaseClient().from('conversations').insert({
+          client_id:    clientId,
+          lead_name:    callerName || 'Caller',
+          lead_phone:   phone,
+          source:       sourceTag,
+          stage:        leadStage,
+          service_type: 'unknown',
+          email_body:   `${isMissed ? 'Missed' : 'Answered'} call via Dialpad (${CP_DIALPAD_NUM})${areaLabel}${durLabel}`,
+          created_at:   new Date().toISOString(),
         });
-        logger.info(`[Dialpad] Missed call → lead created for ${phone}`);
+        logger.info(`[Dialpad] ${isMissed ? 'Missed' : 'Answered'} call → lead created stage=${leadStage} for ${phone}`);
       }
     }
   } catch (err) {
