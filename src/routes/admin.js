@@ -137,7 +137,7 @@ router.get('/health', (req, res) => {
 });
 
 // ─── Dialpad: toggle Alice + quick stats summary ───────────────────────────
-router.get('/dialpad/summary/:clientId', adminAuth, async (req, res) => {
+router.get('/dialpad/summary/:clientId', authMiddleware, async (req, res) => {
   try {
     const { clientId } = req.params;
     const since = new Date(Date.now() - 30 * 86400000).toISOString();
