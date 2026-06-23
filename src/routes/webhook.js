@@ -994,6 +994,17 @@ async function startVoiceIntake(req, res) {
 
   const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
 
+  // Dialpad integration: se Alice estiver OFF, encaminha para o celular do dono
+  // (Dialpad encaminhou permanentemente para este número Twilio; o toggle só muda o comportamento aqui)
+  if (client.dialpad_twilio_forward_number && !client.dialpad_alice_active) {
+    const fallback = client.owner_phone;
+    if (fallback) {
+      logger.info('webhook', `[Dialpad] Alice OFF — bridging to owner ${fallback}`);
+      res.set('Content-Type', 'text/xml');
+      return res.send(`<Response><Dial timeout="30" callerId="${twilioNumber}">${fallback}</Dial></Response>`);
+    }
+  }
+
   // Modo manual: toca no browser antes de cair na IA
   if (client.manual_mode) {
     // Ainda precisa de conversa para o fallback — cria async antes de responder

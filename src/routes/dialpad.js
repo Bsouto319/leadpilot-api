@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../services/supabase');
+const { invalidateClientCacheById } = require('../services/supabase');
 const { calcLeadScore, detectArea, enableForwarding, disableForwarding, findNumberId } = require('../services/dialpad');
 const logger  = require('../utils/logger');
 
@@ -77,6 +78,10 @@ router.post('/webhook/dialpad/:clientId', express.json(), async (req, res) => {
 });
 
 // ─── Toggle Alice ON / OFF ────────────────────────────────────────────────────
+// Dialpad encaminha permanentemente (803)373-8191 → Twilio +18038825001.
+// Este toggle só controla o comportamento da Alice quando a ligação chega no Twilio:
+//   ON  → Alice roda intake de IA
+//   OFF → Twilio conecta direto ao celular do Glauber
 router.post('/dialpad/toggle', express.json(), async (req, res) => {
   try {
     const { clientId, active } = req.body;
@@ -84,41 +89,20 @@ router.post('/dialpad/toggle', express.json(), async (req, res) => {
       return res.status(400).json({ error: 'clientId and active (bool) required' });
     }
 
-    // Get client config
     const { data: client, error: clientErr } = await db.supabaseClient()
       .from('clients')
-      .select('dialpad_number_id, dialpad_twilio_forward_number, business_name')
+      .select('business_name')
       .eq('id', clientId)
       .single();
 
     if (clientErr || !client) return res.status(404).json({ error: 'Client not found' });
 
-    let numberId = client.dialpad_number_id;
-
-    // Find number ID if not cached
-    if (!numberId) {
-      numberId = await findNumberId(CP_DIALPAD_NUM);
-      if (!numberId) return res.status(500).json({ error: 'Dialpad number not found' });
-      await db.supabaseClient().from('clients').update({ dialpad_number_id: numberId }).eq('id', clientId);
-    }
-
-    const twilioFwd = client.dialpad_twilio_forward_number;
-    if (active && !twilioFwd) {
-      return res.status(400).json({ error: 'dialpad_twilio_forward_number not configured for this client' });
-    }
-
-    if (active) {
-      await enableForwarding(numberId, twilioFwd);
-    } else {
-      await disableForwarding(numberId);
-    }
-
-    // Persist toggle state
     await db.supabaseClient()
       .from('clients')
       .update({ dialpad_alice_active: active })
       .eq('id', clientId);
 
+    invalidateClientCacheById(clientId); // força próxima ligação a reler o DB
     logger.info(`[Dialpad] Alice toggle → ${active ? 'ON' : 'OFF'} for ${client.business_name}`);
     return res.json({ ok: true, alice_active: active });
   } catch (err) {
