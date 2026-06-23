@@ -136,6 +136,30 @@ router.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 
+// ─── Dialpad: toggle Alice + quick stats summary ───────────────────────────
+router.get('/dialpad/summary/:clientId', adminAuth, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    const [{ data: client }, { data: calls }] = await Promise.all([
+      db.supabase.from('clients').select('dialpad_alice_active').eq('id', clientId).single(),
+      db.supabase.from('dialpad_calls').select('status,duration_seconds,area,started_at,caller_number,caller_name,recording_url,lead_score')
+        .eq('client_id', clientId).gte('started_at', since).order('started_at', { ascending: false }),
+    ]);
+    const total    = (calls || []).length;
+    const missed   = (calls || []).filter(c => c.status === 'missed').length;
+    const answered = total - missed;
+    res.json({
+      alice_active: client?.dialpad_alice_active || false,
+      total, answered, missed,
+      miss_rate: total ? Math.round((missed / total) * 100) : 0,
+      recent_calls: (calls || []).slice(0, 20),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Diagnóstico e correção automática das permissões de voz Twilio
 router.post('/twilio-fix', async (req, res) => {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;

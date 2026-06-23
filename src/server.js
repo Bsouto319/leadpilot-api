@@ -14,6 +14,7 @@ const errorHandler = require('./middleware/errorHandler');
 const webhookRoutes = require('./routes/webhook');
 const adminRoutes   = require('./routes/admin');
 const cronRoutes    = require('./routes/cron');
+const dialpadRoutes = require('./routes/dialpad');
 const db         = require('./services/supabase');
 const twilioSvc  = require('./services/twilio');
 const gmailSvc   = require('./services/gmail');
@@ -179,6 +180,7 @@ app.get('/audio/greeting/:clientId', (req, res) => {
 app.use('/webhook', webhookRoutes);
 app.use('/api/admin', adminLimiter, adminRoutes);
 app.use('/api/cron',  cronLimiter,  cronRoutes);
+app.use('/api',       dialpadRoutes);
 
 // ── Reddit DM via email button (GET, key in query) ────────────────────────────
 app.get('/dm/reddit', async (req, res) => {
