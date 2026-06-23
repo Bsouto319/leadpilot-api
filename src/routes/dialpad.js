@@ -28,7 +28,7 @@ router.post('/webhook/dialpad/:clientId', express.json(), async (req, res) => {
     const score      = calcLeadScore({ duration, direction, started_at: startedAt });
 
     // Upsert dialpad_calls
-    const { error: upsertErr } = await db.supabase
+    const { error: upsertErr } = await db.supabaseClient()
       .from('dialpad_calls')
       .upsert({
         client_id:       clientId,
@@ -79,7 +79,7 @@ router.post('/dialpad/toggle', express.json(), async (req, res) => {
     }
 
     // Get client config
-    const { data: client, error: clientErr } = await db.supabase
+    const { data: client, error: clientErr } = await db.supabaseClient()
       .from('clients')
       .select('dialpad_number_id, dialpad_twilio_forward_number, business_name')
       .eq('id', clientId)
@@ -93,7 +93,7 @@ router.post('/dialpad/toggle', express.json(), async (req, res) => {
     if (!numberId) {
       numberId = await findNumberId(CP_DIALPAD_NUM);
       if (!numberId) return res.status(500).json({ error: 'Dialpad number not found' });
-      await db.supabase.from('clients').update({ dialpad_number_id: numberId }).eq('id', clientId);
+      await db.supabaseClient().from('clients').update({ dialpad_number_id: numberId }).eq('id', clientId);
     }
 
     const twilioFwd = client.dialpad_twilio_forward_number;
@@ -108,7 +108,7 @@ router.post('/dialpad/toggle', express.json(), async (req, res) => {
     }
 
     // Persist toggle state
-    await db.supabase
+    await db.supabaseClient()
       .from('clients')
       .update({ dialpad_alice_active: active })
       .eq('id', clientId);
@@ -124,7 +124,7 @@ router.post('/dialpad/toggle', express.json(), async (req, res) => {
 // ─── Get toggle state ─────────────────────────────────────────────────────────
 router.get('/dialpad/status/:clientId', async (req, res) => {
   try {
-    const { data, error } = await db.supabase
+    const { data, error } = await db.supabaseClient()
       .from('clients')
       .select('dialpad_alice_active, dialpad_number_id')
       .eq('id', req.params.clientId)
@@ -144,7 +144,7 @@ router.get('/dialpad/analytics/:clientId', async (req, res) => {
     const days = parseInt(req.query.days || '30');
     const since = new Date(Date.now() - days * 86400000).toISOString();
 
-    const { data: calls, error } = await db.supabase
+    const { data: calls, error } = await db.supabaseClient()
       .from('dialpad_calls')
       .select('*')
       .eq('client_id', clientId)

@@ -141,9 +141,10 @@ router.get('/dialpad/summary/:clientId', authMiddleware, async (req, res) => {
   try {
     const { clientId } = req.params;
     const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    const sb = db.supabaseClient();
     const [{ data: client }, { data: calls }] = await Promise.all([
-      db.supabase.from('clients').select('dialpad_alice_active').eq('id', clientId).single(),
-      db.supabase.from('dialpad_calls').select('status,duration_seconds,area,started_at,caller_number,caller_name,recording_url,lead_score')
+      sb.from('clients').select('dialpad_alice_active').eq('id', clientId).single(),
+      sb.from('dialpad_calls').select('status,duration_seconds,area,started_at,caller_number,caller_name,recording_url,lead_score')
         .eq('client_id', clientId).gte('started_at', since).order('started_at', { ascending: false }),
     ]);
     const total    = (calls || []).length;
