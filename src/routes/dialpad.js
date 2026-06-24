@@ -77,11 +77,46 @@ router.post('/webhook/dialpad/:clientId', express.json(), async (req, res) => {
   }
 });
 
+// ─── Dialpad Call Router webhook ─────────────────────────────────────────────
+// Dialpad chama esta URL ao receber uma ligação no número atribuído ao Call Router.
+// Nós respondemos com JSON dizendo para onde rotear:
+//   Alice ON  → phone_number +18038825001 (Twilio/Alice)
+//   Alice OFF → user 6084954296598528 (Sara/Glauber no Dialpad)
+const CP_SARA_USER_ID    = '6084954296598528';
+const CP_ALICE_TWILIO    = '+18038825001';
+const CP_CALLROUTER_ID   = '5575748513636352';
+
+router.post('/dialpad/callrouter/:clientId', express.json(), async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const event = req.body;
+    logger.info(`[Dialpad CallRouter] clientId=${clientId} from=${event.from_number} to=${event.to_number}`);
+
+    const { data: client } = await db.supabaseClient()
+      .from('clients')
+      .select('dialpad_alice_active')
+      .eq('id', clientId)
+      .single();
+
+    const aliceActive = client?.dialpad_alice_active || false;
+
+    if (aliceActive) {
+      // Encaminha para Alice via Twilio
+      logger.info('[Dialpad CallRouter] Alice ON → routing to Twilio');
+      return res.json({ action: 'route', target_type: 'phone_number', target_id: CP_ALICE_TWILIO });
+    } else {
+      // Encaminha para Sara/Glauber no Dialpad (comportamento padrão)
+      logger.info('[Dialpad CallRouter] Alice OFF → routing to Sara');
+      return res.json({ action: 'route', target_type: 'user', target_id: CP_SARA_USER_ID });
+    }
+  } catch (err) {
+    logger.error('[Dialpad CallRouter] error', err);
+    // fallback: Sara atende
+    return res.json({ action: 'route', target_type: 'user', target_id: CP_SARA_USER_ID });
+  }
+});
+
 // ─── Toggle Alice ON / OFF ────────────────────────────────────────────────────
-// Dialpad encaminha permanentemente (803)373-8191 → Twilio +18038825001.
-// Este toggle só controla o comportamento da Alice quando a ligação chega no Twilio:
-//   ON  → Alice roda intake de IA
-//   OFF → Twilio conecta direto ao celular do Glauber
 router.post('/dialpad/toggle', express.json(), async (req, res) => {
   try {
     const { clientId, active } = req.body;
