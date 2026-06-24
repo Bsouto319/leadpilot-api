@@ -17,20 +17,21 @@ async function findNumberId(phone) {
   return match ? match.id : null;
 }
 
-async function enableForwarding(numberId, twilioNumber) {
-  const { data } = await api.patch(`/numbers/${numberId}`, {
+// userId = Dialpad user ID (not phone number)
+async function enableForwarding(userId, twilioNumber) {
+  const { data } = await api.patch(`/users/${userId}`, {
     forwarding_enabled: true,
-    forward_to_number: twilioNumber,
+    forwarding_phone_number: twilioNumber,
   });
-  logger.info(`[Dialpad] Forwarding ON → ${twilioNumber}`);
+  logger.info(`[Dialpad] User forwarding ON → ${twilioNumber}`);
   return data;
 }
 
-async function disableForwarding(numberId) {
-  const { data } = await api.patch(`/numbers/${numberId}`, {
+async function disableForwarding(userId) {
+  const { data } = await api.patch(`/users/${userId}`, {
     forwarding_enabled: false,
   });
-  logger.info('[Dialpad] Forwarding OFF — secretary active');
+  logger.info('[Dialpad] User forwarding OFF — secretary active in Dialpad');
   return data;
 }
 

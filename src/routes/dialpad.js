@@ -117,6 +117,8 @@ router.post('/dialpad/callrouter/:clientId', express.json(), async (req, res) =>
 });
 
 // ─── Toggle Alice ON / OFF ────────────────────────────────────────────────────
+// Alice ON  → habilita forwarding do usuário Dialpad para o Twilio da Alice
+// Alice OFF → desabilita forwarding; Sara recebe chamadas no Dialpad normalmente
 router.post('/dialpad/toggle', express.json(), async (req, res) => {
   try {
     const { clientId, active } = req.body;
@@ -126,18 +128,29 @@ router.post('/dialpad/toggle', express.json(), async (req, res) => {
 
     const { data: client, error: clientErr } = await db.supabaseClient()
       .from('clients')
-      .select('business_name')
+      .select('business_name, dialpad_user_id, dialpad_twilio_forward_number')
       .eq('id', clientId)
       .single();
 
     if (clientErr || !client) return res.status(404).json({ error: 'Client not found' });
+
+    // Atualiza forwarding no Dialpad usando user_id do DB (ou fallback para CP Cabinets)
+    const dialpadUserId = client.dialpad_user_id || (clientId === CP_CLIENT_ID ? CP_SARA_USER_ID : null);
+    if (dialpadUserId) {
+      const { enableForwarding, disableForwarding } = require('../services/dialpad');
+      if (active) {
+        await enableForwarding(dialpadUserId, client.dialpad_twilio_forward_number || CP_ALICE_TWILIO);
+      } else {
+        await disableForwarding(dialpadUserId);
+      }
+    }
 
     await db.supabaseClient()
       .from('clients')
       .update({ dialpad_alice_active: active })
       .eq('id', clientId);
 
-    invalidateClientCacheById(clientId); // força próxima ligação a reler o DB
+    invalidateClientCacheById(clientId);
     logger.info(`[Dialpad] Alice toggle → ${active ? 'ON' : 'OFF'} for ${client.business_name}`);
     return res.json({ ok: true, alice_active: active });
   } catch (err) {

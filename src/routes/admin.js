@@ -506,6 +506,7 @@ router.patch('/clients/:id', async (req, res) => {
       'voice_script', 'manual_mode',
       'service_zones', 'max_radius_miles',
       'alert_phone', 'niche', 'call_start_hour', 'call_end_hour', 'voice_enabled',
+      'dialpad_user_id', 'dialpad_twilio_forward_number',
     ];
     const allowed = {};
     for (const f of editable) {
