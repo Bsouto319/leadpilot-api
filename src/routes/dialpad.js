@@ -145,10 +145,15 @@ router.post('/dialpad/toggle', express.json(), async (req, res) => {
       }
     }
 
-    await db.supabaseClient()
+    const { error: updateErr } = await db.supabaseClient()
       .from('clients')
       .update({ dialpad_alice_active: active })
       .eq('id', clientId);
+
+    if (updateErr) {
+      logger.error('[Dialpad toggle] DB update error', updateErr.message);
+      return res.status(500).json({ error: 'DB update failed: ' + updateErr.message });
+    }
 
     invalidateClientCacheById(clientId);
     logger.info(`[Dialpad] Alice toggle → ${active ? 'ON' : 'OFF'} for ${client.business_name}`);
