@@ -128,14 +128,13 @@ router.post('/dialpad/toggle', express.json(), async (req, res) => {
 
     const { data: client, error: clientErr } = await db.supabaseClient()
       .from('clients')
-      .select('business_name, dialpad_twilio_forward_number')
+      .select('business_name, dialpad_twilio_forward_number, dialpad_user_id')
       .eq('id', clientId)
       .single();
 
     if (clientErr || !client) return res.status(404).json({ error: 'Client not found' });
 
-    // Usa user_id hardcoded para CP Cabinets (coluna dialpad_user_id adicionada via migration futura)
-    const dialpadUserId = clientId === CP_CLIENT_ID ? CP_SARA_USER_ID : null;
+    const dialpadUserId = client.dialpad_user_id || (clientId === CP_CLIENT_ID ? CP_SARA_USER_ID : null);
     if (dialpadUserId) {
       const { enableForwarding, disableForwarding } = require('../services/dialpad');
       if (active) {
