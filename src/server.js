@@ -438,11 +438,12 @@ function startCronJobs() {
   });
 
   // Follow-up emails: Day 2 (48h) and Day 5 (120h) for leads that didn't answer Alice
+  // Runs once per day at 10am ET — one email per lead per day max
   const { runFollowUpCron } = require('./services/followup');
-  cron.schedule('0 */12 * * *', async () => {
+  cron.schedule('0 10 * * *', async () => {
     try { await runFollowUpCron(2); } catch (err) { handleError('cron-followup-2', err).catch(() => {}); }
     try { await runFollowUpCron(3); } catch (err) { handleError('cron-followup-3', err).catch(() => {}); }
-  });
+  }, { timezone: 'America/New_York' });
 
   // Every hour — Reddit + forums + Craigslist prospector for CP Cabinets
   const { runRedditProspectorCron } = require('./services/redditProspector');
@@ -458,5 +459,5 @@ function startCronJobs() {
     try { await runCompetitorIntelCron(); } catch (err) { handleError('cron-competitor-intel', err).catch(() => {}); }
   }, { timezone: 'America/New_York' });
 
-  logger.info('server', 'cron jobs scheduled: appt-reminder@9am, 2h-reminder@every30min, call-retry@every30min, weekly-report@mon8am, thumbtack-poll@every10min, followup-emails@every12h, competitor-intel@sun7pm');
+  logger.info('server', 'cron jobs scheduled: appt-reminder@9am, 2h-reminder@every30min, call-retry@every30min, weekly-report@mon8am, thumbtack-poll@every10min, followup-emails@10am-daily, competitor-intel@sun7pm');
 }
