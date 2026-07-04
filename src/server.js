@@ -445,12 +445,14 @@ function startCronJobs() {
     try { await runFollowUpCron(3); } catch (err) { handleError('cron-followup-3', err).catch(() => {}); }
   }, { timezone: 'America/New_York' });
 
-  // Every hour — Reddit + forums + Craigslist prospector for CP Cabinets
+  // Once a day at 20h (Brasília) — Reddit + forums + Craigslist prospector for CP Cabinets
+  // Antes rodava de hora em hora e mandava email até quando não achava lead —
+  // reduzido pra 1x/dia porque não estava valendo a pena e lotava a caixa de email.
   const { runRedditProspectorCron } = require('./services/redditProspector');
-  cron.schedule('0 * * * *', async () => {
+  cron.schedule('0 20 * * *', async () => {
     logger.info('cron', 'running reddit prospector');
     try { await runRedditProspectorCron(); } catch (err) { handleError('cron-reddit-prospector', err).catch(() => {}); }
-  });
+  }, { timezone: 'America/Sao_Paulo' });
 
   // Every Sunday at 7pm ET — competitor intelligence report for all active clients
   const { runCompetitorIntelCron } = require('./services/competitorIntel');
