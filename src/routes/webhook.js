@@ -2154,6 +2154,93 @@ router.get('/voice-msg/:msgId', (req, res) => {
 
 
 
+// ── iVOX LANDING PAGE WEBHOOK ─────────────────────────────────────────────────
+// Recebe leads da LP do iVox (landing-ivox.vercel.app), cria card no kanban
+// e dispara ligação automática da Lexy (em português) para números dos EUA.
+// Brasil (+55) e outros países: NÃO liga (custo internacional) — só card + email.
+// clientId fixo = B2B Prospector de Bruno (9f4688cd-42ef-4203-b9de-99322965003a)
+// Autenticação: header x-ivox-secret deve bater com env IVOX_WEBHOOK_SECRET
+router.post('/ivox-lp', express.json(), async (req, res) => {
+  const secret = process.env.IVOX_WEBHOOK_SECRET || 'ivox-lp-2026';
+  if (req.headers['x-ivox-secret'] !== secret) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  const { email = '', phone = '', currency = 'brl', source = 'ivox-lp' } = req.body || {};
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'invalid email' });
+  }
+
+  const IVOX_CLIENT_ID = '9f4688cd-42ef-4203-b9de-99322965003a';
+  const currencyLabel  = currency === 'usd' ? 'USD ($)' : 'BRL (R$)';
+  let   cleanPhone     = phone ? phone.replace(/\D/g, '') : null;
+
+  // Normalização: 10 dígitos = número US sem código do país → prefixa 1
+  if (cleanPhone && cleanPhone.length === 10) cleanPhone = '1' + cleanPhone;
+
+  const isUSNumber = !!cleanPhone && cleanPhone.length === 11 && cleanPhone.startsWith('1');
+  const isBRNumber = !!cleanPhone && cleanPhone.startsWith('55');
+
+  logger.info('ivox-lp', `novo lead email=${email} phone=${cleanPhone || 'n/a'} currency=${currencyLabel} us=${isUSNumber}`);
+
+  // 1. Salva o card no kanban (crítico — se falhar, retorna erro)
+  try {
+    await db.saveLead({
+      clientId:    IVOX_CLIENT_ID,
+      leadPhone:   cleanPhone || email, // email como fallback de ID se não tiver tel
+      leadName:    email.split('@')[0],
+      leadEmail:   email,
+      source:      source,
+      serviceType: 'iVox App',
+      message:     `Lead da LP iVox — Moeda: ${currencyLabel} | Email: ${email}${phone ? ` | WhatsApp: ${phone}` : ''}`,
+    });
+  } catch (err) {
+    logger.error('ivox-lp', `erro ao salvar lead: ${err.message}`);
+    return res.status(500).json({ error: 'internal error' });
+  }
+
+  // 2. Ligação automática da Lexy — SOMENTE números dos EUA (+1)
+  if (isUSNumber) {
+    try {
+      const ivoxClient = await db.getClientByIdAdmin(IVOX_CLIENT_ID);
+      if (ivoxClient?.twilio_number) {
+        const lexyScript =
+          'Oi! Aqui é a Lexy, a assistente virtual do iVox. ' +
+          'Tô te ligando porque você acabou de garantir uma ligação grátis no nosso aplicativo. ' +
+          'O iVox faz ligações em inglês por você aqui nos Estados Unidos: ' +
+          'você grava seu recado em português, e a nossa inteligência artificial liga pro restaurante, ' +
+          'pro DMV, pro consultório, e resolve tudo em inglês, com voz natural. ' +
+          'E olha que legal: esta ligação que você está ouvindo agora mesmo foi feita pela nossa inteligência artificial. ' +
+          'É exatamente assim que o iVox fala por você. ' +
+          'Pra usar seu crédito grátis, é só abrir o email que acabamos de te enviar e clicar no botão verde. ' +
+          'Você entra direto no aplicativo, sem senha. ' +
+          'Sua primeira ligação é por nossa conta. Até já!';
+
+        const call = await twilioSvc.makeNotifyCall({
+          to: `+${cleanPhone}`,
+          from: ivoxClient.twilio_number,
+          message: lexyScript,
+          credentials: clientCredentials(ivoxClient),
+          voice: 'Polly.Camila-Neural',
+          language: 'pt-BR',
+        });
+        logger.info('ivox-lp', `lexy_call_iniciada sid=${call.sid} to=+${cleanPhone}`);
+      } else {
+        logger.warn('ivox-lp', 'client iVox sem twilio_number — ligação pulada');
+      }
+    } catch (err) {
+      // Ligação é best-effort: falha não derruba o webhook (card já foi salvo)
+      logger.error('ivox-lp', `lexy_call falhou: ${err.message}`);
+    }
+  } else if (isBRNumber) {
+    logger.info('ivox-lp', `numero brasileiro (+55) — ligação pulada por política de custo`);
+  } else if (cleanPhone) {
+    logger.info('ivox-lp', `numero nao-US (${cleanPhone.slice(0, 3)}...) — ligação pulada`);
+  }
+
+  return res.status(200).json({ ok: true, called: isUSNumber });
+});
+
 // ── BROWSER CLICK-TO-CALL (Twilio Voice JS SDK) ───────────────────────────────
 // Called by Twilio when the admin browser initiates an outbound call
 // Returns TwiML: dial the requested number from the LeadPilot Twilio number
