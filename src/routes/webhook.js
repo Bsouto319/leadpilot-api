@@ -2174,7 +2174,7 @@ router.post('/ivox-lp', express.json(), async (req, res) => {
   logger.info('ivox-lp', `novo lead email=${email} phone=${cleanPhone || 'n/a'} currency=${currencyLabel}`);
 
   try {
-    await saveLead({
+    await db.saveLead({
       clientId:    IVOX_CLIENT_ID,
       leadPhone:   cleanPhone || email, // email como fallback de ID se não tiver tel
       leadName:    email.split('@')[0],
