@@ -1,7 +1,36 @@
-const https  = require('https');
-const fs     = require('fs');
-const path   = require('path');
-const logger = require('../utils/logger');
+const https   = require('https');
+const fs      = require('fs');
+const path    = require('path');
+const crypto  = require('crypto');
+const logger  = require('../utils/logger');
+const { adminSupabaseClient } = require('./supabase');
+
+// ── Cache persistente (sobrevive a restart/deploy — /tmp local não sobrevive) ──
+// Antes regenerava TODAS as frases de TODOS os clientes a cada deploy, gastando
+// cota do ElevenLabs (compartilhada com o iVox) sem necessidade nenhuma.
+const STORAGE_BUCKET = 'leadpilot-audio';
+function textHash(text) { return crypto.createHash('sha256').update(text).digest('hex').slice(0, 10); }
+function storagePath(clientId, phraseKey, hash) { return `${clientId}/${phraseKey}-${hash}.mp3`; }
+
+async function fetchFromPersistentStorage(clientId, phraseKey, hash) {
+  const admin = adminSupabaseClient();
+  if (!admin) return null;
+  try {
+    const { data, error } = await admin.storage.from(STORAGE_BUCKET).download(storagePath(clientId, phraseKey, hash));
+    if (error || !data) return null;
+    return Buffer.from(await data.arrayBuffer());
+  } catch { return null; }
+}
+
+async function uploadToPersistentStorage(clientId, phraseKey, hash, buffer) {
+  const admin = adminSupabaseClient();
+  if (!admin) return;
+  try {
+    await admin.storage.from(STORAGE_BUCKET).upload(storagePath(clientId, phraseKey, hash), buffer, {
+      contentType: 'audio/mpeg', upsert: true,
+    });
+  } catch (err) { logger.warn('elevenlabs', `persist upload failed: ${err.message}`); }
+}
 
 // ── Voice catalogue ───────────────────────────────────────────────────────────
 const VOICE_IDS = {
@@ -185,26 +214,38 @@ async function generateAllClientPhrases(clientId, businessName, voiceId, agentNa
     throw new Error(`Daily char limit would be exceeded: ${daily.chars + totalChars}/${DAILY_CHAR_LIMIT()}`);
   }
 
-  logger.info('elevenlabs', `generating ${Object.keys(phrases).length} phrases for client=${clientId} total=${totalChars} chars`);
   ensureDir();
 
   const results = {};
   let generated = 0;
+  let fromPersistent = 0;
 
   for (const [key, text] of Object.entries(phrases)) {
+    const hash = textHash(text);
     try {
-      const mp3 = await generateMp3(text, voiceId);
+      // 1) Já baixado nesse boot (ou sobrou de antes)?
+      let mp3 = getBuffer(clientId, key);
+      // 2) Existe no storage persistente com o MESMO texto (hash bate)? Não gasta ElevenLabs.
+      if (!mp3) {
+        mp3 = await fetchFromPersistentStorage(clientId, key, hash);
+        if (mp3) fromPersistent += text.length;
+      }
+      // 3) Nada encontrado — gera de verdade e persiste pro próximo deploy não gastar de novo
+      if (!mp3) {
+        mp3 = await generateMp3(text, voiceId);
+        generated += text.length;
+        await uploadToPersistentStorage(clientId, key, hash, mp3);
+      }
       _cache.set(cacheKey(clientId, key), mp3);
       try { fs.writeFileSync(localPath(clientId, key), mp3); } catch {}
       results[key] = { ok: true, chars: text.length, bytes: mp3.length };
-      generated += text.length;
-      logger.info('elevenlabs', `  ${key} ✓ ${text.length}chars → ${mp3.length}bytes`);
     } catch (err) {
       results[key] = { ok: false, error: err.message };
       logger.error('elevenlabs', `  ${key} ✗ ${err.message}`);
     }
   }
 
+  logger.info('elevenlabs', `client=${clientId}: ${generated} chars generated, ${fromPersistent} chars reused from storage (economia)`);
   trackUsage(generated);
   return { results, totalCharsGenerated: generated, dailyUsage: getDailyUsage() };
 }
@@ -227,11 +268,19 @@ async function generateSinglePhrase(clientId, phraseKey, businessName, voiceId, 
   logger.info('elevenlabs', `on-demand regen: client=${clientId} phrase=${phraseKey}`);
   ensureDir();
 
-  const promise = generateMp3(text, voiceId)
+  const hash = textHash(text);
+  const promise = (async () => {
+    let mp3 = await fetchFromPersistentStorage(clientId, phraseKey, hash);
+    if (!mp3) {
+      mp3 = await generateMp3(text, voiceId);
+      trackUsage(text.length);
+      await uploadToPersistentStorage(clientId, phraseKey, hash, mp3);
+    }
+    return mp3;
+  })()
     .then(mp3 => {
       _cache.set(k, mp3);
       try { fs.writeFileSync(localPath(clientId, phraseKey), mp3); } catch {}
-      trackUsage(text.length);
       _regenInProgress.delete(k);
       return mp3;
     })
