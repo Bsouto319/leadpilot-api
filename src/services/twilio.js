@@ -112,12 +112,16 @@ async function lookupCallerName(phoneNumber) {
 }
 
 // Simple one-way notification call — plays a message and hangs up. No intake flow.
-async function makeNotifyCall({ to, from, message, credentials }) {
+async function makeNotifyCall({ to, from, message, credentials, voice = 'alice', language = 'en-US' }) {
   const client = getClient(credentials);
-  const twiml = `<Response><Say voice="alice" language="en-US">${escapeXml(message)}</Say><Pause length="1"/></Response>`;
+  const twiml = `<Response>
+  <Pause length="1"/>
+  <Say voice="${voice}" language="${language}">${escapeXml(message)}</Say>
+  <Pause length="1"/>
+</Response>`;
   try {
     const call = await client.calls.create({ to, from, twiml });
-    logger.info('twilio', `notify_call sid=${call.sid} to=${to}`);
+    logger.info('twilio', `notify_call sid=${call.sid} to=${to} lang=${language}`);
     return call;
   } catch (err) {
     logger.error('twilio', `notify_call failed to=${to} message=${err.message}`);
