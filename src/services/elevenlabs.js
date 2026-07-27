@@ -164,8 +164,8 @@ async function generateMp3(text, voiceId, language = 'en') {
   }
 
   const vid     = VOICE_IDS[voiceId] || voiceId || VOICE_IDS[DEFAULT_VOICE];
-  // eleven_monolingual_v1 = English only; use multilingual_v2 for any other language
-  const modelId = language === 'en' ? 'eleven_monolingual_v1' : 'eleven_multilingual_v2';
+  // eleven_monolingual_v1/eleven_multilingual_v1 foram descontinuados pela ElevenLabs
+  const modelId = 'eleven_multilingual_v2';
   const body = JSON.stringify({
     text,
     model_id: modelId,
