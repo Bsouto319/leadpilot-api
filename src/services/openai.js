@@ -68,13 +68,15 @@ Analyze this inbound lead and respond ONLY with valid JSON:
   "tier": <"hot" | "warm" | "cold">,
   "job_value_estimate": <estimated job value in USD as integer, or null if impossible to estimate>,
   "summary": "<2 sentences max: what they need, key signals (urgency/size/quality), and why the score is what it is>",
-  "signals": [<list of 2-4 short signal strings, e.g. "urgency detected", "large project", "vague request", "premium intent">]
+  "signals": [<list of 2-4 short signal strings, e.g. "urgency detected", "large project", "vague request", "premium intent">],
+  "is_spam": <true if this is NOT a genuine request for the contractor's own services — e.g. someone pitching SEO/marketing/web design/link-building TO the business, unrelated solicitations, bot or test submissions, or gibberish. false for any real project inquiry, even if vague or small>
 }
 
 Scoring guide:
 - 80-100 (hot): specific project, clear scope, urgency signals, high job value
 - 50-79 (warm): reasonable project description, moderate specificity, no red flags
 - 0-49 (cold): vague request, "just browsing", very small job, or signs of price shopping only
+- is_spam=true leads should also score low (0-20), but score alone doesn't imply spam — a real small/vague job is cold, not spam
 
 Job value reference for ${businessName}:
 - Tile install (bathroom): $2,000–$8,000 | full house: $8,000–$25,000
@@ -103,9 +105,10 @@ Lead data:
   const summary  = (json.summary || '').slice(0, 300);
   const jobValue = parseInt(json.job_value_estimate) || null;
   const signals  = Array.isArray(json.signals) ? json.signals.slice(0, 4) : [];
+  const isSpam   = json.is_spam === true;
 
-  logger.info('openai', `lead qualified: score=${score} tier=${tier} value=$${jobValue} — ${name}`);
-  return { score, tier, summary, jobValue, signals };
+  logger.info('openai', `lead qualified: score=${score} tier=${tier} value=$${jobValue} spam=${isSpam} — ${name}`);
+  return { score, tier, summary, jobValue, signals, isSpam };
 }
 
 module.exports = { generateVoiceScript, qualifyLead };

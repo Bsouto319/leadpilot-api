@@ -139,9 +139,22 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
       phone: leadPhone,
     }).catch(err => {
       logger.warn('thumbtack', `qualify failed: ${err.message} — stack: ${err.stack?.split('\n')[1] || ''}`);
-      return { score: null, tier: null, summary: null, jobValue: null, signals: [] };
+      return { score: null, tier: null, summary: null, jobValue: null, signals: [], isSpam: false };
     }),
   ]);
+
+  // Spam / solicitation gate — skip the call and owner alerts entirely for leads
+  // that aren't genuine service requests (e.g. someone pitching SEO to the business).
+  // Fails open: only skips when the AI explicitly flagged it, never on a qualify() error.
+  if (qualification.isSpam) {
+    await db.updateConversation(conversation.id, {
+      stage: 'closed',
+      ...(qualification.score != null ? { score: qualification.score } : {}),
+      ...(qualification.summary    ? { summary: qualification.summary } : {}),
+    }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
+    logger.info('thumbtack', `lead flagged as spam — skipped call/alerts conv=${conversation.id} score=${qualification.score} summary=${qualification.summary}`);
+    return;
+  }
 
   // Build qualification context (used in all notification paths below)
   const tierEmoji   = qualification.tier === 'hot' ? '🔥' : qualification.tier === 'warm' ? '⚡' : '❄️';
