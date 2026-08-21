@@ -3,6 +3,7 @@ const crypto   = require('crypto');
 const router   = express.Router();
 const db       = require('../services/supabase');
 const logger   = require('../utils/logger');
+const { toE164 } = require('../utils/phone');
 const { google } = require('googleapis');
 
 function timingSafeEqual(a, b) {
@@ -566,7 +567,7 @@ router.post('/weekly-report', async (req, res) => {
         `Scheduled: ${s.scheduled}\n` +
         `Conversion: ${s.total > 0 ? Math.round((s.scheduled / s.total) * 100) : 0}%\n` +
         `Powered by LeadPilot`;
-      await twilioSvc.sendSms({ to: s.client.owner_phone, from: s.client.twilio_number, body: msg });
+      await twilioSvc.sendSms({ to: toE164(s.client.owner_phone), from: s.client.twilio_number, body: msg });
       results.push({ client: s.client.business_name, sent: true });
     }
     res.json({ ok: true, results });

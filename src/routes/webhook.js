@@ -12,6 +12,7 @@ const { sendEmail } = require('../services/gmail');
 const { makeNotifyCall } = require('../services/twilio');
 const { triggerZipQualifier } = require('../services/zipQualifier');
 const { validateLead } = require('../utils/spamFilter');
+const { toE164 } = require('../utils/phone');
 
 // Parser rápido de data por regex — cobre ~90% dos casos sem chamar OpenAI.
 // Retorna ISO string ou null (fallback para GPT).
@@ -119,7 +120,7 @@ async function handleHumanHandoff({ client, conversation, message }) {
 
   try {
     await twilioSvc.sendSms({
-      to: client.owner_phone,
+      to: toE164(client.owner_phone),
       from: client.twilio_number,
       body: `⚠️ ATENÇÃO – ${client.business_name}\nCliente quer falar com humano!\nNome: ${leadName}\nFone: +${leadPhone}\nMensagem: "${message}"\n\nLigue diretamente para esse cliente agora.`,
       credentials: clientCredentials(client),
@@ -606,7 +607,7 @@ async function processAddressReply({ client, conversation, message }) {
     }
     if (client.owner_phone) {
       makeNotifyCall({
-        to: client.owner_phone,
+        to: toE164(client.owner_phone),
         from: client.twilio_number,
         message: `Hey! You have a new confirmed appointment from ${client.business_name}. ${conversation.lead_name || 'A lead'} scheduled for ${formatted} at ${address}. Check your email for details!`,
         credentials: clientCredentials(client),
@@ -823,9 +824,9 @@ router.post('/call-status', async (req, res) => {
         const alertBody = `⚠️ LEAD ALERT — ${client.business_name}\nLead ${statusLabel}.\n\nName: ${leadName}\nPhone: +${conv.lead_phone}\nService: ${alertServiceLabel}\nSource: ${conv.source || 'unknown'}\n\nFallback SMS sent automatically.`;
 
         const alertPhones = (client.alert_phones || client.owner_phone || '')
-          .split(',').map(p => p.trim()).filter(Boolean);
+          .split(',').map(p => toE164(p)).filter(Boolean);
         const adminPhone = process.env.ALERT_PHONE;
-        if (adminPhone && !alertPhones.includes(adminPhone)) alertPhones.push(adminPhone);
+        if (adminPhone && !alertPhones.includes(toE164(adminPhone))) alertPhones.push(toE164(adminPhone));
 
         for (const phone of alertPhones) {
           await twilioSvc.sendSms({
@@ -956,7 +957,7 @@ async function processGather({ speech, conversationId, clientId }) {
   }
   if (client.owner_phone) {
     makeNotifyCall({
-      to: client.owner_phone,
+      to: toE164(client.owner_phone),
       from: client.twilio_number,
       message: `Hey! ${client.agent_name || 'Lexy'} just scheduled a new appointment for ${client.business_name}. ${tierVoiceV}The lead is confirmed for ${scheduledLabel}. Check your email for details!`,
       credentials: clientCredentials(client),
@@ -1560,10 +1561,10 @@ async function processVoiceIntake(req, res) {
 
       const notifyMsg = `Hey! ${agentName} just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`;
       if (client.owner_phone) {
-        makeNotifyCall({ to: client.owner_phone, from: client.twilio_number, message: notifyMsg, credentials: clientCredentials(client) }).catch(() => {});
+        makeNotifyCall({ to: toE164(client.owner_phone), from: client.twilio_number, message: notifyMsg, credentials: clientCredentials(client) }).catch(() => {});
       }
       if (client.office_phone) {
-        makeNotifyCall({ to: client.office_phone, from: client.twilio_number, message: notifyMsg, credentials: clientCredentials(client) }).catch(() => {});
+        makeNotifyCall({ to: toE164(client.office_phone), from: client.twilio_number, message: notifyMsg, credentials: clientCredentials(client) }).catch(() => {});
       }
 
       // Follow-up SMS to collect email since it wasn't captured during the call
@@ -1680,10 +1681,10 @@ async function processVoiceIntake(req, res) {
 
       const notifyMsg2 = `Hey! ${agentName} just booked a new appointment for ${client.business_name}. ${tierVoice}${conv.lead_name || 'The lead'} is confirmed for ${formatted} at ${address}. Check your email for full details!`;
       if (client.owner_phone) {
-        makeNotifyCall({ to: client.owner_phone, from: client.twilio_number, message: notifyMsg2, credentials: clientCredentials(client) }).catch(() => {});
+        makeNotifyCall({ to: toE164(client.owner_phone), from: client.twilio_number, message: notifyMsg2, credentials: clientCredentials(client) }).catch(() => {});
       }
       if (client.office_phone) {
-        makeNotifyCall({ to: client.office_phone, from: client.twilio_number, message: notifyMsg2, credentials: clientCredentials(client) }).catch(() => {});
+        makeNotifyCall({ to: toE164(client.office_phone), from: client.twilio_number, message: notifyMsg2, credentials: clientCredentials(client) }).catch(() => {});
       }
     })().catch(() => {});
 

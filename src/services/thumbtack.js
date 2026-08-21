@@ -7,6 +7,7 @@ const { sendEmail } = require('./gmail');
 const { handleError } = require('../middleware/alerting');
 const { buildNewLeadAlertEmail, clientBranding } = require('./followup');
 const { triggerZipQualifier } = require('./zipQualifier');
+const { toE164 } = require('../utils/phone');
 
 function normalizePhone(raw) {
   const digits = (raw || '').replace(/\D/g, '');
@@ -218,7 +219,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     const notifyMsg = `Hey! ${agentName} received a new website lead for ${client.business_name}. ${name} scheduled a ${vLabel2} for ${visitFormatted}. ${agentName} is calling the lead now to confirm. Check your email for full details.`;
     if (client.owner_phone) {
       makeNotifyCall({
-        to: `+${client.owner_phone}`,
+        to: toE164(client.owner_phone),
         from: client.twilio_number,
         message: notifyMsg,
         credentials: clientCredentials(client),
@@ -226,7 +227,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }
     if (client.office_phone) {
       makeNotifyCall({
-        to: `+${client.office_phone}`,
+        to: toE164(client.office_phone),
         from: client.twilio_number,
         message: notifyMsg,
         credentials: clientCredentials(client),
@@ -327,7 +328,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
 
   if (client.owner_phone) {
     makeNotifyCall({
-      to: `+${client.owner_phone}`,
+      to: toE164(client.owner_phone),
       from: client.twilio_number,
       message: notifyMsg,
       credentials: clientCredentials(client),
@@ -335,7 +336,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
   }
   if (client.office_phone) {
     makeNotifyCall({
-      to: `+${client.office_phone}`,
+      to: toE164(client.office_phone),
       from: client.twilio_number,
       message: notifyMsg,
       credentials: clientCredentials(client),

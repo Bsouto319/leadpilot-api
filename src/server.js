@@ -10,6 +10,7 @@ const cron      = require('node-cron');
 const helmet    = require('helmet');
 const rateLimit = require('express-rate-limit');
 const logger    = require('./utils/logger');
+const { toE164 } = require('./utils/phone');
 const errorHandler = require('./middleware/errorHandler');
 const webhookRoutes = require('./routes/webhook');
 const adminRoutes   = require('./routes/admin');
@@ -409,7 +410,7 @@ function startCronJobs() {
           `Visitas agendadas: ${s.scheduled}\n` +
           `Conversão: ${conversion}%\n` +
           `Powered by LeadPilot`;
-        await twilioSvc.sendSms({ to: s.client.owner_phone, from: s.client.twilio_number, body: msg });
+        await twilioSvc.sendSms({ to: toE164(s.client.owner_phone), from: s.client.twilio_number, body: msg });
         logger.info('cron', `weekly report → ${s.client.business_name}`);
       }
     } catch (err) { handleError('cron-weekly', err).catch(() => {}); }
