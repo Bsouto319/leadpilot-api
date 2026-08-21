@@ -9,7 +9,12 @@ const { buildNewLeadAlertEmail, clientBranding } = require('./followup');
 const { triggerZipQualifier } = require('./zipQualifier');
 
 function normalizePhone(raw) {
-  return (raw || '').replace(/\D/g, '');
+  const digits = (raw || '').replace(/\D/g, '');
+  // Thumbtack emails and CF7 website forms give US numbers without the leading
+  // country code (e.g. "8033316844") — Twilio requires full E.164 (+1XXXXXXXXXX),
+  // so a bare 10-digit number dials as "+8033316844" and gets rejected as invalid.
+  if (digits.length === 10) return '1' + digits;
+  return digits;
 }
 
 function detectServiceType(text) {
