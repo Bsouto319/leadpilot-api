@@ -787,7 +787,7 @@
             </div>
           </div>
           <div id="showroom-hint" style="display:none;background:#f9f7f4;border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:13px;color:var(--muted);margin-top:4px;">
-            📍 <strong style="color:var(--navy);">1085 Lake Murray Blvd, Suite E — Irmo, SC 29063</strong><br>Mon–Fri 9:00 AM – 4:00 PM · Saturday by appointment
+            📍 <strong style="color:var(--navy);">1085 Lake Murray Blvd, Suite E — Irmo, SC 29063</strong><br>Mon–Fri 9:00 AM – 4:00 PM · Saturday 9:00 AM – 11:30 AM
           </div>
           <input type="hidden" name="visit-type" id="visitTypeInput" />
         </div>
@@ -831,6 +831,7 @@
               <input type="date" name="your-date" id="dateInput" />
               <p id="sundayMsg"  style="display:none;color:#c95210;font-size:0.78rem;margin-top:5px;font-weight:500">Showroom is closed on Sundays. Please choose a weekday.</p>
               <p id="mondayMsg" style="display:none;color:#c95210;font-size:0.78rem;margin-top:5px;font-weight:500">On Mondays we start at 1:00 PM — morning slots are unavailable.</p>
+              <p id="saturdayMsg" style="display:none;color:#c95210;font-size:0.78rem;margin-top:5px;font-weight:500">On Saturdays the showroom is open to the public only until 11:30 AM.</p>
             </div>
             <div class="field">
               <label>Preferred Time</label>
@@ -968,7 +969,7 @@
       </div>
       <div class="hours-row">
         <span class="hours-day">Saturday</span>
-        <span class="hours-time hours-na">By appointment</span>
+        <span class="hours-time">9:00 AM – 11:30 AM</span>
       </div>
       <div class="hours-row">
         <span class="hours-day">Sunday</span>
@@ -1093,15 +1094,17 @@
       di.min = day;
     })();
     di.addEventListener('change', function () {
-      const sundayMsg  = document.getElementById('sundayMsg');
-      const mondayMsg  = document.getElementById('mondayMsg');
-      const timeSelect = document.getElementById('timeSelect');
+      const sundayMsg   = document.getElementById('sundayMsg');
+      const mondayMsg   = document.getElementById('mondayMsg');
+      const saturdayMsg = document.getElementById('saturdayMsg');
+      const timeSelect  = document.getElementById('timeSelect');
       if (!this.value) return;
       // Block specific dates (vacation / closed)
       if (BLOCKED_DATES.includes(this.value)) {
         this.value = '';
         sundayMsg.style.display = 'none';
         mondayMsg.style.display = 'none';
+        saturdayMsg.style.display = 'none';
         if (!document.getElementById('blockedMsg')) {
           const m = document.createElement('p');
           m.id = 'blockedMsg';
@@ -1121,12 +1124,15 @@
         this.value = '';
         sundayMsg.style.display = 'block';
         mondayMsg.style.display = 'none';
+        saturdayMsg.style.display = 'none';
         return;
       }
       sundayMsg.style.display = 'none';
-      const isMonday = day === 1;
-      mondayMsg.style.display = isMonday ? 'block' : 'none';
-      // Filter time options on Monday — only 1 PM+
+      const isMonday   = day === 1;
+      const isSaturday = day === 6;
+      mondayMsg.style.display   = isMonday   ? 'block' : 'none';
+      saturdayMsg.style.display = isSaturday ? 'block' : 'none';
+      // Filter time options: Monday only 1 PM+, Saturday only up to 11:30 AM
       for (let i = 0; i < timeSelect.options.length; i++) {
         const opt = timeSelect.options[i];
         if (!opt.value) continue;
@@ -1134,16 +1140,17 @@
         if (!m) continue;
         const h = parseInt(m[1]); const isPM = /pm/i.test(m[3]);
         const h24 = isPM && h < 12 ? h + 12 : (!isPM && h === 12 ? 0 : h);
-        opt.disabled = isMonday && h24 < 13;
-        opt.style.display = isMonday && h24 < 13 ? 'none' : '';
+        const blocked = (isMonday && h24 < 13) || (isSaturday && h24 >= 12);
+        opt.disabled = blocked;
+        opt.style.display = blocked ? 'none' : '';
       }
-      // Reset selected time if it's before 1 PM on Monday
-      if (isMonday && timeSelect.value) {
+      // Reset selected time if it falls outside the allowed window for the day
+      if ((isMonday || isSaturday) && timeSelect.value) {
         const cm = timeSelect.value.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
         if (cm) {
           const ch = parseInt(cm[1]); const cPM = /pm/i.test(cm[3]);
           const ch24 = cPM && ch < 12 ? ch + 12 : (!cPM && ch === 12 ? 0 : ch);
-          if (ch24 < 13) timeSelect.value = '';
+          if ((isMonday && ch24 < 13) || (isSaturday && ch24 >= 12)) timeSelect.value = '';
         }
       }
     });
@@ -1197,6 +1204,18 @@
         const th24 = tPM && th < 12 ? th + 12 : (!tPM && th === 12 ? 0 : th);
         if (th24 < 13) {
           err.textContent = 'On Mondays, our first available slot is 1:00 PM. Please select 1:00 PM or later.';
+          err.style.display = 'block';
+          return;
+        }
+      }
+    }
+    if (dateVal && timeVal && new Date(dateVal + 'T12:00:00').getDay() === 6) {
+      const tm = timeVal.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+      if (tm) {
+        const th = parseInt(tm[1]); const tPM = /pm/i.test(tm[3]);
+        const th24 = tPM && th < 12 ? th + 12 : (!tPM && th === 12 ? 0 : th);
+        if (th24 >= 12) {
+          err.textContent = 'On Saturdays, the showroom is open to the public only until 11:30 AM. Please select an earlier time or another day.';
           err.style.display = 'block';
           return;
         }
