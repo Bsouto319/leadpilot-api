@@ -1788,15 +1788,23 @@ router.post('/thumbtack', express.json(), async (req, res) => {
   }
 
   const body = req.body;
-  logger.info('thumbtack', `native webhook received leadID=${body.leadID || 'N/A'} clientId=${clientId} body=${JSON.stringify(body)}`);
+  const eventType = body?.event?.eventType || 'unknown';
+  const data = body?.data || {};
+  logger.info('thumbtack', `native webhook received event=${eventType} negotiationID=${data.negotiationID || 'N/A'} clientId=${clientId} body=${JSON.stringify(body)}`);
 
-  // Mapeia payload nativo → formato interno
-  const rawPhone  = body.customer?.phone || '';
-  const leadName  = body.customer?.name  || 'Customer';
-  const leadEmail = body.customer?.email || null;
-  const category  = body.request?.category    || '';
-  const desc      = body.request?.description || '';
-  const location  = body.request?.location;
+  // Mapeia payload nativo (Partner API v4) → formato interno.
+  // Achado real (teste Thumbtack, 27/09 — MD Flooring): os dados vêm aninhados
+  // em data.customer/data.request (evento "NegotiationCreatedV4"), não direto
+  // na raiz do body como a versão anterior deste código assumia — por isso todo
+  // teste chegava com "missing clientId or leadPhone" mesmo com o payload certo.
+  const customer = data.customer || {};
+  const request  = data.request  || {};
+  const rawPhone  = customer.phone || '';
+  const leadName  = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Customer';
+  const leadEmail = customer.email || null;
+  const category  = request.category?.name    || '';
+  const desc      = request.description       || '';
+  const location  = request.location;
   const locationStr = location ? `${location.city || ''}, ${location.state || ''} ${location.zipCode || ''}`.trim() : '';
   const serviceNote = [category, desc, locationStr].filter(Boolean).join(' — ');
 
@@ -1806,7 +1814,7 @@ router.post('/thumbtack', express.json(), async (req, res) => {
     leadName,
     leadEmail,
     serviceNote: serviceNote || 'Thumbtack lead',
-    thumbtackLeadId: body.leadID,
+    thumbtackLeadId: data.negotiationID || request.requestID || null,
     apiKey: expectedSecret,
   }).catch(err => handleError('thumbtack', err));
 });
