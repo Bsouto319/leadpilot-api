@@ -114,13 +114,13 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     return;
   }
 
-  // Modo manual: o lead aparece no Kanban (stage padrão 'new_lead'), mas nenhuma
-  // automação dispara -- sem qualificação por IA, sem ligação, sem e-mail, sem
-  // alerta pro dono. Pensado pra cliente novo em fase de teste/validação, onde
-  // o Bruno quer só acompanhar visualmente antes de ligar a automação de verdade.
+  // Modo manual: o lead aparece no Kanban, e o dono/equipe ainda recebe o e-mail
+  // de aviso (é só informativo, não fala com o cliente) -- mas nada que contate
+  // o lead automaticamente dispara: sem ligação, sem e-mail de confirmação pro
+  // cliente, sem avançar o estágio pra "ai_responded" (o Bruno vai ligar/
+  // responder manualmente). Pensado pra cliente novo em fase de teste/validação.
   if (client.manual_mode) {
-    logger.info('thumbtack', `manual_mode ativo p/ client=${client.id} — lead ${conversation.id} salvo sem automacao`);
-    return;
+    logger.info('thumbtack', `manual_mode ativo p/ client=${client.id} — lead ${conversation.id} salvo, sem contato automatico ao cliente`);
   }
 
   // ZIP VIP qualifier — fires async, non-blocking
@@ -128,8 +128,10 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     triggerZipQualifier(conversation.id, client.id, leadAddress).catch(() => {});
   }
 
-  // Confirmation email to lead immediately after capture (before call)
-  if (leadEmail) {
+  // Confirmation email to lead immediately after capture (before call) --
+  // nunca em manual_mode: é contato direto com o cliente, e o Bruno decidiu
+  // caso a caso quem fala com o lead primeiro enquanto o cliente é novo.
+  if (leadEmail && !client.manual_mode) {
     const { sendLeadConfirmationEmail } = require('./followup');
     sendLeadConfirmationEmail({ ...conversation, lead_email: leadEmail, clients: client })
       .catch(err => logger.warn('thumbtack', `confirmation email failed: ${err.message}`));
@@ -272,43 +274,58 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
   // Save voice script + AI qualification to DB.
   // form_filled leads keep their stage — address already captured, just waiting for date.
   // All other leads advance to ai_responded to signal Sofia has reached out.
-  const nextStage = conversation.stage === 'form_filled' ? 'form_filled' : 'ai_responded';
-  await db.updateConversation(conversation.id, {
-    stage: nextStage,
-    ai_response: voiceScript,
-    last_response_at: new Date().toISOString(),
-    ...(qualification.score != null ? { score: qualification.score } : {}),
-    ...(qualification.summary    ? { summary: qualification.summary } : {}),
-  }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
+  // Em manual_mode não avança estágio nem grava ai_response -- o Bruno ainda
+  // não respondeu de verdade, só a IA gerou um score/resumo interno.
+  if (!client.manual_mode) {
+    const nextStage = conversation.stage === 'form_filled' ? 'form_filled' : 'ai_responded';
+    await db.updateConversation(conversation.id, {
+      stage: nextStage,
+      ai_response: voiceScript,
+      last_response_at: new Date().toISOString(),
+      ...(qualification.score != null ? { score: qualification.score } : {}),
+      ...(qualification.summary    ? { summary: qualification.summary } : {}),
+    }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
+  } else if (qualification.score != null || qualification.summary) {
+    await db.updateConversation(conversation.id, {
+      ...(qualification.score != null ? { score: qualification.score } : {}),
+      ...(qualification.summary    ? { summary: qualification.summary } : {}),
+    }).catch(err => logger.warn('thumbtack', `updateConversation failed: ${err.message}`));
+  }
 
-  // Outbound call to lead — always call immediately (no hour restrictions)
-  const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
-  let convFresh;
-  try { convFresh = await db.getConversationById(conversation.id); } catch {}
-  if (convFresh?.call_sid && activeCallStatuses.includes(convFresh.call_status)) {
-    logger.info('thumbtack', `skipping outbound call — active call already exists sid=${convFresh.call_sid}`);
-  } else {
-    try {
-      const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
-      const call = await twilioSvc.makeCall({
-        to: `+${leadPhone}`,
-        from: client.twilio_number,
-        voiceScript,
-        statusCallbackUrl: `${BASE}/webhook/call-status`,
-        intakeUrl: `${BASE}/webhook/voice-outbound-intake?conversationId=${conversation.id}&clientId=${client.id}`,
-        credentials: clientCredentials(client),
-      });
-      await db.updateConversation(conversation.id, {
-        call_sid: call.sid,
-        call_status: call.status,
-        call_attempted_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      await handleError('twilio', err);
+  // Outbound call to lead — nunca em manual_mode (o Bruno liga manualmente,
+  // e o twilio_number desse tipo de cliente costuma ser só um placeholder
+  // enquanto não tem número Twilio de verdade — tentar ligar ia falhar mesmo).
+  if (!client.manual_mode) {
+    const activeCallStatuses = ['queued', 'initiated', 'ringing', 'in-progress'];
+    let convFresh;
+    try { convFresh = await db.getConversationById(conversation.id); } catch {}
+    if (convFresh?.call_sid && activeCallStatuses.includes(convFresh.call_status)) {
+      logger.info('thumbtack', `skipping outbound call — active call already exists sid=${convFresh.call_sid}`);
+    } else {
+      try {
+        const BASE = process.env.BASE_URL || 'https://leads.btechsouto.shop';
+        const call = await twilioSvc.makeCall({
+          to: `+${leadPhone}`,
+          from: client.twilio_number,
+          voiceScript,
+          statusCallbackUrl: `${BASE}/webhook/call-status`,
+          intakeUrl: `${BASE}/webhook/voice-outbound-intake?conversationId=${conversation.id}&clientId=${client.id}`,
+          credentials: clientCredentials(client),
+        });
+        await db.updateConversation(conversation.id, {
+          call_sid: call.sid,
+          call_status: call.status,
+          call_attempted_at: new Date().toISOString(),
+        });
+      } catch (err) {
+        await handleError('twilio', err);
+      }
     }
   }
 
-  // Notify owner via email HTML (immediate — with AI insight)
+  // Notify owner via email HTML (immediate — with AI insight) --
+  // continua mesmo em manual_mode: é aviso interno pro Bruno/Marcos, não fala
+  // com o cliente.
   if (client.owner_email || client.admin_email) {
     const branding = clientBranding(client);
     const { subject: alertSubject, html: alertHtml } = buildNewLeadAlertEmail({
@@ -331,25 +348,28 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }).catch(err => logger.warn('thumbtack', `email notify failed: ${err.message}`));
   }
 
-  // Notify owner + office via call
-  const tierVoice = qualification.tier === 'hot' ? 'This is a HIGH quality lead. ' : qualification.tier === 'warm' ? 'This is a warm lead. ' : '';
-  const notifyMsg = `Hey! ${agentName} just received a new ${sourceLabel} lead for ${client.business_name}. ${tierVoice}${name} is requesting ${serviceType.replace(/_/g, ' ')}. We are calling them right now! Check your email for full details.`;
+  // Notify owner + office via call — nunca em manual_mode (mesma razão da
+  // ligação pro lead: sem número Twilio de verdade ainda, e o e-mail já avisa).
+  if (!client.manual_mode) {
+    const tierVoice = qualification.tier === 'hot' ? 'This is a HIGH quality lead. ' : qualification.tier === 'warm' ? 'This is a warm lead. ' : '';
+    const notifyMsg = `Hey! ${agentName} just received a new ${sourceLabel} lead for ${client.business_name}. ${tierVoice}${name} is requesting ${serviceType.replace(/_/g, ' ')}. We are calling them right now! Check your email for full details.`;
 
-  if (client.owner_phone) {
-    makeNotifyCall({
-      to: toE164(client.owner_phone),
-      from: client.twilio_number,
-      message: notifyMsg,
-      credentials: clientCredentials(client),
-    }).catch(err => logger.warn('thumbtack', `owner notify call failed: ${err.message}`));
-  }
-  if (client.office_phone) {
-    makeNotifyCall({
-      to: toE164(client.office_phone),
-      from: client.twilio_number,
-      message: notifyMsg,
-      credentials: clientCredentials(client),
-    }).catch(err => logger.warn('thumbtack', `office notify call failed: ${err.message}`));
+    if (client.owner_phone) {
+      makeNotifyCall({
+        to: toE164(client.owner_phone),
+        from: client.twilio_number,
+        message: notifyMsg,
+        credentials: clientCredentials(client),
+      }).catch(err => logger.warn('thumbtack', `owner notify call failed: ${err.message}`));
+    }
+    if (client.office_phone) {
+      makeNotifyCall({
+        to: toE164(client.office_phone),
+        from: client.twilio_number,
+        message: notifyMsg,
+        credentials: clientCredentials(client),
+      }).catch(err => logger.warn('thumbtack', `office notify call failed: ${err.message}`));
+    }
   }
 
   db.appendMessage(conversation.id, 'lead', message).catch(() => {});
