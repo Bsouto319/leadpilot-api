@@ -1819,6 +1819,63 @@ router.post('/thumbtack', express.json(), async (req, res) => {
   }).catch(err => handleError('thumbtack', err));
 });
 
+// ── NETLIFY FORMS WEBSITE WEBHOOK ──────────────────────────────────────────────
+// Pra sites estáticos hospedados na Netlify (ex: mdflooringsolutions.com), que
+// usam Netlify Forms em vez de WordPress/CF7 -- formato de payload diferente.
+// Configurar em: Site settings > Forms > Form notifications > Outgoing webhook,
+// apontando pra: /webhook/netlify-form?clientId=XXX&secret=YYY
+// Campos reais do form (mdflooringsolutions.com, 27/09): name, phone, email,
+// property, address, service, sqft, message.
+// O formato exato do payload da Netlify ainda não foi confirmado com um envio
+// real -- por isso essa rota loga o body inteiro antes de tentar extrair os
+// campos, pra eu poder ajustar o mapeamento se a estrutura vier diferente do
+// esperado (mesma lição do Thumbtack: nunca confiar cegamente no formato
+// documentado sem ver um payload real chegando).
+router.post('/netlify-form', express.json(), async (req, res) => {
+  res.sendStatus(200);
+
+  const { clientId, secret } = req.query;
+  const expectedSecret = process.env.THUMBTACK_WEBHOOK_SECRET;
+  if (expectedSecret && secret !== expectedSecret) {
+    logger.warn('netlify-form', `invalid secret from ${req.ip}`);
+    return;
+  }
+  if (!clientId) {
+    logger.warn('netlify-form', 'missing clientId in URL — configure webhook URL as /webhook/netlify-form?clientId=XXX&secret=YYY');
+    return;
+  }
+
+  const body = req.body;
+  logger.info('netlify-form', `received clientId=${clientId} body=${JSON.stringify(body)}`);
+
+  // Formato documentado da Netlify: { payload: { data: {...campos do form...}, human_fields: {...} } }
+  // Tolerante a variação de estrutura até confirmarmos com um envio real.
+  const payload = body.payload || body;
+  const data    = payload.data || payload;
+
+  const rawPhone    = data.phone || '';
+  const leadName    = data.name  || 'Customer';
+  const leadEmail   = data.email || null;
+  const leadAddress = data.address || null;
+  const details = [
+    data.service && `Service: ${data.service}`,
+    data.property && `Property: ${data.property}`,
+    data.sqft && `Sqft: ${data.sqft}`,
+    data.message,
+  ].filter(Boolean).join(' — ');
+
+  processThumbtackLead({
+    clientId,
+    leadPhone: rawPhone,
+    leadName,
+    leadEmail,
+    leadAddress,
+    serviceNote: details || 'Website contact form',
+    source: 'website',
+    apiKey: expectedSecret,
+  }).catch(err => handleError('netlify-form', err));
+});
+
 // ── CF7 WEBSITE WEBHOOK ────────────────────────────────────────────────────────
 // WordPress Contact Form 7 + plugin "CF7 to Webhook" by Moranet
 // Campos: your-name, your-email, your-phone, your-date, your-subject, your-message
