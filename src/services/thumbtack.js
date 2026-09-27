@@ -114,6 +114,15 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     return;
   }
 
+  // Modo manual: o lead aparece no Kanban (stage padrão 'new_lead'), mas nenhuma
+  // automação dispara -- sem qualificação por IA, sem ligação, sem e-mail, sem
+  // alerta pro dono. Pensado pra cliente novo em fase de teste/validação, onde
+  // o Bruno quer só acompanhar visualmente antes de ligar a automação de verdade.
+  if (client.manual_mode) {
+    logger.info('thumbtack', `manual_mode ativo p/ client=${client.id} — lead ${conversation.id} salvo sem automacao`);
+    return;
+  }
+
   // ZIP VIP qualifier — fires async, non-blocking
   if (leadAddress) {
     triggerZipQualifier(conversation.id, client.id, leadAddress).catch(() => {});
