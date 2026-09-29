@@ -2,11 +2,17 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 // Assistente pessoal do Bruno via WhatsApp pra organizar leads da MD Flooring
 // Solutions que chegam por fora do fluxo automático (SMS/telefone direto,
-// não passam pelo webhook do Thumbtack/site). Mesmo padrão do gz-whatsapp
-// (GastoZap): recebe áudio/texto. A extração por IA e o salvamento em si
-// acontecem no próprio LeadPilot (endpoint protegido por ADMIN_KEY, já tem
-// a chave da OpenAI configurada) -- essa função só precisa saber falar com
-// a UAZAPI, sem guardar chave de IA nem de banco de outro projeto.
+// não passam pelo webhook do Thumbtack/site). A extração por IA e o
+// salvamento acontecem no próprio LeadPilot (endpoint protegido por
+// ADMIN_KEY, já tem a chave da OpenAI configurada) -- essa função só precisa
+// falar com a UAZAPI.
+//
+// Payload real da UAZAPI (evento "messages", confirmado em
+// https://docs.uazapi.com/webhook/messages -- NÃO é o formato
+// body.data.key.remoteJid que o gz-whatsapp assume, esse formato causava
+// falha silenciosa: remoteJid/messageType vinham undefined):
+// { EventType, message: { sender, chatid, fromMe, isGroup, messageType,
+//   text, messageid, ... } }
 
 const UAZAPI_BASE = "https://btechsoutoshop.uazapi.com";
 const LEADPILOT_API = "https://leads.btechsouto.shop";
@@ -20,37 +26,35 @@ serve(async (req) => {
   let body: any;
   try { body = await req.json(); } catch { return new Response("ok", { status: 200 }); }
 
-  // UAZAPI pode enviar payload na raiz OU em body.data (mesma variação do gz-whatsapp)
-  const data = body?.data ?? body;
-  if (!data || data?.key?.fromMe === true) return new Response("ok", { status: 200 });
+  const msg = body?.message;
+  if (!msg || msg.fromMe === true || msg.isGroup === true) return new Response("ok", { status: 200 });
 
-  const remoteJid: string = data?.key?.remoteJid || "";
-  if (remoteJid.endsWith("@g.us")) return new Response("ok", { status: 200 });
+  const senderJid: string = msg.sender || msg.chatid || "";
+  const phone = senderJid.replace(/@.*/, "").replace("+", "");
+  const messageType = String(msg.messageType || "").toLowerCase();
+  const messageId: string = msg.messageid || msg.id || "";
+  console.log("MDF-DEBUG sender:", senderJid, "| phone:", phone, "| type:", messageType);
 
-  const phone = remoteJid.replace(/@.*/, "").replace("+", "");
-  console.log("MDF-DEBUG remoteJid:", remoteJid, "| parsedPhone:", phone, "| messageType:", data?.messageType);
   if (phone !== AUTHORIZED_PHONE) {
     console.log("MDF-DEBUG rejected: phone mismatch, expected", AUTHORIZED_PHONE);
     return new Response("ok", { status: 200 });
   }
-
-  const messageType: string = data?.messageType || "conversation";
-  const messageId: string = data?.key?.id || "";
 
   const UAZAPI_TOKEN = Deno.env.get("UAZAPI_TOKEN")!;
   const ADMIN_KEY = Deno.env.get("LEADPILOT_ADMIN_KEY")!;
 
   try {
     let text = "";
-    if (messageType === "conversation" || messageType === "extendedTextMessage") {
-      text = data.message?.conversation || data.message?.extendedTextMessage?.text || "";
-    } else if (messageType === "audioMessage") {
+    if (messageType === "conversation" || messageType === "extendedtextmessage") {
+      text = msg.text || "";
+    } else if (messageType === "audiomessage") {
       text = await transcreverAudio(messageId, UAZAPI_TOKEN);
       if (!text) {
         await replyText(phone, "Não consegui transcrever o áudio. Manda por texto?", UAZAPI_TOKEN);
         return new Response("ok", { status: 200 });
       }
     } else {
+      console.log("MDF-DEBUG ignored messageType:", messageType);
       return new Response("ok", { status: 200 });
     }
 
@@ -92,7 +96,7 @@ async function replyText(phone: string, text: string, token: string) {
       headers: { "Content-Type": "application/json", "token": token },
       body: JSON.stringify({ number: phone, text }),
     });
-    console.log("UAZAPI-SEND:", resp.status);
+    console.log("MDF UAZAPI-SEND:", resp.status);
   } catch (e) {
     console.error("replyText error:", e);
   }
@@ -108,7 +112,10 @@ async function transcreverAudio(messageId: string, token: string): Promise<strin
       headers: { "Content-Type": "application/json", "token": token },
       body: JSON.stringify({ id: messageId, transcribe: true }),
     });
-    if (!resp.ok) return "";
+    if (!resp.ok) {
+      console.log("MDF-DEBUG transcribe failed:", resp.status, await resp.text());
+      return "";
+    }
     const json = await resp.json();
     return json.transcription || "";
   } catch (e) {
