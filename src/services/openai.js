@@ -142,4 +142,30 @@ Data de hoje: ${hoje}. Converta datas relativas (ex: "quinta que vem", "dia 6") 
   }
 }
 
-module.exports = { generateVoiceScript, qualifyLead, extractLeadFromText };
+// Baixa um áudio de uma URL pública e transcreve via Whisper -- usado pelo
+// assistente de WhatsApp (a própria UAZAPI tentou transcrever mas a instância
+// não tem chave de IA configurada, transcribe:true voltava vazio sem erro).
+async function transcribeAudioUrl(audioUrl) {
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
+
+  const resp = await fetch(audioUrl);
+  if (!resp.ok) throw new Error(`Não consegui baixar o áudio (${resp.status})`);
+  const buffer = Buffer.from(await resp.arrayBuffer());
+
+  const tmpFile = path.join(os.tmpdir(), `mdf-audio-${Date.now()}.ogg`);
+  fs.writeFileSync(tmpFile, buffer);
+  try {
+    const result = await getOpenAI().audio.transcriptions.create({
+      model: 'whisper-1',
+      file: fs.createReadStream(tmpFile),
+      language: 'pt',
+    });
+    return result.text || '';
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch {}
+  }
+}
+
+module.exports = { generateVoiceScript, qualifyLead, extractLeadFromText, transcribeAudioUrl };

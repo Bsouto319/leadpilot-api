@@ -50,31 +50,31 @@ serve(async (req) => {
   const ADMIN_KEY = Deno.env.get("LEADPILOT_ADMIN_KEY")!;
 
   try {
-    let text = "";
+    let payload: any = { client_id: MD_FLOORING_CLIENT_ID, service_type: "flooring", timezone: "America/New_York" };
+
     if (messageType === "conversation" || messageType === "extendedtextmessage") {
-      text = msg.text || "";
+      const text = msg.text || "";
+      if (!text.trim()) return new Response("ok", { status: 200 });
+      payload.raw_text = text;
     } else if (messageType === "audiomessage") {
-      text = await transcreverAudio(messageId, UAZAPI_TOKEN);
-      if (!text) {
-        await replyText(REPLY_PHONE, "Não consegui transcrever o áudio. Manda por texto?", UAZAPI_TOKEN);
+      // Só baixa (fileURL) -- a UAZAPI não transcreve porque a instância não
+      // tem chave de IA própria configurada. Quem transcreve é o LeadPilot,
+      // que já tem a chave certa (Whisper via services/openai.js).
+      const audioUrl = await baixarAudio(messageId, UAZAPI_TOKEN);
+      if (!audioUrl) {
+        await replyText(REPLY_PHONE, "Não consegui baixar o áudio. Manda por texto?", UAZAPI_TOKEN);
         return new Response("ok", { status: 200 });
       }
+      payload.audio_url = audioUrl;
     } else {
       console.log("MDF-DEBUG ignored messageType:", messageType);
       return new Response("ok", { status: 200 });
     }
 
-    if (!text.trim()) return new Response("ok", { status: 200 });
-
     const resp = await fetch(`${LEADPILOT_API}/api/cron/manual-lead`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_KEY },
-      body: JSON.stringify({
-        client_id: MD_FLOORING_CLIENT_ID,
-        raw_text: text,
-        service_type: "flooring",
-        timezone: "America/New_York",
-      }),
+      body: JSON.stringify(payload),
     });
     const result = await resp.json();
 
@@ -108,24 +108,26 @@ async function replyText(phone: string, text: string, token: string) {
   }
 }
 
-// Transcrição embutida da própria UAZAPI (POST /message/download com
-// transcribe:true) -- não precisa baixar base64 nem chamar Whisper na mão.
-async function transcreverAudio(messageId: string, token: string): Promise<string> {
+// Pega só a URL pública do áudio (POST /message/download, sem transcribe --
+// a instância da UAZAPI não tem chave de IA própria, transcribe:true
+// voltava vazio sem erro nenhum). O LeadPilot baixa e transcreve com o
+// Whisper dele, que já tem a chave certa configurada.
+async function baixarAudio(messageId: string, token: string): Promise<string> {
   if (!messageId) return "";
   try {
     const resp = await fetch(`${UAZAPI_BASE}/message/download`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "token": token },
-      body: JSON.stringify({ id: messageId, transcribe: true }),
+      body: JSON.stringify({ id: messageId }),
     });
     if (!resp.ok) {
-      console.log("MDF-DEBUG transcribe failed:", resp.status, await resp.text());
+      console.log("MDF-DEBUG download failed:", resp.status, await resp.text());
       return "";
     }
     const json = await resp.json();
-    return json.transcription || "";
+    return json.fileURL || "";
   } catch (e) {
-    console.error("transcreverAudio error:", e);
+    console.error("baixarAudio error:", e);
     return "";
   }
 }

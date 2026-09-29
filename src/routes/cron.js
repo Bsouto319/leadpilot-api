@@ -6,7 +6,7 @@ const twilioSvc   = require('../services/twilio');
 const calendarSvc = require('../services/calendar');
 const { handleError } = require('../middleware/alerting');
 const logger  = require('../utils/logger');
-const { extractLeadFromText } = require('../services/openai');
+const { extractLeadFromText, transcribeAudioUrl } = require('../services/openai');
 
 function authMiddleware(req, res, next) {
   const key      = req.headers['x-admin-key'] || '';
@@ -185,14 +185,27 @@ function parseDataBR(dateStr) {
 // extração por IA aqui mesmo -- assim a função Edge que recebe o WhatsApp
 // não precisa de uma chave OpenAI própria, só chama esse endpoint.
 router.post('/manual-lead', async (req, res) => {
-  const { client_id, raw_text, service_type, timezone } = req.body || {};
-  if (!client_id || !raw_text) {
-    return res.status(400).json({ ok: false, error: 'client_id e raw_text são obrigatórios' });
+  const { client_id, raw_text, audio_url, service_type, timezone } = req.body || {};
+  if (!client_id || (!raw_text && !audio_url)) {
+    return res.status(400).json({ ok: false, error: 'client_id e (raw_text ou audio_url) são obrigatórios' });
+  }
+
+  let textoFinal = raw_text;
+  if (!textoFinal && audio_url) {
+    try {
+      textoFinal = await transcribeAudioUrl(audio_url);
+    } catch (err) {
+      logger.warn('manual-lead', `erro na transcrição: ${err.message}`);
+      return res.status(500).json({ ok: false, error: 'Erro ao transcrever áudio: ' + err.message });
+    }
+    if (!textoFinal || !textoFinal.trim()) {
+      return res.json({ ok: false, error: 'Não consegui entender o áudio — muito curto ou sem fala clara.' });
+    }
   }
 
   let campos;
   try {
-    campos = await extractLeadFromText(raw_text, timezone);
+    campos = await extractLeadFromText(textoFinal, timezone);
   } catch (err) {
     logger.warn('manual-lead', `erro na extração: ${err.message}`);
     return res.status(500).json({ ok: false, error: 'Erro ao processar com IA: ' + err.message });
