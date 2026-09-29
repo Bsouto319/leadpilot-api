@@ -6,6 +6,7 @@ const twilioSvc   = require('../services/twilio');
 const calendarSvc = require('../services/calendar');
 const { handleError } = require('../middleware/alerting');
 const logger  = require('../utils/logger');
+const { extractLeadFromText } = require('../services/openai');
 
 function authMiddleware(req, res, next) {
   const key      = req.headers['x-admin-key'] || '';
@@ -170,14 +171,39 @@ router.post('/competitor-intel', async (req, res) => {
   }
 });
 
+function parseDataBR(dateStr) {
+  if (!dateStr) return null;
+  const m = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return null;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
 // POST /cron/manual-lead — cria/atualiza um lead manualmente (usado pelo
 // assistente de WhatsApp do Bruno pra organizar leads que chegam fora do
 // webhook automático, ex: SMS/telefone direto na MD Flooring Solutions).
+// Recebe o texto cru (transcrição de áudio ou texto digitado) e faz a
+// extração por IA aqui mesmo -- assim a função Edge que recebe o WhatsApp
+// não precisa de uma chave OpenAI própria, só chama esse endpoint.
 router.post('/manual-lead', async (req, res) => {
-  const { client_id, acao, cliente_nome, telefone, resumo, data_retorno_iso, endereco, service_type } = req.body || {};
-  if (!client_id || !cliente_nome) {
-    return res.status(400).json({ ok: false, error: 'client_id e cliente_nome são obrigatórios' });
+  const { client_id, raw_text, service_type, timezone } = req.body || {};
+  if (!client_id || !raw_text) {
+    return res.status(400).json({ ok: false, error: 'client_id e raw_text são obrigatórios' });
   }
+
+  let campos;
+  try {
+    campos = await extractLeadFromText(raw_text, timezone);
+  } catch (err) {
+    logger.warn('manual-lead', `erro na extração: ${err.message}`);
+    return res.status(500).json({ ok: false, error: 'Erro ao processar com IA: ' + err.message });
+  }
+  if (!campos || !campos.cliente_nome) {
+    return res.json({ ok: false, error: 'Não entendi o cliente/orçamento no texto enviado.' });
+  }
+
+  const { acao, cliente_nome, telefone, resumo, data_retorno, endereco } = campos;
+  const data_retorno_iso = parseDataBR(data_retorno);
+  const extras = (data_retorno ? `\n📅 Retorno: ${data_retorno}` : '') + (telefone ? `\n📞 ${telefone}` : '');
 
   try {
     if (acao === 'atualizar') {
@@ -194,7 +220,7 @@ router.post('/manual-lead', async (req, res) => {
         if (data_retorno_iso) fields.scheduled_at = data_retorno_iso;
         if (telefone) fields.lead_phone = telefone;
         await db.updateConversation(existentes[0].id, fields);
-        return res.json({ ok: true, action: 'updated', message: `${cliente_nome} atualizado — ${resumo}` });
+        return res.json({ ok: true, action: 'updated', message: `${cliente_nome} atualizado — ${resumo}${extras}` });
       }
       // 0 ou 2+ resultados -- cai pro fluxo de criação, sem arriscar atualizar o registro errado.
       const aviso = existentes && existentes.length > 1
@@ -205,7 +231,7 @@ router.post('/manual-lead', async (req, res) => {
         source: 'manual_whatsapp', serviceType: service_type || null, message: resumo,
         scheduledAt: data_retorno_iso || null, leadAddress: endereco || null,
       });
-      return res.json({ ok: true, action: 'created', warning: aviso, leadId: created.id, message: `${cliente_nome} adicionado — ${resumo}` });
+      return res.json({ ok: true, action: 'created', warning: aviso, leadId: created.id, message: `${cliente_nome} adicionado — ${resumo}${extras}` });
     }
 
     const created = await db.saveLead({
@@ -213,7 +239,7 @@ router.post('/manual-lead', async (req, res) => {
       source: 'manual_whatsapp', serviceType: service_type || null, message: resumo,
       scheduledAt: data_retorno_iso || null, leadAddress: endereco || null,
     });
-    res.json({ ok: true, action: 'created', leadId: created.id, message: `${cliente_nome} adicionado — ${resumo}` });
+    res.json({ ok: true, action: 'created', leadId: created.id, message: `${cliente_nome} adicionado — ${resumo}${extras}` });
   } catch (err) {
     logger.warn('manual-lead', `erro: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });

@@ -111,4 +111,35 @@ Lead data:
   return { score, tier, summary, jobValue, signals, isSpam };
 }
 
-module.exports = { generateVoiceScript, qualifyLead };
+// Extrai dados de lead a partir de texto livre (transcrição de áudio ou
+// texto digitado) -- usado pelo assistente de WhatsApp do Bruno pra organizar
+// leads manuais (MD Flooring Solutions) sem precisar de uma chave OpenAI
+// separada na função Edge que recebe o WhatsApp.
+async function extractLeadFromText(text, timezone = 'America/New_York') {
+  const openai = getOpenAI();
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: timezone });
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    max_tokens: 400,
+    response_format: { type: 'json_object' },
+    messages: [
+      {
+        role: 'system',
+        content: `Você organiza leads de orçamento (contractor de serviços residenciais) a partir de um áudio/texto ditado. Extraia e retorne APENAS JSON:
+{"acao":"novo"|"atualizar","cliente_nome":"string","telefone":"string ou null","resumo":"string curto do que foi combinado","data_retorno":"DD/MM/YYYY ou null","endereco":"string ou null"}
+"acao" é "atualizar" só se o texto disser explicitamente pra atualizar/adicionar em um cliente que já existe; caso contrário "novo".
+Data de hoje: ${hoje}. Converta datas relativas (ex: "quinta que vem", "dia 6") pra DD/MM/YYYY usando essa referência.`,
+      },
+      { role: 'user', content: text },
+    ],
+  });
+
+  try {
+    return JSON.parse(completion.choices[0].message.content);
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { generateVoiceScript, qualifyLead, extractLeadFromText };
