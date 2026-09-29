@@ -18,7 +18,13 @@ const UAZAPI_BASE = "https://btechsoutoshop.uazapi.com";
 const LEADPILOT_API = "https://leads.btechsouto.shop";
 const MD_FLOORING_CLIENT_ID = "2b917476-bda9-4e5e-9f4e-6bd0d1238b5a";
 // Só o Bruno usa esse assistente -- qualquer outro remetente é ignorado.
-const AUTHORIZED_PHONE = "5561982025951";
+// O WhatsApp às vezes identifica o remetente pelo número normal (@s.whatsapp.net)
+// e às vezes por um LID (@lid, um ID interno opaco, não é o número de telefone) --
+// aceita os dois, descobertos testando com mensagem real (não dá pra prever o LID).
+const AUTHORIZED_IDS = ["5561982025951", "167091525132392"];
+// Responder sempre pro número de telefone de verdade -- mandar reply pro LID
+// não funciona no envio da UAZAPI (só serve pra identificar remetente recebido).
+const REPLY_PHONE = "5561982025951";
 
 serve(async (req) => {
   if (req.method !== "POST") return new Response("ok", { status: 200 });
@@ -35,8 +41,8 @@ serve(async (req) => {
   const messageId: string = msg.messageid || msg.id || "";
   console.log("MDF-DEBUG sender:", senderJid, "| phone:", phone, "| type:", messageType);
 
-  if (phone !== AUTHORIZED_PHONE) {
-    console.log("MDF-DEBUG rejected: phone mismatch, expected", AUTHORIZED_PHONE);
+  if (!AUTHORIZED_IDS.includes(phone)) {
+    console.log("MDF-DEBUG rejected: id not authorized:", phone);
     return new Response("ok", { status: 200 });
   }
 
@@ -50,7 +56,7 @@ serve(async (req) => {
     } else if (messageType === "audiomessage") {
       text = await transcreverAudio(messageId, UAZAPI_TOKEN);
       if (!text) {
-        await replyText(phone, "Não consegui transcrever o áudio. Manda por texto?", UAZAPI_TOKEN);
+        await replyText(REPLY_PHONE, "Não consegui transcrever o áudio. Manda por texto?", UAZAPI_TOKEN);
         return new Response("ok", { status: 200 });
       }
     } else {
@@ -73,15 +79,15 @@ serve(async (req) => {
     const result = await resp.json();
 
     if (!resp.ok || !result.ok) {
-      await replyText(phone, "⚠️ " + (result.error || `Erro ${resp.status}`), UAZAPI_TOKEN);
+      await replyText(REPLY_PHONE, "⚠️ " + (result.error || `Erro ${resp.status}`), UAZAPI_TOKEN);
       return new Response("ok", { status: 200 });
     }
 
     const aviso = result.warning ? `⚠️ ${result.warning}\n\n` : "";
-    await replyText(phone, `${aviso}✅ ${result.message}`, UAZAPI_TOKEN);
+    await replyText(REPLY_PHONE, `${aviso}✅ ${result.message}`, UAZAPI_TOKEN);
   } catch (e) {
     console.error("md-flooring-whatsapp error:", e);
-    await replyText(phone, "Erro ao processar. Tenta de novo em instantes.", UAZAPI_TOKEN);
+    await replyText(REPLY_PHONE, "Erro ao processar. Tenta de novo em instantes.", UAZAPI_TOKEN);
   }
 
   return new Response("ok", { status: 200 });
