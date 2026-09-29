@@ -27,8 +27,12 @@ serve(async (req) => {
   const remoteJid: string = data?.key?.remoteJid || "";
   if (remoteJid.endsWith("@g.us")) return new Response("ok", { status: 200 });
 
-  const phone = remoteJid.replace("@s.whatsapp.net", "").replace("+", "");
-  if (phone !== AUTHORIZED_PHONE) return new Response("ok", { status: 200 });
+  const phone = remoteJid.replace(/@.*/, "").replace("+", "");
+  console.log("MDF-DEBUG remoteJid:", remoteJid, "| parsedPhone:", phone, "| messageType:", data?.messageType);
+  if (phone !== AUTHORIZED_PHONE) {
+    console.log("MDF-DEBUG rejected: phone mismatch, expected", AUTHORIZED_PHONE);
+    return new Response("ok", { status: 200 });
+  }
 
   const messageType: string = data?.messageType || "conversation";
   const messageId: string = data?.key?.id || "";
