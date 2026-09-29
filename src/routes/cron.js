@@ -170,4 +170,54 @@ router.post('/competitor-intel', async (req, res) => {
   }
 });
 
+// POST /cron/manual-lead — cria/atualiza um lead manualmente (usado pelo
+// assistente de WhatsApp do Bruno pra organizar leads que chegam fora do
+// webhook automático, ex: SMS/telefone direto na MD Flooring Solutions).
+router.post('/manual-lead', async (req, res) => {
+  const { client_id, acao, cliente_nome, telefone, resumo, data_retorno_iso, endereco, service_type } = req.body || {};
+  if (!client_id || !cliente_nome) {
+    return res.status(400).json({ ok: false, error: 'client_id e cliente_nome são obrigatórios' });
+  }
+
+  try {
+    if (acao === 'atualizar') {
+      const supabase = db.adminSupabaseClient();
+      const { data: existentes, error: findErr } = await supabase
+        .from('conversations')
+        .select('id, lead_name')
+        .eq('client_id', client_id)
+        .ilike('lead_name', cliente_nome);
+      if (findErr) throw findErr;
+
+      if (existentes && existentes.length === 1) {
+        const fields = { email_body: resumo };
+        if (data_retorno_iso) fields.scheduled_at = data_retorno_iso;
+        if (telefone) fields.lead_phone = telefone;
+        await db.updateConversation(existentes[0].id, fields);
+        return res.json({ ok: true, action: 'updated', message: `${cliente_nome} atualizado — ${resumo}` });
+      }
+      // 0 ou 2+ resultados -- cai pro fluxo de criação, sem arriscar atualizar o registro errado.
+      const aviso = existentes && existentes.length > 1
+        ? `Achei ${existentes.length} clientes parecidos com "${cliente_nome}" — criei um card novo em vez de arriscar atualizar o errado.`
+        : `Não achei "${cliente_nome}" no Kanban — criando um card novo.`;
+      const created = await db.saveLead({
+        clientId: client_id, leadPhone: telefone || null, leadName: cliente_nome,
+        source: 'manual_whatsapp', serviceType: service_type || null, message: resumo,
+        scheduledAt: data_retorno_iso || null, leadAddress: endereco || null,
+      });
+      return res.json({ ok: true, action: 'created', warning: aviso, leadId: created.id, message: `${cliente_nome} adicionado — ${resumo}` });
+    }
+
+    const created = await db.saveLead({
+      clientId: client_id, leadPhone: telefone || null, leadName: cliente_nome,
+      source: 'manual_whatsapp', serviceType: service_type || null, message: resumo,
+      scheduledAt: data_retorno_iso || null, leadAddress: endereco || null,
+    });
+    res.json({ ok: true, action: 'created', leadId: created.id, message: `${cliente_nome} adicionado — ${resumo}` });
+  } catch (err) {
+    logger.warn('manual-lead', `erro: ${err.message}`);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;
