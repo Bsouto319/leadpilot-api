@@ -1256,35 +1256,45 @@ async function processVoiceIntake(req, res) {
 </Response>`);
   }
 
+  // ── Detecta voicemail/gravação automática ANTES de qualquer step ───────────
+  // Frases específicas pegam os casos comuns rápido, mas qualquer gravação de
+  // voicemail é, por natureza, uma frase longa (saudação + instruções) -- uma
+  // pessoa real respondendo "qual seu nome" nunca fala 20+ palavras de uma vez.
+  // Esse limite de palavras pega variações de texto que a lista de frases não
+  // cobre (ex: "I can't take your call" em vez de "unable to take your call"),
+  // sem depender de prever toda gravação possível.
+  const voicemailPhrases = [
+    /not able to connect/i,
+    /please leave a (message|voicemail)/i,
+    /leave a message after the (beep|tone)/i,
+    /you.ve reached the voicemail/i,
+    /no one is (available|here) to take your call/i,
+    /unable to take your call/i,
+    /can.t take (your|this) call/i,
+    /press \d (to|for)/i,
+    /currently (not available|unavailable)/i,
+    /call cannot be completed/i,
+    /our (business )?hours are/i,
+    /voicemail (box|system|greeting)/i,
+    /at the (beep|tone), please/i,
+    /try (your call again|again later)/i,
+    /leave your name( and)? (phone )?number/i,
+    /your message is important to us/i,
+  ];
+  const wordCount = speech.split(/\s+/).filter(Boolean).length;
+  if (voicemailPhrases.some(p => p.test(speech)) || wordCount > 20) {
+    logger.info('webhook', `voicemail detected for conv=${id} step=${step} words=${wordCount} — discarding and hanging up`);
+    if (conv.scheduled_at) {
+      sendVoicemailFollowUp(conv, client).catch(err =>
+        logger.warn('webhook', `voicemail followup failed: ${err.message}`)
+      );
+    }
+    res.set('Content-Type', 'text/xml');
+    return res.send(`<Response><Hangup/></Response>`);
+  }
+
   // ── STEP: name ────────────────────────────────────────────────────────────
   if (step === 'name') {
-    // Detect voicemail automated messages — discard speech and hang up silently
-    const voicemailPhrases = [
-      /not able to connect/i,
-      /please leave a (message|voicemail)/i,
-      /leave a message after the (beep|tone)/i,
-      /you.ve reached the voicemail/i,
-      /no one is (available|here) to take your call/i,
-      /unable to take your call/i,
-      /press \d (to|for)/i,
-      /currently (not available|unavailable)/i,
-      /call cannot be completed/i,
-      /our (business )?hours are/i,
-      /voicemail (box|system|greeting)/i,
-      /at the (beep|tone), please/i,
-      /try (your call again|again later)/i,
-    ];
-    if (voicemailPhrases.some(p => p.test(speech))) {
-      logger.info('webhook', `voicemail detected for conv=${id} — discarding and hanging up`);
-      if (conv.scheduled_at) {
-        sendVoicemailFollowUp(conv, client).catch(err =>
-          logger.warn('webhook', `voicemail followup failed: ${err.message}`)
-        );
-      }
-      res.set('Content-Type', 'text/xml');
-      return res.send(`<Response><Hangup/></Response>`);
-    }
-
     // Extrai primeiro nome sem chamar GPT — remove prefixos comuns
     const cleaned = speech
       .replace(/^(my name is|i'm|i am|it's|this is|hey|hi|hello)\s+/i, '')
