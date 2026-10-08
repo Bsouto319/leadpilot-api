@@ -198,7 +198,7 @@ async function sendLeadConfirmationEmail(conv) {
     scheduledAt: conv.scheduled_at || null,
     agentName: client.agent_name || null,
     timezone: client.timezone || null,
-    visitLabel: client.visit_label || 'scheduled visit',
+    visitLabel: conv.lead_address ? 'in-home visit' : (client.visit_label || 'scheduled visit'),
     ...branding,
   });
 
@@ -347,7 +347,7 @@ async function sendAppointmentReminderToLead(conv) {
     scheduledAt: conv.scheduled_at,
     address: conv.lead_address,
     timezone: client.timezone,
-    visitLabel: client.visit_label || 'scheduled visit',
+    visitLabel: conv.lead_address ? 'in-home visit' : (client.visit_label || 'scheduled visit'),
     addressDisplay: branding2.addressDisplay,
     contactPhone: branding2.contactPhoneDisplay,
     websiteUrl: client.website_url,

@@ -190,7 +190,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
 
     // Confirmation voice script — warmer than cold outreach
     const firstName  = name.split(' ')[0];
-    const vLabel     = client.visit_label || 'scheduled visit';
+    const vLabel     = leadAddress ? 'in-home visit' : (client.visit_label || 'scheduled visit');
     const confirmScript = `Hi ${firstName}! This is ${agentName} calling from ${client.business_name}. I'm reaching out to confirm your FREE ${vLabel} scheduled for ${visitFormatted}. We're really excited to work with you! If you have any questions before your visit, feel free to reply to our email or call us back. See you soon!`;
 
     await db.updateConversation(conversation.id, {
@@ -202,7 +202,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     // Owner email notification — HTML
     if (client.owner_email || client.admin_email) {
       const branding = clientBranding(client);
-      const vLabel   = client.visit_label || 'scheduled visit';
+      const vLabel   = leadAddress ? 'in-home visit' : (client.visit_label || 'scheduled visit');
       const { subject: alertSubject, html: alertHtml } = buildNewLeadAlertEmail({
         leadName: name, leadPhone, leadEmail,
         serviceType,
@@ -226,7 +226,7 @@ async function processThumbtackLead({ clientId, leadPhone: rawPhone, leadName, s
     }
 
     // Owner + office alert call
-    const vLabel2   = client.visit_label || 'scheduled visit';
+    const vLabel2   = leadAddress ? 'in-home visit' : (client.visit_label || 'scheduled visit');
     const notifyMsg = `Hey! ${agentName} received a new website lead for ${client.business_name}. ${name} scheduled a ${vLabel2} for ${visitFormatted}. ${agentName} is calling the lead now to confirm. Check your email for full details.`;
     if (client.owner_phone) {
       makeNotifyCall({
