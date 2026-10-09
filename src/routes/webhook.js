@@ -1955,6 +1955,7 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
   // Convert visitDate + bestTime into scheduledAt ISO in the client's timezone
   let scheduledAt = null;
   if (visitDate) {
+    let effectiveVisitDate = visitDate;
     const hourMap = {
       morning: 9, 'early morning': 9,
       'late morning': 11,
@@ -1987,8 +1988,38 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
       }
     }
 
-    // Fallback
-    if (hour == null) { hour = 10; minute = 0; }
+    // "today"/"asap"/"now" (or anything unparseable on the current day) has no fixed
+    // hour to map to — a hardcoded fallback like 10am can land in the PAST if the
+    // lead fills the form after that time, scheduling a visit that already happened.
+    // When the visit is for today, base the fallback on the current Eastern time
+    // instead, so it always lands in the future.
+    if (hour == null || /\btoday\b|\basap\b|\bnow\b|\bsoon\b|\banytime\b|\bflexible\b/.test(bt)) {
+      const fmtNow = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+        hour12: false,
+      });
+      const nowParts = {};
+      for (const { type, value } of fmtNow.formatToParts(new Date())) nowParts[type] = value;
+      const todayET = `${nowParts.year}-${nowParts.month}-${nowParts.day}`;
+      if (visitDate === todayET) {
+        // Give the team a couple hours' notice instead of "right now".
+        const candidateHour = (parseInt(nowParts.hour) === 24 ? 0 : parseInt(nowParts.hour)) + 2;
+        if (candidateHour >= 17) {
+          // Already too late for same-day coverage (showroom may be unstaffed
+          // by then) — push to tomorrow morning instead of cramming it into
+          // the last minutes before close.
+          const nextDayMs = Date.UTC(parseInt(nowParts.year), parseInt(nowParts.month) - 1, parseInt(nowParts.day) + 1);
+          const nd = new Date(nextDayMs);
+          effectiveVisitDate = `${nd.getUTCFullYear()}-${String(nd.getUTCMonth() + 1).padStart(2, '0')}-${String(nd.getUTCDate()).padStart(2, '0')}`;
+          hour = 9; minute = 0;
+        } else {
+          hour = candidateHour; minute = 0;
+        }
+      } else if (hour == null) {
+        hour = 10; minute = 0; // future date, no time given — safe fixed default
+      }
+    }
 
     // Clamp to 9:00–17:00 range
     const totalMins = hour * 60 + minute;
@@ -2000,7 +2031,7 @@ router.post('/cf7', express.urlencoded({ extended: true }), express.json(), asyn
       // Convert local Eastern time → UTC without relying on server's local timezone.
       // Uses Date.UTC() + Intl.DateTimeFormat.formatToParts() — both timezone-agnostic.
       const tz = 'America/New_York';
-      const [yr, mo, dy] = visitDate.split('-').map(Number);
+      const [yr, mo, dy] = effectiveVisitDate.split('-').map(Number);
       // Build a pseudo-UTC timestamp treating the local time as UTC temporarily
       const pseudoMs = Date.UTC(yr, mo - 1, dy, hour, minute, 0, 0);
       const pseudoDate = new Date(pseudoMs);
