@@ -46,7 +46,7 @@ const ALLOWED_ORIGINS = [
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
   // Public webhook routes accept submissions from any website (CF7, landing pages, etc.)
-  const isPublicWebhook = /^\/webhook\/(cf7|thumbtack)/.test(req.path);
+  const isPublicWebhook = /^\/webhook\/(cf7|thumbtack|hotmart-boxcerto|btech-boxcerto-onboard)/.test(req.path);
   if (isPublicWebhook) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');

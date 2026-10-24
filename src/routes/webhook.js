@@ -2395,6 +2395,196 @@ router.post('/btech-lead', express.json(), async (req, res) => {
   }
 });
 
+// ── BOXCERTO — ONBOARDING PÓS-HOTMART ─────────────────────────────────────────
+// Funil: Hotmart aprova compra -> avisa Bruno + comprador por WhatsApp/e-mail
+// com link do formulário -> comprador preenche -> cria a oficina + tags de
+// verdade no Supabase do BoxCerto (mesmas tabelas que o app React usa) ->
+// comprador já recebe o link pra imprimir as placas, sem depender de visita
+// presencial pra começar a usar.
+
+const BOXCERTO_SUPABASE_URL = process.env.BOXCERTO_SUPABASE_URL || 'https://iopdfbsndijehdqowfmj.supabase.co';
+const BOXCERTO_SUPABASE_ANON_KEY = process.env.BOXCERTO_SUPABASE_ANON_KEY
+  || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGRmYnNuZGlqZWhkcW93Zm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMjc5NjgsImV4cCI6MjA3NzYwMzk2OH0.5aoRsDS-WFeemjqnESeTyjvdt03abNsUyO-HJdgj3FE';
+const BOXCERTO_APP_URL = process.env.BOXCERTO_APP_URL || 'https://boxcerto.contatobtech.com.br';
+const BOXCERTO_ONBOARD_URL = process.env.BOXCERTO_ONBOARD_URL || 'https://ver.contatobtech.com.br/onboarding.html';
+
+function slugifyOficina(nome) {
+  return String(nome || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'oficina';
+}
+
+async function enviarWhatsAppBTech(phone, text) {
+  const uazapiUrl   = process.env.UAZAPI_URL   || 'https://btechsoutoshop.uazapi.com';
+  const uazapiToken = process.env.UAZAPI_TOKEN;
+  if (!uazapiToken) {
+    logger.warn('boxcerto-onboard', 'UAZAPI_TOKEN não configurado — WhatsApp não enviado');
+    return;
+  }
+  const r = await fetch(`${uazapiUrl}/message/sendText/${uazapiToken}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: String(phone).replace(/\D/g, ''), text }),
+  });
+  if (!r.ok) {
+    logger.warn('boxcerto-onboard', `UAZAPI ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  }
+}
+
+// Cria a oficina + N tags no Supabase real do BoxCerto, reaproveitando a mesma
+// lógica de criarOficina() do app (patiosync/src/lib/api.ts) -- mesmas tabelas
+// (ps_oficinas/ps_tags), mesmo PIN de 4 dígitos, só feito via REST aqui porque
+// o backend não importa o app React.
+async function criarOficinaBoxCerto(nome, numeroDeTags) {
+  const headers = {
+    'Content-Type': 'application/json',
+    apikey: BOXCERTO_SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${BOXCERTO_SUPABASE_ANON_KEY}`,
+  };
+
+  let slug = slugifyOficina(nome);
+  const checkRes = await fetch(`${BOXCERTO_SUPABASE_URL}/rest/v1/ps_oficinas?slug=eq.${slug}&select=id`, { headers });
+  const existentes = await checkRes.json();
+  if (Array.isArray(existentes) && existentes.length > 0) {
+    slug = `${slug}-${Math.floor(100 + Math.random() * 900)}`;
+  }
+
+  const pin = String(Math.floor(1000 + Math.random() * 9000));
+
+  const oficinaRes = await fetch(`${BOXCERTO_SUPABASE_URL}/rest/v1/ps_oficinas`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify({ nome, slug, pin }),
+  });
+  if (!oficinaRes.ok) throw new Error(`ps_oficinas insert falhou: ${oficinaRes.status} ${await oficinaRes.text()}`);
+  const [oficina] = await oficinaRes.json();
+
+  const tags = Array.from({ length: numeroDeTags }, (_, i) => ({ oficina_id: oficina.id, numero: i + 1 }));
+  const tagsRes = await fetch(`${BOXCERTO_SUPABASE_URL}/rest/v1/ps_tags`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(tags),
+  });
+  if (!tagsRes.ok) throw new Error(`ps_tags insert falhou: ${tagsRes.status} ${await tagsRes.text()}`);
+
+  return oficina;
+}
+
+// 1) Hotmart manda esse POST quando uma compra do BoxCerto é aprovada.
+// Valida o hottok (token de verificação copiado da aba Autenticação do Hotmart,
+// configurado como HOTMART_HOTTOK). Se a env var ainda não foi setada, deixa
+// passar e só loga -- assim o primeiro disparo real mostra o payload de
+// verdade nos logs sem travar a venda por falta de config.
+router.post('/hotmart-boxcerto', express.json(), async (req, res) => {
+  const body = req.body || {};
+  const hottokRecebido = body.hottok || req.query.hottok || req.headers['x-hotmart-hottok'] || '';
+  const hottokEsperado = process.env.HOTMART_HOTTOK;
+
+  if (hottokEsperado && hottokRecebido !== hottokEsperado) {
+    logger.warn('hotmart-boxcerto', `hottok inválido recebido: "${String(hottokRecebido).slice(0, 8)}..."`);
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  if (!hottokEsperado) {
+    logger.warn('hotmart-boxcerto', 'HOTMART_HOTTOK não configurado ainda -- aceitando sem validar');
+  }
+
+  logger.info('hotmart-boxcerto', `payload recebido: ${JSON.stringify(body).slice(0, 1500)}`);
+
+  const data = body.data || {};
+  const evento = body.event || data.event || data?.purchase?.status || '';
+  const statusCompra = (data?.purchase?.status || '').toUpperCase();
+  const aprovado = /PURCHASE_APPROVED|PURCHASE_COMPLETE/i.test(evento) || /APPROVED|COMPLETE/.test(statusCompra);
+
+  if (!aprovado) {
+    logger.info('hotmart-boxcerto', `evento "${evento}" ignorado (não é compra aprovada)`);
+    return res.json({ ok: true, ignored: true });
+  }
+
+  const buyer = data.buyer || {};
+  const nomeComprador = buyer.name || buyer.nome || 'Comprador BoxCerto';
+  const emailComprador = buyer.email || '';
+  const telefoneComprador = (buyer.checkout_phone || buyer.phone || '').replace(/\D/g, '');
+  const transacao = data?.purchase?.transaction || body.id || '';
+
+  try {
+    await db.saveLead({
+      clientId: '9f4688cd-42ef-4203-b9de-99322965003a',
+      leadPhone: telefoneComprador || '0000000000',
+      leadName: nomeComprador,
+      source: 'hotmart-compra',
+      serviceType: 'BoxCerto',
+      message: `✅ Compra aprovada na Hotmart (transação ${transacao}). E-mail: ${emailComprador || 'não informado'}. Aguardando o comprador preencher o onboarding em ${BOXCERTO_ONBOARD_URL}`,
+    });
+  } catch (err) {
+    logger.error('hotmart-boxcerto', `erro ao criar card no LeadPilot: ${err.message}`);
+  }
+
+  const alertPhone = (process.env.ALERT_PHONE || '5561982025951').replace(/\D/g, '');
+  enviarWhatsAppBTech(
+    alertPhone,
+    `🎉 *Venda BoxCerto aprovada!*\n\nComprador: ${nomeComprador}\nE-mail: ${emailComprador || '—'}\nTelefone: ${telefoneComprador ? `+${telefoneComprador}` : '—'}\nTransação: ${transacao}\n\nJá mandei o link de onboarding pra ele. Card criado no LeadPilot.`
+  ).catch((err) => logger.error('hotmart-boxcerto', `erro ao avisar Bruno: ${err.message}`));
+
+  if (telefoneComprador) {
+    enviarWhatsAppBTech(
+      telefoneComprador,
+      `Oi, ${nomeComprador.split(' ')[0]}! 🎉 Sua assinatura do BoxCerto foi aprovada.\n\nPra já liberar sua oficina e as tags pra imprimir, preenche esse formulário rápido (1 minuto):\n${BOXCERTO_ONBOARD_URL}\n\nQualquer dúvida, é só perguntar aqui mesmo.`
+    ).catch((err) => logger.error('hotmart-boxcerto', `erro ao avisar comprador: ${err.message}`));
+  }
+
+  res.json({ ok: true });
+});
+
+// 2) Comprador preenche o formulário (ver.contatobtech.com.br/onboarding.html)
+// e isso cria a oficina de verdade -- liberação imediata, sem depender da
+// visita presencial do Bruno pra começar a usar.
+router.post('/btech-boxcerto-onboard', express.json(), async (req, res) => {
+  const { nome = '', numVagas = 5, whatsapp = '', endereco = '' } = req.body || {};
+  if (!nome.trim()) return res.status(400).json({ error: 'nome da oficina é obrigatório' });
+
+  const qtd = Math.min(Math.max(parseInt(numVagas, 10) || 5, 1), 50);
+
+  try {
+    const oficina = await criarOficinaBoxCerto(nome.trim(), qtd);
+    const printUrl = `${BOXCERTO_APP_URL}/oficina/${oficina.slug}/imprimir`;
+
+    try {
+      await db.saveLead({
+        clientId: '9f4688cd-42ef-4203-b9de-99322965003a',
+        leadPhone: whatsapp.replace(/\D/g, '') || '0000000000',
+        leadName: nome.trim(),
+        source: 'hotmart-compra',
+        serviceType: 'BoxCerto',
+        message: `✅ Onboarding concluído. Oficina "${nome}" criada (slug ${oficina.slug}, PIN ${oficina.pin}, ${qtd} tags). Endereço: ${endereco || 'não informado'}. Link de impressão: ${printUrl}`,
+      });
+    } catch (err) {
+      logger.error('btech-boxcerto-onboard', `erro ao atualizar LeadPilot: ${err.message}`);
+    }
+
+    const alertPhone = (process.env.ALERT_PHONE || '5561982025951').replace(/\D/g, '');
+    enviarWhatsAppBTech(
+      alertPhone,
+      `🏭 *Onboarding BoxCerto concluído!*\n\nOficina: ${nome}\nEndereço: ${endereco || '—'}\nWhatsApp: ${whatsapp || '—'}\nVagas/tags: ${qtd}\nPIN: ${oficina.pin}\n\nJá liberado -- comprador recebeu o link pra imprimir. Combine a visita presencial quando quiser.`
+    ).catch((err) => logger.error('btech-boxcerto-onboard', `erro ao avisar Bruno: ${err.message}`));
+
+    if (whatsapp) {
+      enviarWhatsAppBTech(
+        whatsapp,
+        `Prontinho! ✅ Sua oficina "${nome}" já está liberada no BoxCerto.\n\nPIN de acesso: ${oficina.pin}\nImprimir suas ${qtd} tags (cole uma em cada vaga): ${printUrl}\n\nQuando quiser, o Bruno passa pessoalmente pra te ajudar a organizar -- mas já pode usar agora mesmo.`
+      ).catch((err) => logger.error('btech-boxcerto-onboard', `erro ao avisar comprador: ${err.message}`));
+    }
+
+    logger.info('btech-boxcerto-onboard', `oficina criada: ${oficina.slug} (${qtd} tags)`);
+    res.json({ ok: true, slug: oficina.slug, pin: oficina.pin, printUrl });
+  } catch (err) {
+    logger.error('btech-boxcerto-onboard', `erro: ${err.message}`);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
 // ── BROWSER CLICK-TO-CALL (Twilio Voice JS SDK) ───────────────────────────────
 // Called by Twilio when the admin browser initiates an outbound call
 // Returns TwiML: dial the requested number from the LeadPilot Twilio number
