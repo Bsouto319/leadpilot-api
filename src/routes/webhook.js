@@ -2424,10 +2424,13 @@ async function enviarWhatsAppBTech(phone, text) {
     logger.warn('boxcerto-onboard', 'UAZAPI_TOKEN não configurado — WhatsApp não enviado');
     return;
   }
-  const r = await fetch(`${uazapiUrl}/message/sendText/${uazapiToken}`, {
+  // Mesmo formato que a Lexy usa de verdade (md-flooring-whatsapp/enviarTexto):
+  // token vai no header, não na URL -- a rota /message/sendText/:token (usada
+  // em notifyProspectReply) devolve 405 nessa instância UAZAPI.
+  const r = await fetch(`${uazapiUrl}/send/text`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone: String(phone).replace(/\D/g, ''), text }),
+    headers: { 'Content-Type': 'application/json', token: uazapiToken },
+    body: JSON.stringify({ number: String(phone).replace(/\D/g, ''), text }),
   });
   if (!r.ok) {
     logger.warn('boxcerto-onboard', `UAZAPI ${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -2509,17 +2512,29 @@ router.post('/hotmart-boxcerto', express.json(), async (req, res) => {
   const telefoneComprador = (buyer.checkout_phone || buyer.phone || '').replace(/\D/g, '');
   const transacao = data?.purchase?.transaction || body.id || '';
 
+  const B2B_CLIENT_ID = '9f4688cd-42ef-4203-b9de-99322965003a';
+  const notaCompra = `✅ Compra aprovada na Hotmart (transação ${transacao}). E-mail: ${emailComprador || 'não informado'}. Aguardando o comprador preencher o onboarding em ${BOXCERTO_ONBOARD_URL}`;
+
   try {
-    await db.saveLead({
-      clientId: '9f4688cd-42ef-4203-b9de-99322965003a',
-      leadPhone: telefoneComprador || '0000000000',
-      leadName: nomeComprador,
-      source: 'hotmart-compra',
-      serviceType: 'BoxCerto',
-      message: `✅ Compra aprovada na Hotmart (transação ${transacao}). E-mail: ${emailComprador || 'não informado'}. Aguardando o comprador preencher o onboarding em ${BOXCERTO_ONBOARD_URL}`,
-    });
+    const existente = telefoneComprador ? await db.getExistingConversation(B2B_CLIENT_ID, telefoneComprador) : null;
+    if (existente) {
+      await db.updateConversation(existente.id, {
+        stage: 'compra_aprovada',
+        email_body: `${notaCompra}\n\n---\n${existente.email_body || ''}`.trim(),
+      });
+    } else {
+      const lead = await db.saveLead({
+        clientId: B2B_CLIENT_ID,
+        leadPhone: telefoneComprador || '0000000000',
+        leadName: nomeComprador,
+        source: 'hotmart-compra',
+        serviceType: 'BoxCerto',
+        message: notaCompra,
+      });
+      await db.updateConversation(lead.id, { stage: 'compra_aprovada' });
+    }
   } catch (err) {
-    logger.error('hotmart-boxcerto', `erro ao criar card no LeadPilot: ${err.message}`);
+    logger.error('hotmart-boxcerto', `erro ao criar/atualizar card no LeadPilot: ${err.message}`);
   }
 
   const alertPhone = (process.env.ALERT_PHONE || '5561982025951').replace(/\D/g, '');
@@ -2551,17 +2566,30 @@ router.post('/btech-boxcerto-onboard', express.json(), async (req, res) => {
     const oficina = await criarOficinaBoxCerto(nome.trim(), qtd);
     const printUrl = `${BOXCERTO_APP_URL}/oficina/${oficina.slug}/imprimir`;
 
+    const B2B_CLIENT_ID = '9f4688cd-42ef-4203-b9de-99322965003a';
+    const telefoneOnboard = whatsapp.replace(/\D/g, '');
+    const notaOnboard = `✅ Onboarding concluído. Oficina "${nome}" criada (slug ${oficina.slug}, PIN ${oficina.pin}, ${qtd} tags). Endereço: ${endereco || 'não informado'}. Link de impressão: ${printUrl}`;
+
     try {
-      await db.saveLead({
-        clientId: '9f4688cd-42ef-4203-b9de-99322965003a',
-        leadPhone: whatsapp.replace(/\D/g, '') || '0000000000',
-        leadName: nome.trim(),
-        source: 'hotmart-compra',
-        serviceType: 'BoxCerto',
-        message: `✅ Onboarding concluído. Oficina "${nome}" criada (slug ${oficina.slug}, PIN ${oficina.pin}, ${qtd} tags). Endereço: ${endereco || 'não informado'}. Link de impressão: ${printUrl}`,
-      });
+      const existente = telefoneOnboard ? await db.getExistingConversation(B2B_CLIENT_ID, telefoneOnboard) : null;
+      if (existente) {
+        await db.updateConversation(existente.id, {
+          stage: 'onboarding_feito',
+          email_body: `${notaOnboard}\n\n---\n${existente.email_body || ''}`.trim(),
+        });
+      } else {
+        const lead = await db.saveLead({
+          clientId: B2B_CLIENT_ID,
+          leadPhone: telefoneOnboard || '0000000000',
+          leadName: nome.trim(),
+          source: 'hotmart-compra',
+          serviceType: 'BoxCerto',
+          message: notaOnboard,
+        });
+        await db.updateConversation(lead.id, { stage: 'onboarding_feito' });
+      }
     } catch (err) {
-      logger.error('btech-boxcerto-onboard', `erro ao atualizar LeadPilot: ${err.message}`);
+      logger.error('btech-boxcerto-onboard', `erro ao criar/atualizar card no LeadPilot: ${err.message}`);
     }
 
     const alertPhone = (process.env.ALERT_PHONE || '5561982025951').replace(/\D/g, '');

@@ -115,7 +115,7 @@ async function getExistingConversation(clientId, leadPhone) {
     .select('*')
     .eq('client_id', clientId)
     .eq('lead_phone', leadPhone)
-    .in('stage', ['ai_responded', 'new_lead', 'awaiting_address', 'handoff', 'no_show', 'scheduled'])
+    .in('stage', ['ai_responded', 'new_lead', 'awaiting_address', 'handoff', 'no_show', 'scheduled', 'compra_aprovada', 'onboarding_feito'])
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
