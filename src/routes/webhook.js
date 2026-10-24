@@ -2348,6 +2348,39 @@ router.post('/ivox-lp', express.json(), async (req, res) => {
   return res.status(200).json({ ok: true, called: isUSNumber });
 });
 
+// ── BTECH WHATSAPP (Lexy) WEBHOOK ─────────────────────────────────────────────
+// Recebe lead do WhatsApp da BTech (via Edge Function md-flooring-whatsapp,
+// webhook da UAZAPI no número 93988147) e cria card no mesmo client B2B
+// Prospector que o iVox usa. Sem ligação Twilio -- só números BR aqui, e a
+// regra de custo já existente (acima) nunca liga pra +55 mesmo.
+router.post('/btech-lead', express.json(), async (req, res) => {
+  const secret = process.env.BTECH_WEBHOOK_SECRET || 'btech-lead-2026';
+  if (req.headers['x-btech-secret'] !== secret) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  const { phone = '', nome = '', produto = '', origem = '' } = req.body || {};
+  if (!phone) return res.status(400).json({ error: 'phone required' });
+
+  const B2B_CLIENT_ID = '9f4688cd-42ef-4203-b9de-99322965003a';
+
+  try {
+    const lead = await db.saveLead({
+      clientId: B2B_CLIENT_ID,
+      leadPhone: phone,
+      leadName: nome || 'Lead BTech',
+      source: 'whatsapp-btech',
+      serviceType: produto || 'BTech',
+      message: origem || 'Mensagem via WhatsApp BTech',
+    });
+    logger.info('btech-lead', `card criado leadId=${lead.id} phone=${phone} produto=${produto}`);
+    res.json({ ok: true, leadId: lead.id });
+  } catch (err) {
+    logger.error('btech-lead', `erro ao salvar lead: ${err.message}`);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
 // ── BROWSER CLICK-TO-CALL (Twilio Voice JS SDK) ───────────────────────────────
 // Called by Twilio when the admin browser initiates an outbound call
 // Returns TwiML: dial the requested number from the LeadPilot Twilio number

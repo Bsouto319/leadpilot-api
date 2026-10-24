@@ -1,30 +1,59 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// Assistente pessoal do Bruno via WhatsApp pra organizar leads da MD Flooring
-// Solutions que chegam por fora do fluxo automático (SMS/telefone direto,
-// não passam pelo webhook do Thumbtack/site). A extração por IA e o
-// salvamento acontecem no próprio LeadPilot (endpoint protegido por
-// ADMIN_KEY, já tem a chave da OpenAI configurada) -- essa função só precisa
-// falar com a UAZAPI.
+// Função reaproveitada: era o assistente pessoal da MD Flooring, agora loga
+// automaticamente lead novo na aba "Leads" do Painel Btech. Mantém o mesmo
+// slug/URL (md-flooring-whatsapp) pra não precisar reconfigurar o webhook na
+// UAZAPI -- só troca o que ela faz quando a mensagem chega.
+//
+// Regra do Bruno: no número da BTech (93988147) só fala quem é de verdade
+// um lead -- o resto é grupo/comunidade. Então qualquer mensagem individual
+// que não seja do próprio Bruno já conta como lead em potencial.
 //
 // Payload real da UAZAPI (evento "messages", confirmado em
-// https://docs.uazapi.com/webhook/messages -- NÃO é o formato
-// body.data.key.remoteJid que o gz-whatsapp assume, esse formato causava
-// falha silenciosa: remoteJid/messageType vinham undefined):
+// https://docs.uazapi.com/webhook/messages):
 // { EventType, message: { sender, chatid, fromMe, isGroup, messageType,
-//   text, messageid, ... } }
+//   text, pushName, messageid, ... } }
 
-const UAZAPI_BASE = "https://btechsoutoshop.uazapi.com";
-const LEADPILOT_API = "https://leads.btechsouto.shop";
-const MD_FLOORING_CLIENT_ID = "2b917476-bda9-4e5e-9f4e-6bd0d1238b5a";
-// Só o Bruno usa esse assistente -- qualquer outro remetente é ignorado.
-// O WhatsApp às vezes identifica o remetente pelo número normal (@s.whatsapp.net)
-// e às vezes por um LID (@lid, um ID interno opaco, não é o número de telefone) --
-// aceita os dois, descobertos testando com mensagem real (não dá pra prever o LID).
-const AUTHORIZED_IDS = ["5561982025951", "167091525132392"];
-// Responder sempre pro número de telefone de verdade -- mandar reply pro LID
-// não funciona no envio da UAZAPI (só serve pra identificar remetente recebido).
-const REPLY_PHONE = "5561982025951";
+const SPREADSHEET_ID = "1qUCox23Tlfp2VnDNM484ZDXwdfN8Yeb2i7PA7U9oXZQ";
+const SHEET_TAB = "Leads";
+
+// Detecta o produto pela mensagem pré-escrita que o próprio anúncio Meta manda
+// no clique de "Enviar mensagem" (ex: "Olá! Quero saber como funciona o
+// BoxCerto"). Serve pra qualquer campanha futura -- só adiciona a palavra-chave
+// da campanha nova nessa lista, sem mexer no resto da função.
+const PRODUCT_KEYWORDS: [RegExp, string][] = [
+  [/boxcerto/i, "BoxCerto"],
+  [/lotesync/i, "LoteSync"],
+  [/clinicaflow|pronutro/i, "ClinicaFlow"],
+  [/sellpilot/i, "SellPilot"],
+  [/leadpilot/i, "LeadPilot"],
+];
+
+function detectProduct(text: string): string {
+  for (const [re, name] of PRODUCT_KEYWORDS) if (re.test(text)) return name;
+  return "BTech (não identificado)";
+}
+
+// A Lexy (agente da BTech) só responde perguntas fechadas e conhecidas --
+// preço e vídeo. Nunca negocia, nunca promete nada, nunca responde fora
+// dessas duas. Qualquer coisa diferente fica só registrada em Leads pro
+// Bruno responder na mão. Resposta automática = texto fixo, não é IA
+// gerando texto livre -- zero risco de alucinar preço ou condição.
+const AUTO_REPLIES: [RegExp, string][] = [
+  [
+    /quanto|pre[cç]o|valor|custa|investimento/i,
+    "Oi! Sou a Lexy, da BTech 👋 O BoxCerto sai por *R$670 no 1º ano* (renova a R$800/ano) ou *R$67/mês* sem compromisso anual — já com tags físicas, IA do áudio e implantação inclusos. Sem letra miúda!\n\nQuer ver funcionando antes? É só pedir 😊",
+  ],
+  [
+    /v[ií]deo|demonstra[cç][aã]o|funcionando|ver\s+funcionar|como\s+funciona/i,
+    "Claro! Dá uma olhada aqui, 30 segundos mostrando o BoxCerto funcionando de verdade:\nhttps://ver.contatobtech.com.br\n\nQualquer dúvida, é só me chamar! 😊",
+  ],
+];
+
+function detectAutoReply(text: string): string | null {
+  for (const [re, reply] of AUTO_REPLIES) if (re.test(text)) return reply;
+  return null;
+}
 
 serve(async (req) => {
   if (req.method !== "POST") return new Response("ok", { status: 200 });
@@ -35,99 +64,130 @@ serve(async (req) => {
   const msg = body?.message;
   if (!msg || msg.fromMe === true || msg.isGroup === true) return new Response("ok", { status: 200 });
 
-  const senderJid: string = msg.sender || msg.chatid || "";
-  const phone = senderJid.replace(/@.*/, "").replace("+", "");
   const messageType = String(msg.messageType || "").toLowerCase();
-  const messageId: string = msg.messageid || msg.id || "";
-  console.log("MDF-DEBUG sender:", senderJid, "| phone:", phone, "| type:", messageType);
-
-  if (!AUTHORIZED_IDS.includes(phone)) {
-    console.log("MDF-DEBUG rejected: id not authorized:", phone);
+  // Qualquer tipo de mensagem individual conta -- texto, áudio, imagem com legenda etc.
+  // Só ignora o que claramente não é conversa (ex: reações, status).
+  if (["reactionmessage", "", "protocolmessage"].includes(messageType)) {
     return new Response("ok", { status: 200 });
   }
 
-  const UAZAPI_TOKEN = Deno.env.get("UAZAPI_TOKEN")!;
-  const ADMIN_KEY = Deno.env.get("LEADPILOT_ADMIN_KEY")!;
+  const senderJid: string = msg.sender || msg.chatid || "";
+  const phone = senderJid.replace(/@.*/, "").replace("+", "");
+  const nome = msg.pushName || msg.pushname || msg.senderName || "";
+  const text: string = msg.text || msg.caption || "";
+  if (!phone) return new Response("ok", { status: 200 });
+
+  const produto = detectProduct(text);
+  const origem = text.trim() ? `WhatsApp — "${text.trim().slice(0, 80)}"` : "WhatsApp";
+
+  console.log("BTECH-LEAD:", phone, "|", nome, "| produto:", produto, "| tipo:", messageType);
 
   try {
-    let payload: any = { client_id: MD_FLOORING_CLIENT_ID, service_type: "flooring", timezone: "America/New_York" };
-
-    if (messageType === "conversation" || messageType === "extendedtextmessage") {
-      const text = msg.text || "";
-      if (!text.trim()) return new Response("ok", { status: 200 });
-      payload.raw_text = text;
-    } else if (messageType === "audiomessage") {
-      // Só baixa (fileURL) -- a UAZAPI não transcreve porque a instância não
-      // tem chave de IA própria configurada. Quem transcreve é o LeadPilot,
-      // que já tem a chave certa (Whisper via services/openai.js).
-      const audioUrl = await baixarAudio(messageId, UAZAPI_TOKEN);
-      if (!audioUrl) {
-        await replyText(REPLY_PHONE, "Não consegui baixar o áudio. Manda por texto?", UAZAPI_TOKEN);
-        return new Response("ok", { status: 200 });
-      }
-      payload.audio_url = audioUrl;
-    } else {
-      console.log("MDF-DEBUG ignored messageType:", messageType);
-      return new Response("ok", { status: 200 });
-    }
-
-    const resp = await fetch(`${LEADPILOT_API}/api/cron/manual-lead`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_KEY },
-      body: JSON.stringify(payload),
-    });
-    const result = await resp.json();
-
-    if (!resp.ok || !result.ok) {
-      await replyText(REPLY_PHONE, "⚠️ " + (result.error || `Erro ${resp.status}`), UAZAPI_TOKEN);
-      return new Response("ok", { status: 200 });
-    }
-
-    const aviso = result.warning ? `⚠️ ${result.warning}\n\n` : "";
-    await replyText(REPLY_PHONE, `${aviso}✅ ${result.message}`, UAZAPI_TOKEN);
+    const accessToken = await getGoogleAccessToken();
+    await upsertLead(accessToken, phone, nome, produto, origem);
   } catch (e) {
-    console.error("md-flooring-whatsapp error:", e);
-    await replyText(REPLY_PHONE, "Erro ao processar. Tenta de novo em instantes.", UAZAPI_TOKEN);
+    console.error("btech-leads (md-flooring-whatsapp) error:", e);
+  }
+
+  const resposta = detectAutoReply(text);
+  if (resposta) {
+    try {
+      await enviarTexto(phone, resposta);
+      console.log("LEXY-AUTO-REPLY:", phone);
+    } catch (e) {
+      console.error("lexy auto-reply error:", e);
+    }
   }
 
   return new Response("ok", { status: 200 });
 });
 
-// ─── UAZAPI ──────────────────────────────────────────────────────────────────
-
-async function replyText(phone: string, text: string, token: string) {
-  try {
-    const resp = await fetch(`${UAZAPI_BASE}/send/text`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "token": token },
-      body: JSON.stringify({ number: phone, text }),
-    });
-    console.log("MDF UAZAPI-SEND:", resp.status);
-  } catch (e) {
-    console.error("replyText error:", e);
-  }
+async function enviarTexto(phone: string, text: string) {
+  const UAZAPI_URL = Deno.env.get("UAZAPI_URL") || "https://btechsoutoshop.uazapi.com";
+  const UAZAPI_TOKEN = Deno.env.get("UAZAPI_TOKEN");
+  if (!UAZAPI_TOKEN) throw new Error("Falta o secret UAZAPI_TOKEN nesta function");
+  const res = await fetch(`${UAZAPI_URL}/send/text`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", token: UAZAPI_TOKEN },
+    body: JSON.stringify({ number: phone, text }),
+  });
+  if (!res.ok) throw new Error(`UAZAPI send falhou: ${res.status} ${await res.text()}`);
 }
 
-// Pega só a URL pública do áudio (POST /message/download, sem transcribe --
-// a instância da UAZAPI não tem chave de IA própria, transcribe:true
-// voltava vazio sem erro nenhum). O LeadPilot baixa e transcreve com o
-// Whisper dele, que já tem a chave certa configurada.
-async function baixarAudio(messageId: string, token: string): Promise<string> {
-  if (!messageId) return "";
-  try {
-    const resp = await fetch(`${UAZAPI_BASE}/message/download`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "token": token },
-      body: JSON.stringify({ id: messageId }),
-    });
-    if (!resp.ok) {
-      console.log("MDF-DEBUG download failed:", resp.status, await resp.text());
-      return "";
-    }
-    const json = await resp.json();
-    return json.fileURL || "";
-  } catch (e) {
-    console.error("baixarAudio error:", e);
-    return "";
-  }
+// ─── Google Sheets (service account, JWT assinado na mão — sem lib externa) ──
+
+async function getGoogleAccessToken(): Promise<string> {
+  const saRaw = Deno.env.get("GOOGLE_SA_JSON");
+  if (!saRaw) throw new Error("Falta o secret GOOGLE_SA_JSON nesta function");
+  const sa = JSON.parse(saRaw);
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const claims = {
+    iss: sa.client_email,
+    scope: "https://www.googleapis.com/auth/spreadsheets",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  };
+  const enc = (o: unknown) =>
+    btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const unsigned = `${enc(header)}.${enc(claims)}`;
+
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToArrayBuffer(String(sa.private_key).replace(/\\n/g, "\n")),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const jwt = `${unsigned}.${sigB64}`;
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+  if (!res.ok) throw new Error(`Google OAuth falhou: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.access_token;
+}
+
+function pemToArrayBuffer(pem: string): ArrayBuffer {
+  const b64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/, "")
+    .replace(/-----END PRIVATE KEY-----/, "")
+    .replace(/\s/g, "");
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function upsertLead(accessToken: string, phone: string, nome: string, produto: string, origem: string) {
+  const getUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_TAB}!A2:G5000`;
+  const getRes = await fetch(getUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!getRes.ok) throw new Error(`Sheets GET falhou: ${getRes.status} ${await getRes.text()}`);
+  const getData = await getRes.json();
+  const rows: string[][] = getData.values || [];
+
+  // Já existe lead com esse telefone -- não duplica linha, conversa continua a mesma.
+  if (rows.some((r) => r[2] === phone)) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const line = [today, nome || "(sem nome)", phone, produto, origem, "1. Lead recebido", "Responder em até 5 min"];
+
+  const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_TAB}!A:G:append?valueInputOption=USER_ENTERED`;
+  const appendRes = await fetch(appendUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ values: [line] }),
+  });
+  if (!appendRes.ok) throw new Error(`Sheets APPEND falhou: ${appendRes.status} ${await appendRes.text()}`);
 }
