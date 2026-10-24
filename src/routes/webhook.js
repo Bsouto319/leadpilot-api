@@ -2348,6 +2348,20 @@ router.post('/ivox-lp', express.json(), async (req, res) => {
   return res.status(200).json({ ok: true, called: isUSNumber });
 });
 
+// ── RENOMEIA CLIENT B2B PROSPECTOR PRA "BTech" (uso único, mesma chave) ───────
+router.post('/btech-rename', express.json(), async (req, res) => {
+  const secret = process.env.BTECH_WEBHOOK_SECRET || 'btech-lead-2026';
+  if (req.headers['x-btech-secret'] !== secret) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  try {
+    await db.updateClient('9f4688cd-42ef-4203-b9de-99322965003a', { business_name: 'BTech' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── BTECH WHATSAPP (Lexy) WEBHOOK ─────────────────────────────────────────────
 // Recebe lead do WhatsApp da BTech (via Edge Function md-flooring-whatsapp,
 // webhook da UAZAPI no número 93988147) e cria card no mesmo client B2B
