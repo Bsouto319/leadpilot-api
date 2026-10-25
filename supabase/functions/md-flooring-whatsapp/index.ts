@@ -42,12 +42,15 @@ FATOS SOBRE O BOXCERTO:
 - O que é: cada vaga da oficina tem um QR. O mecânico escaneia, fala o serviço por áudio, a IA organiza e lança a Ordem de Serviço com valor. O cliente acompanha o status pelo celular, sem instalar app.
 - Preço: R$670 no 1º ano (renova a R$800/ano) ou R$67/mês sem compromisso anual. Inclui tags físicas reutilizáveis, IA do áudio, e implantação presencial.
 - Como ver funcionando: vídeo de 30s em https://ver.contatobtech.com.br
+- Depois de comprar, como usar no dia a dia (escanear QR, PIN, áudio, e como o cliente acompanha sem instalar app nenhum): vídeo tutorial em https://iopdfbsndijehdqowfmj.supabase.co/storage/v1/object/public/patiosync/boxcerto-tutorial-pos-compra-v2.mp4 -- mandado automaticamente por WhatsApp assim que a oficina é liberada
 - Como assinar: pelo link de checkout no mesmo site (botão "Assinar agora"), via Hotmart -- aceita Pix, boleto e cartão (até 12x).
 - Depois do pagamento: a Hotmart confirma a compra por e-mail. Como o BoxCerto precisa de tags físicas instaladas na oficina, o Bruno entra em contato pra agendar a implantação presencial (geralmente em Brasília-DF e região).
 - Cancelamento: pode cancelar a assinatura direto na área de membros da Hotmart (vem no e-mail de confirmação da compra), a qualquer momento. Garantia de 7 dias (direito de arrependimento padrão).
 - Dúvida técnica fora disso, ou pedido de condição especial: diga que vai confirmar com o Bruno e que ele retorna.
 
-Responda curto (2-4 frases), tom direto e simpático, como mensagem de WhatsApp de verdade. Pode usar emoji com moderação.`;
+Responda curto (2-4 frases), tom direto e simpático, como mensagem de WhatsApp de verdade. Pode usar emoji com moderação.
+
+IMPORTANTE: responda sempre no mesmo idioma que a pessoa escreveu. Se ela escrever em inglês, responda em inglês (Brasília/DF tem bastante gente estrangeira). Nunca misture idiomas na mesma resposta.`;
 
 async function geraRespostaLexy(text: string): Promise<string | null> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
