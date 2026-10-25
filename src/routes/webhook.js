@@ -2601,7 +2601,7 @@ router.post('/btech-boxcerto-onboard', express.json(), async (req, res) => {
     if (whatsapp) {
       enviarWhatsAppBTech(
         whatsapp,
-        `Prontinho! ✅ Sua oficina "${nome}" já está liberada no BoxCerto.\n\nPIN de acesso: ${oficina.pin}\nImprimir suas ${qtd} tags (cole uma em cada vaga): ${printUrl}\n\nQuando quiser, o Bruno passa pessoalmente pra te ajudar a organizar -- mas já pode usar agora mesmo.`
+        `Prontinho! ✅ Sua oficina "${nome}" já está liberada no BoxCerto.\n\nPIN de acesso: ${oficina.pin}\nImprimir suas ${qtd} tags (cole uma em cada vaga): ${printUrl}\n\nVídeo rápido mostrando como usar no dia a dia (sem precisar instalar nada, é tudo pelo link): https://iopdfbsndijehdqowfmj.supabase.co/storage/v1/object/public/patiosync/boxcerto-tutorial-pos-compra.mp4\n\nQuando quiser, o Bruno passa pessoalmente pra te ajudar a organizar -- mas já pode usar agora mesmo.`
       ).catch((err) => logger.error('btech-boxcerto-onboard', `erro ao avisar comprador: ${err.message}`));
     }
 
