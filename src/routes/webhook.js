@@ -2405,7 +2405,7 @@ router.post('/btech-lead', express.json(), async (req, res) => {
 const BOXCERTO_SUPABASE_URL = process.env.BOXCERTO_SUPABASE_URL || 'https://iopdfbsndijehdqowfmj.supabase.co';
 const BOXCERTO_SUPABASE_ANON_KEY = process.env.BOXCERTO_SUPABASE_ANON_KEY
   || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvcGRmYnNuZGlqZWhkcW93Zm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMjc5NjgsImV4cCI6MjA3NzYwMzk2OH0.5aoRsDS-WFeemjqnESeTyjvdt03abNsUyO-HJdgj3FE';
-const BOXCERTO_APP_URL = process.env.BOXCERTO_APP_URL || 'https://boxcerto.contatobtech.com.br';
+const BOXCERTO_APP_URL = process.env.BOXCERTO_APP_URL || 'https://oficina.contatobtech.com.br';
 const BOXCERTO_ONBOARD_URL = process.env.BOXCERTO_ONBOARD_URL || 'https://ver.contatobtech.com.br/onboarding.html';
 
 function slugifyOficina(nome) {
